@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.local
+npm-debug.log*
+*.log
+
+# never commit a memory database or credentials
+*.db
+*.db-journal
+*.sqlite
+.claude/settings.local.json
+
+# OS noise
+Thumbs.db
+.DS_Store

@@ -1,0 +1,20 @@
+{
+  "name": "kacey",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kacey - voice-first personal assistant backend (Claude Agent SDK + klaus_memory MCP)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "health": "node -e \"fetch('http://localhost:'+(process.env.PORT||8787)+'/api/health').then(r=>r.json()).then(o=>console.log(JSON.stringify(o,null,2)))\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.220",
+    "express": "^5.1.0",
+    "ws": "^8.18.3"
+  }
+}

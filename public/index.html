@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#05060b" />
+<meta name="description" content="Kacey — voice-first assistant with long-term memory." />
+<title>Kacey</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============================================================
+     BACKGROUND: the orb. Purely decorative, never focusable.
+     States are driven by data-state on #orb (see app.js).
+     ============================================================ -->
+<div class="stage" aria-hidden="true">
+  <div class="orb" id="orb" data-state="boot">
+    <div class="orb__amp" id="orbAmp">
+      <span class="orb__halo"></span>
+      <span class="orb__blob orb__blob--a"></span>
+      <span class="orb__blob orb__blob--b"></span>
+      <span class="orb__blob orb__blob--c"></span>
+      <span class="orb__core"></span>
+      <span class="orb__ring"></span>
+      <span class="orb__specular"></span>
+    </div>
+  </div>
+  <div class="grain"></div>
+</div>
+
+<!-- ============================================================
+     FOREGROUND: chat + controls, floating over the orb.
+     ============================================================ -->
+<div class="app">
+
+  <header class="topbar">
+    <div class="topbar__side">
+      <div class="conn" id="conn" data-state="connecting">
+        <span class="conn__dot" aria-hidden="true"></span>
+        <span class="conn__label" id="connLabel">Connecting…</span>
+      </div>
+    </div>
+
+    <p class="brand" id="brand">Kacey<span class="brand__badge" id="mockBadge" hidden>mock</span></p>
+
+    <div class="topbar__side topbar__side--end">
+      <div class="select">
+        <label class="sr-only" for="lang" id="langLabel">Language</label>
+        <select class="select__el" id="lang">
+          <option value="cs-CZ">Čeština</option>
+          <option value="en-US">English</option>
+        </select>
+        <span class="select__caret" aria-hidden="true"></span>
+      </div>
+
+      <button type="button" class="iconbtn" id="mute" aria-pressed="false" aria-label="Mute spoken replies" title="Mute spoken replies">
+        <svg class="i i--on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z" />
+          <path class="wave wave--1" d="M15.4 9.2a4 4 0 0 1 0 5.6" />
+          <path class="wave wave--2" d="M17.9 6.7a7.6 7.6 0 0 1 0 10.6" />
+        </svg>
+        <svg class="i i--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z" />
+          <path class="wave" d="M16 9.6l5 4.8M21 9.6l-5 4.8" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="logwrap" id="logwrap">
+    <ol class="log" id="log" role="log" aria-live="polite" aria-atomic="false" aria-relevant="additions" aria-label="Conversation"></ol>
+  </main>
+
+  <!-- transient status: tool activity, listening hints, errors -->
+  <div class="status">
+    <p class="status__hint" id="hint" aria-live="polite"></p>
+    <p class="status__alert" id="alert" role="alert" hidden></p>
+  </div>
+
+  <footer class="dock">
+    <form class="composer" id="composer" autocomplete="off">
+      <label class="sr-only" for="input" id="inputLabel">Message</label>
+      <input class="composer__input" id="input" type="text" placeholder="Type a message…"
+             autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" />
+      <button type="submit" class="composer__btn" id="send" aria-label="Send message" title="Send message">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h12M12 6l6 6-6 6" /></svg>
+      </button>
+      <button type="button" class="composer__btn composer__btn--stop" id="stop" hidden aria-label="Stop the response" title="Stop the response">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="8" height="8" rx="1.5" /></svg>
+      </button>
+    </form>
+
+    <div class="miczone">
+      <button type="button" class="mic" id="mic" aria-pressed="false" aria-label="Start talking">
+        <span class="mic__pulse" aria-hidden="true"></span>
+        <span class="mic__pulse mic__pulse--2" aria-hidden="true"></span>
+        <svg class="mic__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 3.6a2.9 2.9 0 0 1 2.9 2.9v4.4a2.9 2.9 0 0 1-5.8 0V6.5A2.9 2.9 0 0 1 12 3.6z" />
+          <path d="M6.4 10.9a5.6 5.6 0 0 0 11.2 0M12 16.5V20M9 20h6" />
+        </svg>
+      </button>
+      <p class="miczone__note" id="micNote"></p>
+    </div>
+  </footer>
+</div>
+
+<!-- polite announcer for completed assistant turns (keeps the log from spamming SRs per chunk) -->
+<p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>
+
+<script src="app.js"></script>
+</body>
+</html>
