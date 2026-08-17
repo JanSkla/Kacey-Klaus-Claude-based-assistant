@@ -1,0 +1,113 @@
+<title>Voice Lab — Kacey</title>
+<link rel="stylesheet" href="styles.css" />
+
+<header class="top">
+  <div class="brand">VOICE&nbsp;LAB<span class="sub">Kacey — český hlas</span></div>
+  <div class="top-actions">
+    <button id="pregenBtn" class="btn" type="button" title="Vygeneruje zvuk pro všechny hlasy podle filtru, aby se pak nečekalo">⚡ Předgenerovat</button>
+    <button id="playAllBtn" class="btn btn--go" type="button">▶ Přehrát vše</button>
+    <button id="blindBtn" class="btn" type="button">Slepý test</button>
+    <button id="reloadBtn" class="btn btn--ghost" type="button">Načíst hlasy znovu</button>
+  </div>
+</header>
+
+<main>
+  <!-- ---------------------------------------------------------------- text -->
+  <section class="panel">
+    <h2>1 · Zkušební věta</h2>
+    <p class="muted">
+      Vyber větu, nebo napiš vlastní. Ty připravené jsou schválně zákeřné —
+      diakritika, skloňování jmen, čísla čtená slovy, a Kaceyin komorný rytmus.
+    </p>
+    <div id="presets" class="chips"></div>
+    <textarea id="text" rows="3" spellcheck="false"></textarea>
+    <div class="row">
+      <label class="check">
+        <input type="checkbox" id="autoplay" checked />
+        <span>Přehrát hned po syntéze</span>
+      </label>
+      <span id="charCount" class="muted small"></span>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- providers -->
+  <section class="panel">
+    <h2>2 · Hlasy</h2>
+    <p class="muted">
+      Hlasy schopné češtiny. Poslechni, označ pohlaví, přiděl hvězdy,
+      a poznámky si piš rovnou k hlasu.
+    </p>
+
+    <div class="filters">
+      <label class="filter">
+        <span>Hvězdy</span>
+        <select id="fStars">
+          <option value="0">vše</option>
+          <option value="1">★ 1+</option>
+          <option value="2">★ 2+</option>
+          <option value="3">★ 3+</option>
+          <option value="4">★ 4+</option>
+          <option value="5">★ 5</option>
+          <option value="unrated">nehodnocené</option>
+        </select>
+      </label>
+      <label class="filter">
+        <span>Pohlaví</span>
+        <select id="fGender">
+          <option value="">vše</option>
+          <option value="f">♀ ženské</option>
+          <option value="m">♂ mužské</option>
+          <option value="untagged">neoznačené</option>
+        </select>
+      </label>
+      <span id="filterCount" class="muted small"></span>
+      <span id="saveState" class="save-state" aria-live="polite"></span>
+    </div>
+
+    <div id="providers" class="providers"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------ shortlist -->
+  <section class="panel">
+    <h2>3 · Volba</h2>
+    <p class="muted">Až budeš rozhodnutý, tady je hotová konfigurace.</p>
+    <div id="shortlist" class="shortlist"></div>
+    <pre id="config" class="config" hidden></pre>
+  </section>
+</main>
+
+<!-- blind A/B overlay -->
+<div id="blind" class="blind" hidden>
+  <div class="blind__card">
+    <button class="blind__close" id="blindClose" type="button" aria-label="Zavřít">×</button>
+    <h3>Slepý test</h3>
+    <p class="muted" id="blindProgress"></p>
+    <div class="blind__pair">
+      <button class="blind__side" id="sideA" type="button"><span>A</span><small>přehrát</small></button>
+      <button class="blind__side" id="sideB" type="button"><span>B</span><small>přehrát</small></button>
+    </div>
+    <div class="blind__choose">
+      <button class="btn" id="pickA" type="button">A je lepší</button>
+      <button class="btn btn--ghost" id="pickTie" type="button">Nerozhodně</button>
+      <button class="btn" id="pickB" type="button">B je lepší</button>
+    </div>
+    <div id="blindResult" class="blind__result"></div>
+  </div>
+</div>
+
+<!-- now-playing bar, shown only while a queue runs -->
+<div id="nowplaying" class="np" hidden>
+  <div class="np__dot" aria-hidden="true"></div>
+  <div class="np__text">
+    <strong id="npName">—</strong>
+    <span id="npState" class="np__state">—</span>
+  </div>
+  <span id="npCount" class="np__count"></span>
+  <button id="npPrev" class="btn btn--ghost" type="button" aria-label="Předchozí">⏮</button>
+  <button id="npSkip" class="btn btn--ghost" type="button" aria-label="Další">⏭</button>
+  <button id="npStop" class="btn" type="button">Stop</button>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>

@@ -14,6 +14,7 @@ import { WebSocketServer } from 'ws';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,13 +35,15 @@ const PUBLIC_DIR = path.join(HERE, 'public');
 // "klaus-memory.db"), so we must pass it explicitly or the server silently creates
 // a fresh empty database in the current working directory.
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python';
-// Verified 2026-08-03: this file holds the real memory (8 facts, populated FTS +
-// embeddings). The sibling C:\repos\hobby\lukas\Klaus\klaus.db has the schema but
-// zero facts — pointing here at that one makes Kacey start with no memory.
+// Klaus\memory\ was renamed to Klaus\Kacey-mvp\ — both paths below moved with it.
+// This is the populated database (3.5 MB, real facts + FTS + embeddings); the
+// sibling C:\repos\hobby\lukas\Klaus\klaus.db is schema-only with zero facts, so
+// pointing at that one makes Kacey start with no memory and no error.
 const KLAUS_DB =
-  process.env.KLAUS_DB || 'C:\\repos\\hobby\\lukas\\Klaus\\memory\\klaus.db';
+  process.env.KLAUS_DB || 'C:\\repos\\hobby\\lukas\\Klaus\\Kacey-mvp\\klaus.db';
+// Directory CONTAINING the klaus_memory package, not the package itself.
 const KLAUS_MEMORY_PYTHONPATH =
-  process.env.KLAUS_MEMORY_PYTHONPATH || 'C:\\repos\\hobby\\lukas\\Klaus\\memory';
+  process.env.KLAUS_MEMORY_PYTHONPATH || 'C:\\repos\\hobby\\lukas\\Klaus\\Kacey-mvp';
 
 const MCP_SERVER_NAME = 'klaus-memory';
 
@@ -103,10 +106,14 @@ const MEMORY_TOOLS = [
   // journal (episodic recall: "what did I do on Thursday")
   'journal_day',
   'journal_search',
-  // calendar: local DB only. calendar_sync (external) stays out.
+  // calendar: local DB only. calendar_sync (external, wholesale) stays out.
+  // update/delete DO write through to the external backend per event, which is
+  // the point — the persona already makes her confirm day, time and who with.
   'calendar_day',
   'calendar_conflicts',
   'calendar_create',
+  'calendar_update',
+  'calendar_delete',
 ];
 
 const ALLOWED_TOOLS = MEMORY_TOOLS.map((t) => `mcp__${MCP_SERVER_NAME}__${t}`);
@@ -252,9 +259,20 @@ class KaceySession {
 
   /** Queue a user turn for the live SDK session. */
   pushUserMessage(text) {
+    // Two rules keep slipping despite being in the persona, because the system
+    // prompt sits far back in context while the model's tool-use reflex fires
+    // right here: it opens with an English "I'll check your calendar." and it
+    // refers to itself in masculine. Restating them on the turn itself puts
+    // them in the most recent context, where they actually hold.
+    // Kept short so it cannot crowd out what the user actually said.
+    const nudge =
+      '\n\n[systémová poznámka: veškerý text česky — včetně úvodní věty před ' +
+      'použitím nástroje. O sobě mluv v ženském rodě (ráda, podívala jsem se). ' +
+      'Anglicky jen tehdy, když uživatel píše anglicky.]';
+
     this.pending.push({
       type: 'user',
-      message: { role: 'user', content: text },
+      message: { role: 'user', content: text + nudge },
       parent_tool_use_id: null,
       session_id: this.sessionId ?? undefined,
     });
@@ -292,6 +310,13 @@ class KaceySession {
         settingSources: [],
 
         mcpServers: MCP_SERVERS,
+
+        // Use ONLY the server above. Without this, the SDK also auto-fetches the
+        // account's claude.ai cloud connectors — Gmail, Google Calendar, Slack,
+        // Notion and a dozen more turned up in Kacey's session. settingSources: []
+        // does not stop them (they are not a settings source), and 15 servers
+        // racing at startup is also what made klaus-memory time out.
+        strictMcpConfig: true,
 
         // No built-in tools whatsoever; only the allow-listed MCP tools.
         tools: [],
@@ -486,6 +511,278 @@ const app = express();
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, model: MODEL, mcpServers: Object.keys(MCP_SERVERS) });
+});
+
+/* ---------------------------------------------------------------------------
+ * Voice. Chosen in the Voice Lab on 2026-08-17 by listening to all 58 XTTS
+ * studio speakers. Note the spellings — "Ana" not "Anna", "María" with the
+ * accent, "Lidiya" not "Lidia"; XTTS matches the speaker name exactly and a
+ * near-miss is a 500, not a fallback.
+ *
+ * Synthesis runs through the local XTTS server (voicelab/xtts_server.py, port
+ * 8790), so nothing leaves the machine. It is slower than real time on CPU —
+ * the browser voice stays available as the fast fallback.
+ * ------------------------------------------------------------------------- */
+
+const XTTS_URL = process.env.XTTS_URL || 'http://127.0.0.1:8790';
+
+const VOICES = [
+  { id: 'Nova Hogarth', label: 'Nova Hogarth', preferred: true },
+  { id: 'Ana Florence', label: 'Ana Florence' },
+  { id: 'Alma María', label: 'Alma María' },
+  { id: 'Uta Obando', label: 'Uta Obando' },
+  { id: 'Lidiya Szekeres', label: 'Lidiya Szekeres' },
+];
+
+const DEFAULT_VOICE = process.env.KACEY_TTS_VOICE || 'Nova Hogarth';
+
+app.get('/api/voices', async (_req, res) => {
+  let available = false;
+  try {
+    const r = await fetch(`${XTTS_URL}/health`, { signal: AbortSignal.timeout(3000) });
+    available = r.ok && (await r.json()).ok === true;
+  } catch {
+    available = false;                       // XTTS not running — browser voice only
+  }
+  res.json({ voices: VOICES, defaultVoice: DEFAULT_VOICE, xtts: available });
+});
+
+/* ---------------------------------------------------------------------------
+ * Internal calendar — READ ONLY.
+ *
+ * The calendar is klaus_memory's own: table `calendar_event`, written by Kacey
+ * through the calendar_create MCP tool. Editing stays in the conversation for
+ * now, so this endpoint only reads.
+ *
+ * Read straight from SQLite with node:sqlite rather than standing up
+ * klaus_memory's HTTP API on 8010: one less process to keep alive, and the MCP
+ * server already owns the write path. Opened read-only, per request, so we never
+ * hold a lock and always see Kacey's latest writes.
+ *
+ * Day boundaries follow klaus_memory's logical day, which ends at 04:00 — an
+ * event at 01:30 belongs to the previous date, same rule the persona uses.
+ * ------------------------------------------------------------------------- */
+
+const LOGICAL_DAY_START_HOUR = 4;
+
+function logicalDayOf(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const shifted = new Date(d.getTime() - LOGICAL_DAY_START_HOUR * 3600 * 1000);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}-${String(shifted.getDate()).padStart(2, '0')}`;
+}
+
+app.get('/api/calendar', async (req, res) => {
+  // month=YYYY-MM shows one calendar month; omitted means the current one.
+  const wantMonth = /^\d{4}-\d{2}$/.test(String(req.query.month || ''))
+    ? String(req.query.month)
+    : null;
+
+  let db;
+  try {
+    // Dynamic import (this file is ESM, so there is no bare `require`), and lazy
+    // so a Node build without node:sqlite still runs the rest of Kacey.
+    const { DatabaseSync } = await import('node:sqlite');
+    db = new DatabaseSync(KLAUS_DB, { readOnly: true });
+  } catch (err) {
+    return res.status(503).json({ error: `Kalendář nelze otevřít: ${err.message}` });
+  }
+
+  try {
+    const rows = db
+      .prepare(
+        `SELECT event_id, title, starts_at, ends_at, origin, sync_state,
+                sensitivity, sync_error
+           FROM calendar_event
+          ORDER BY starts_at`,
+      )
+      .all();
+
+    const today = logicalDayOf(new Date().toISOString());
+    const month = wantMonth || today.slice(0, 7);
+
+    // Index every event by logical day once, then slice the month out of it.
+    const byDay = new Map();
+    const byMonth = new Map();
+    for (const r of rows) {
+      const day = logicalDayOf(r.starts_at);
+      if (!day) continue;
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day).push(r);
+      const m = day.slice(0, 7);
+      byMonth.set(m, (byMonth.get(m) || 0) + 1);
+    }
+
+    // Every day of the requested month, so the view reads as a month even where
+    // nothing is booked.
+    const [y, mo] = month.split('-').map(Number);
+    const dayCount = new Date(y, mo, 0).getDate();
+    const days = [];
+    for (let d = 1; d <= dayCount; d++) {
+      const date = `${month}-${String(d).padStart(2, '0')}`;
+      days.push({ date, events: byDay.get(date) || [] });
+    }
+
+    // Which months hold anything — so the UI can jump straight to a populated
+    // month instead of the user clicking through empty ones.
+    const monthsWithEvents = [...byMonth.entries()]
+      .map(([m, count]) => ({ month: m, count }))
+      .sort((a, b) => (a.month < b.month ? -1 : 1));
+
+    res.json({
+      today,
+      month,
+      monthEvents: byMonth.get(month) || 0,
+      total: rows.length,
+      monthsWithEvents,
+      days,
+    });
+  } catch (err) {
+    log(`calendar read failed: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  } finally {
+    try { db.close(); } catch { /* already closed */ }
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * Calendar writes.
+ *
+ * Reads go straight to SQLite (above); writes must NOT, because klaus_memory
+ * owns real logic here — it recomputes conflicts, stamps updated_at, and pushes
+ * through to the external calendar backend. So each write runs
+ * tools/calendar_write.py, which drives MemoryService properly.
+ *
+ * A short-lived process per write rather than another daemon: writes are
+ * user-initiated and rare, and a dead daemon fails silently (which this project
+ * has already been bitten by).
+ * ------------------------------------------------------------------------- */
+
+const EVENT_ID_RE = /^ev_[A-Za-z0-9_-]{4,64}$/;
+
+function calendarWrite(payload) {
+  return new Promise((resolve) => {
+    const child = spawn(
+      PYTHON_BIN,
+      [path.join(HERE, 'tools', 'calendar_write.py'), '--db', KLAUS_DB],
+      {
+        env: { ...process.env, PYTHONPATH: KLAUS_MEMORY_PYTHONPATH, PYTHONIOENCODING: 'utf-8' },
+      },
+    );
+
+    let out = '', err = '';
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* gone */ } }, 30000);
+
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { err += d; });
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: `nelze spustit python: ${e.message}` });
+    });
+    child.on('close', () => {
+      clearTimeout(timer);
+      try {
+        resolve(JSON.parse(out.trim()));
+      } catch {
+        resolve({ ok: false, error: (err || out || 'zápis selhal').trim().slice(0, 300) });
+      }
+    });
+
+    child.stdin.end(JSON.stringify(payload), 'utf8');
+  });
+}
+
+app.post('/api/calendar/:id/update', express.json({ limit: '32kb' }), async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!EVENT_ID_RE.test(id)) return res.status(400).json({ error: 'neplatné event_id' });
+
+  const body = req.body || {};
+  const payload = { action: 'update', event_id: id };
+  for (const key of ['title', 'starts_at', 'sensitivity']) {
+    if (typeof body[key] === 'string' && body[key].trim()) payload[key] = body[key].trim();
+  }
+  // ends_at is tri-state: absent = keep, null = clear the end time.
+  if ('ends_at' in body) payload.ends_at = body.ends_at === null ? null : String(body.ends_at);
+  if (Object.keys(payload).length <= 2) {
+    return res.status(400).json({ error: 'nic ke změně' });
+  }
+
+  const r = await calendarWrite(payload);
+  log(`calendar update ${id}: ${r.ok ? 'ok' : 'FAILED ' + r.error}`);
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+app.post('/api/calendar/:id/delete', express.json({ limit: '4kb' }), async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!EVENT_ID_RE.test(id)) return res.status(400).json({ error: 'neplatné event_id' });
+
+  const r = await calendarWrite({ action: 'delete', event_id: id });
+  log(`calendar delete ${id}: ${r.ok ? 'ok' : 'FAILED ' + r.error}`);
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+/**
+ * Normalise text for XTTS.
+ *
+ * A full stop makes XTTS produce a hard terminal drop — clipped, and it often
+ * swallows the last syllable. A comma gives a softer boundary, which measurably
+ * cleans up the delivery (found by ear in the Voice Lab, 2026-08-17).
+ *
+ * This runs at the synthesis boundary, NOT before it: the frontend splits the
+ * reply into sentences on '.', so rewriting dots earlier would leave it with no
+ * boundaries to split on and Kacey would speak the whole reply as one breath.
+ *
+ * Set KACEY_TTS_DOTS=keep to send the text through untouched.
+ */
+const TTS_DOTS = process.env.KACEY_TTS_DOTS || 'comma';
+
+function ttsText(input) {
+  let s = String(input);
+  if (TTS_DOTS !== 'comma') return s.trim();
+
+  // "..." would become ",,," — make it a real ellipsis first.
+  s = s.replace(/\.{2,}/g, '…');
+  s = s.replace(/\./g, ',');
+  // Czech writes decimals with a comma anyway, so "3.14" -> "3,14" is a bonus.
+  s = s.replace(/\s+,/g, ',');        // stray " ," from an odd split
+  s = s.replace(/,{2,}/g, ',');       // ",," reads as a stumble
+  // A question or exclamation mark already carries the boundary; a comma glued to
+  // either side ("Ano!, Hned,") reads as a stumble. The stronger mark wins.
+  s = s.replace(/,(\s*[!?])/g, '$1');
+  s = s.replace(/([!?])\s*,/g, '$1');
+  return s.trim();
+}
+
+app.post('/api/tts', express.json({ limit: '64kb' }), async (req, res) => {
+  const { text, voice } = req.body || {};
+  if (!text || !voice) return res.status(400).json({ error: 'text and voice are required' });
+  if (!VOICES.some((v) => v.id === voice)) {
+    return res.status(400).json({ error: `unknown voice "${voice}"` });
+  }
+
+  const spoken = ttsText(text);
+  if (!spoken) return res.status(400).json({ error: 'nothing to speak' });
+
+  try {
+    const started = Date.now();
+    const upstream = await fetch(`${XTTS_URL}/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: spoken, speaker: voice, language: 'cs' }),
+      // CPU synthesis of a sentence can take tens of seconds.
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!upstream.ok) throw new Error(`XTTS ${upstream.status}`);
+    const audio = Buffer.from(await upstream.arrayBuffer());
+    const ms = Date.now() - started;
+    log(`tts ${voice}: ${JSON.stringify(spoken)} -> ${audio.length} B in ${ms} ms`);
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('X-Tts-Ms', String(ms));
+    res.end(audio);
+  } catch (err) {
+    log(`tts failed (${voice}): ${err.message}`);
+    res.status(502).json({ error: `Hlasový server neodpovídá (${err.message})` });
+  }
 });
 
 // The frontend agent owns public/ exclusively.
