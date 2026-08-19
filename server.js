@@ -565,11 +565,82 @@ app.get('/api/voices', async (_req, res) => {
 
 const LOGICAL_DAY_START_HOUR = 4;
 
+/** Local calendar date of a Date, as 'YYYY-MM-DD'. */
+function calDayOf(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function logicalDayOf(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return null;
-  const shifted = new Date(d.getTime() - LOGICAL_DAY_START_HOUR * 3600 * 1000);
-  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}-${String(shifted.getDate()).padStart(2, '0')}`;
+  return calDayOf(new Date(d.getTime() - LOGICAL_DAY_START_HOUR * 3600 * 1000));
+}
+
+/* All-day events arrive from the calendar sync as whole clock days: midnight to
+   midnight with an EXCLUSIVE end, or midnight to 23:59. They must not get the
+   4-hour logical-day shift — midnight belongs to the previous logical day, so a
+   holiday starting at 00:00 on the 26th would be filed as starting on the 25th
+   and ending a day early. Detect the shape and use plain calendar days for it. */
+function isAllDay(startIso, endIso) {
+  if (!endIso) return false;
+  const s = new Date(startIso), e = new Date(endIso);
+  if (isNaN(s) || isNaN(e)) return false;
+  if (s.getHours() !== 0 || s.getMinutes() !== 0) return false;
+  const endsAtMidnight = e.getHours() === 0 && e.getMinutes() === 0;
+  const endsAtDayEnd = e.getHours() === 23 && e.getMinutes() === 59;
+  if (!endsAtMidnight && !endsAtDayEnd) return false;
+  return e.getTime() - s.getTime() >= 20 * 3600 * 1000;    // at least most of a day
+}
+
+/* The inclusive range of days an event occupies. The end is treated as
+   exclusive throughout — an event ending at 00:00, or at 04:00 for a timed one,
+   does not reach into the day that begins there. */
+function dayRangeOf(r) {
+  const s = new Date(r.starts_at);
+  if (isNaN(s)) return null;
+  const allDay = isAllDay(r.starts_at, r.ends_at);
+  const first = allDay ? calDayOf(s) : logicalDayOf(r.starts_at);
+  if (!first) return null;
+
+  let last = first;
+  if (r.ends_at) {
+    const e = new Date(r.ends_at);
+    if (!isNaN(e) && e.getTime() > s.getTime()) {
+      const endMoment = new Date(e.getTime() - 1);
+      const end = allDay ? calDayOf(endMoment) : logicalDayOf(endMoment.toISOString());
+      if (end && end > first) last = end;
+    }
+  }
+  return { first, last, allDay };
+}
+
+/** Days since epoch for a 'YYYY-MM-DD'. UTC so a DST change cannot shift it. */
+function dayIndex(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
+}
+
+/** Every 'YYYY-MM' from a to b inclusive. Capped: a corrupt far-future row must
+    not turn into an unbounded loop. */
+function monthsBetween(a, b) {
+  const out = [];
+  let [y, m] = a.split('-').map(Number);
+  const [ey, em] = b.split('-').map(Number);
+  while ((y < ey || (y === ey && m <= em)) && out.length < 240) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    if (++m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/* source_meta is free-form JSON written by whatever produced the event, so it is
+   parsed defensively and only sent when it actually holds something. */
+function parseSourceMeta(raw) {
+  if (!raw) return null;
+  let value;
+  try { value = JSON.parse(raw); } catch { return null; }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return Object.keys(value).length ? value : null;
 }
 
 app.get('/api/calendar', async (req, res) => {
@@ -592,7 +663,7 @@ app.get('/api/calendar', async (req, res) => {
     const rows = db
       .prepare(
         `SELECT event_id, title, starts_at, ends_at, origin, sync_state,
-                sensitivity, sync_error
+                sensitivity, sync_error, source, source_meta, updated_at
            FROM calendar_event
           ORDER BY starts_at`,
       )
@@ -601,16 +672,20 @@ app.get('/api/calendar', async (req, res) => {
     const today = logicalDayOf(new Date().toISOString());
     const month = wantMonth || today.slice(0, 7);
 
-    // Index every event by logical day once, then slice the month out of it.
-    const byDay = new Map();
+    /* Resolve each event once to the range of days it covers. Ranges rather
+       than a single bucket: an event that runs from July to August belongs on
+       every day in between, and used to appear only on the day it started —
+       which made a two-week holiday invisible in the month it mostly covers. */
+    const spans = [];
     const byMonth = new Map();
     for (const r of rows) {
-      const day = logicalDayOf(r.starts_at);
-      if (!day) continue;
-      if (!byDay.has(day)) byDay.set(day, []);
-      byDay.get(day).push(r);
-      const m = day.slice(0, 7);
-      byMonth.set(m, (byMonth.get(m) || 0) + 1);
+      const range = dayRangeOf(r);
+      if (!range) continue;
+      spans.push({ row: r, ...range });
+      // A spanning event counts once in every month it touches.
+      for (const m of monthsBetween(range.first.slice(0, 7), range.last.slice(0, 7))) {
+        byMonth.set(m, (byMonth.get(m) || 0) + 1);
+      }
     }
 
     // Every day of the requested month, so the view reads as a month even where
@@ -620,7 +695,22 @@ app.get('/api/calendar', async (req, res) => {
     const days = [];
     for (let d = 1; d <= dayCount; d++) {
       const date = `${month}-${String(d).padStart(2, '0')}`;
-      days.push({ date, events: byDay.get(date) || [] });
+      const events = [];
+      for (const s of spans) {
+        // 'YYYY-MM-DD' compares lexicographically the same as chronologically.
+        if (date < s.first || date > s.last) continue;
+        const count = dayIndex(s.last) - dayIndex(s.first) + 1;
+        const index = dayIndex(date) - dayIndex(s.first) + 1;
+        events.push({
+          ...s.row,
+          source_meta: parseSourceMeta(s.row.source_meta),
+          all_day: s.allDay,
+          // Which slice of the event this day is, so the row can say so rather
+          // than repeating the full time range on every day it covers.
+          span: { index, count, first: index === 1, last: index === count },
+        });
+      }
+      days.push({ date, events });
     }
 
     // Which months hold anything — so the UI can jump straight to a populated

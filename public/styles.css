@@ -763,6 +763,40 @@ body.is-hidden .orb__blob { animation-play-state: paused; }
 .cal__tag--local   { color: var(--rose); }
 .cal__tag--ext     { color: var(--cyan-dim); }
 
+/* Which day of a run this row is — a plain counter, deliberately quiet. */
+.cal__tag--span {
+  font-family: var(--mono); letter-spacing: 0; text-transform: none;
+  color: var(--cyan-dim); border-color: var(--line);
+}
+
+/* Which calendar the event came from. Three sources today; the hue rotation
+   gives each a stable identity without hard-coding names into the palette. */
+.cal__tag--src { border-color: transparent; color: var(--ink-dim); }
+.cal__tag--src[data-src] {
+  background: hsl(var(--h) 60% 60% / .13);
+  color: hsl(var(--h) 70% 78%);
+}
+.cal__tag--src[data-src="prace"] {
+  background: hsl(calc(var(--h) + 55) 60% 60% / .13);
+  color: hsl(calc(var(--h) + 55) 70% 78%);
+}
+.cal__tag--src[data-src="rodina"] {
+  background: hsl(calc(var(--h) - 55) 60% 60% / .13);
+  color: hsl(calc(var(--h) - 55) 70% 78%);
+}
+
+/* Free-form source_meta. Lower case, because these are values not labels. */
+.cal__tag--meta {
+  text-transform: none; letter-spacing: .02em;
+  color: var(--ink-dim); border-style: dashed;
+  max-width: 26ch; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* A day that an event merely passes through, rather than starts on. */
+.cal__event--cont .cal__title { color: var(--ink-dim); }
+.cal__event--cont .cal__time { color: var(--cyan-dim); }
+.cal__event--span .cal__time { font-variant-numeric: tabular-nums; }
+
 .cal__err { font-size: 11px; color: var(--rose); padding: 6px 0; }
 
 /* month header + jump-to-month chips */

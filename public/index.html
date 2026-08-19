@@ -13,7 +13,7 @@
 
 <!-- ============================================================
      BACKGROUND: reactor orb + HUD chrome. Decorative only.
-     States are driven by data-state on #orb (see app.js).
+     States are driven by data-state on #orb (see js/orb.js).
      ============================================================ -->
 <div class="stage" aria-hidden="true">
   <div class="grid"></div>
@@ -353,12 +353,20 @@
 <!-- polite announcer for completed assistant turns (keeps the log from spamming SRs per chunk) -->
 <p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>
 
-<!-- wake-voice.js defines window.KaceyWakeVoice and must load before app.js,
-     which picks it up at boot. It is inert without enrolled samples. -->
+<!-- These two are classic scripts, not modules: the Node tests in test/ load
+     them by evaluating the source, and wake-worklet.js is fetched by relative
+     URL at runtime. Classic scripts run before deferred module scripts, so both
+     globals exist by the time app.js boots.
+
+     wake-voice.js defines window.KaceyWakeVoice — the local voice-template wake
+     word. Inert without enrolled samples. -->
 <script src="wake-voice.js"></script>
 <!-- closing.js defines window.KaceyClosing — recognises "to je vše, díky" and
      friends, so the hands-free loop can be ended by saying so. -->
 <script src="closing.js"></script>
-<script src="app.js"></script>
+
+<!-- The frontend proper: a native ES module that pulls in public/js/*. No build
+     step — the browser resolves the imports. -->
+<script type="module" src="app.js"></script>
 </body>
 </html>
