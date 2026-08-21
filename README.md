@@ -6,7 +6,7 @@ MCP server, so Kacey remembers things between conversations.
 
 ```
 Browser (voice + text UI)  ->  this server (Node)  ->  Claude Agent SDK  ->  klaus_memory MCP
-        public/                    server.js            @anthropic-ai/...      python -m klaus_memory
+   public/app.js + js/            server.js            @anthropic-ai/...      python -m klaus_memory
 ```
 
 ## Run it
@@ -22,6 +22,13 @@ Authentication comes from the Claude CLI — run `claude` once in a terminal and
 in. No `ANTHROPIC_API_KEY` is needed if you are logged in. If Claude is not
 authenticated, Kacey says so in the UI instead of failing silently.
 
+Run the tests (no browser needed — they cover the wake-word DSP, the wake
+pipeline and the spoken-command matcher):
+
+```sh
+npm run test:wake
+```
+
 Check it is alive:
 
 ```sh
@@ -31,12 +38,47 @@ curl http://localhost:8787/api/health
 
 ## Files
 
-| Path               | What it is                                              |
-| ------------------ | ------------------------------------------------------- |
-| `server.js`        | The whole backend: HTTP, WebSocket, SDK session, MCP    |
-| `persona/kacey.md` | Kacey's system prompt — edit and restart, no code change |
-| `.env.example`     | Every configuration knob with explanation                |
-| `public/`          | Frontend (owned by the frontend; not touched here)      |
+| Path                 | What it is                                                    |
+| -------------------- | ------------------------------------------------------------- |
+| `server.js`          | The whole backend: HTTP, WebSocket, SDK session, MCP          |
+| `persona/kacey.md`   | Kacey's system prompt — edit and restart, no code change      |
+| `.env.example`       | Every configuration knob with explanation                     |
+| `public/index.html`  | The markup, and the only place scripts are loaded             |
+| `public/app.js`      | Frontend entry point — boot and wiring, nothing else          |
+| `public/js/`         | The frontend proper: `core/` `ui/` `voice/` `net/` (below)      |
+| `public/styles.css`  | All of the styling; one hue drives the whole palette          |
+| `test/`              | Node tests for the pieces that can be tested without a browser |
+| `ARCHITECTURE.md`    | How it all fits together, and the invariants that hold          |
+
+### Frontend layout
+
+`public/app.js` is a native ES module — `<script type="module">`, no build step, no
+dependencies. It restores preferences, subscribes the orb's followers, wires the
+DOM and starts the transport, in that order. Everything else is in `public/js/`,
+grouped by what a module talks to:
+
+```
+public/js/
+  core/    state i18n dom bus              imports nothing outside itself
+  ui/      orb log telemetry labels        the DOM: what is on screen
+           theme voice-picker calendar
+  voice/   sentences chime tts             the microphone and the speakers,
+           recognition commands barge      and who is allowed to hold them
+           wake wake-panel
+  net/     transport-socket                the wire: two transports and the
+           transport-mock protocol         pipeline they both feed
+  debug.js                                 reaches across all four, on purpose
+```
+
+Three files stay **classic scripts** at the root of `public/` rather than modules:
+`wake-voice.js` and `closing.js`, because the Node tests load them by evaluating
+the source, and `wake-worklet.js`, which the browser fetches by relative URL at
+runtime. Classic scripts run before deferred module scripts, so the globals they
+define exist by the time `app.js` boots.
+
+**[ARCHITECTURE.md](ARCHITECTURE.md) is the full account**: a module-by-module
+table, how a turn flows end to end, the microphone arbitration, the two deliberate
+import cycles, the invariants, and where to put new code.
 
 ## Configuration
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
-<meta name="theme-color" content="#05060b" />
+<meta name="theme-color" content="#03070d" />
 <meta name="description" content="Kacey — voice-first assistant with long-term memory." />
 <title>Kacey</title>
 <link rel="stylesheet" href="styles.css" />
@@ -12,26 +12,49 @@
 <body>
 
 <!-- ============================================================
-     BACKGROUND: the orb. Purely decorative, never focusable.
-     States are driven by data-state on #orb (see app.js).
+     BACKGROUND: reactor orb + HUD chrome. Decorative only.
+     States are driven by data-state on #orb (see js/orb.js).
      ============================================================ -->
 <div class="stage" aria-hidden="true">
+  <div class="grid"></div>
+
   <div class="orb" id="orb" data-state="boot">
     <div class="orb__amp" id="orbAmp">
       <span class="orb__halo"></span>
+
+      <!-- concentric instrument rings -->
+      <span class="ring ring--outer"></span>
+      <span class="ring ring--ticks"></span>
+      <span class="ring ring--dashed"></span>
+      <span class="ring ring--inner"></span>
+      <span class="ring ring--sweep"></span>
+
+      <!-- reactor core -->
       <span class="orb__blob orb__blob--a"></span>
       <span class="orb__blob orb__blob--b"></span>
       <span class="orb__blob orb__blob--c"></span>
-      <span class="orb__core"></span>
+      <span class="core">
+        <span class="core__tri"></span>
+        <span class="core__tri core__tri--flip"></span>
+        <span class="orb__core"></span>
+      </span>
       <span class="orb__ring"></span>
       <span class="orb__specular"></span>
     </div>
   </div>
+
+  <!-- frame brackets -->
+  <span class="bracket bracket--tl"></span>
+  <span class="bracket bracket--tr"></span>
+  <span class="bracket bracket--bl"></span>
+  <span class="bracket bracket--br"></span>
+
+  <div class="scanlines"></div>
   <div class="grain"></div>
 </div>
 
 <!-- ============================================================
-     FOREGROUND: chat + controls, floating over the orb.
+     FOREGROUND
      ============================================================ -->
 <div class="app">
 
@@ -43,9 +66,19 @@
       </div>
     </div>
 
-    <p class="brand" id="brand">Kacey<span class="brand__badge" id="mockBadge" hidden>mock</span></p>
+    <p class="brand" id="brand">
+      <span class="brand__mark" aria-hidden="true"></span>
+      K A C E Y
+      <span class="brand__badge" id="mockBadge" hidden>mock</span>
+    </p>
 
     <div class="topbar__side topbar__side--end">
+      <div class="select">
+        <label class="sr-only" for="voice" id="voiceLabel">Hlas</label>
+        <select class="select__el" id="voice"></select>
+        <span class="select__caret" aria-hidden="true"></span>
+      </div>
+
       <div class="select">
         <label class="sr-only" for="lang" id="langLabel">Language</label>
         <select class="select__el" id="lang">
@@ -54,6 +87,30 @@
         </select>
         <span class="select__caret" aria-hidden="true"></span>
       </div>
+
+      <button type="button" class="iconbtn iconbtn--wake" id="wake" aria-pressed="true" aria-label="Slovo KC zapne diktování" title="Slovo KC zapne diktování">
+        <svg class="i i--on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 4.5v15M8 7.5v9M16 7.5v9M4.5 10.5v3M19.5 10.5v3" />
+        </svg>
+        <svg class="i i--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 8.5v7M8 10.5v3M16 10.5v3" />
+          <path d="M4 20L20 4" />
+        </svg>
+      </button>
+
+      <button type="button" class="iconbtn" id="calBtn" aria-expanded="false" aria-controls="calPanel" aria-label="Kalendář" title="Kalendář">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="3.5" y="5" width="17" height="15" rx="2" />
+          <path d="M3.5 10h17M8 3.5v3M16 3.5v3" />
+        </svg>
+      </button>
+
+      <button type="button" class="iconbtn" id="settings" aria-expanded="false" aria-controls="settingsPanel" aria-label="Nastavení vzhledu" title="Nastavení vzhledu">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="3.1" />
+          <path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5" />
+        </svg>
+      </button>
 
       <button type="button" class="iconbtn" id="mute" aria-pressed="false" aria-label="Mute spoken replies" title="Mute spoken replies">
         <svg class="i i--on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -69,6 +126,52 @@
     </div>
   </header>
 
+  <!-- ---------- telemetry rails: every value is real, none simulated ---------- -->
+  <aside class="rail rail--left" aria-hidden="true">
+    <section class="panel">
+      <h2 class="panel__title">LINK</h2>
+      <dl class="readout">
+        <div class="readout__row"><dt>STATE</dt><dd id="tmState">—</dd></div>
+        <div class="readout__row"><dt>MODEL</dt><dd id="tmModel">—</dd></div>
+        <div class="readout__row"><dt>MCP</dt><dd id="tmMcp">—</dd></div>
+        <div class="readout__row"><dt>SESSION</dt><dd id="tmSession">—</dd></div>
+        <div class="readout__row"><dt>TURNS</dt><dd id="tmTurns">0</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel__title">MEMORY</h2>
+      <dl class="readout">
+        <div class="readout__row"><dt>LAST TOOL</dt><dd id="tmTool">—</dd></div>
+        <div class="readout__row"><dt>CALLS</dt><dd id="tmToolCount">0</dd></div>
+      </dl>
+    </section>
+  </aside>
+
+  <aside class="rail rail--right" aria-hidden="true">
+    <section class="panel">
+      <h2 class="panel__title">VOICE</h2>
+      <dl class="readout">
+        <div class="readout__row"><dt>SPEAKER</dt><dd id="tmVoice">—</dd></div>
+        <div class="readout__row"><dt>LANG</dt><dd id="tmLang">—</dd></div>
+        <div class="readout__row"><dt>QUEUE</dt><dd id="tmTts">0</dd></div>
+        <div class="readout__row"><dt>SYNTH</dt><dd id="tmSynth">—</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel__title">ACTIVITY</h2>
+      <div class="meter" id="meter">
+        <span class="meter__bar"></span><span class="meter__bar"></span>
+        <span class="meter__bar"></span><span class="meter__bar"></span>
+        <span class="meter__bar"></span><span class="meter__bar"></span>
+        <span class="meter__bar"></span><span class="meter__bar"></span>
+        <span class="meter__bar"></span><span class="meter__bar"></span>
+        <span class="meter__bar"></span><span class="meter__bar"></span>
+      </div>
+    </section>
+  </aside>
+
   <main class="logwrap" id="logwrap">
     <ol class="log" id="log" role="log" aria-live="polite" aria-atomic="false" aria-relevant="additions" aria-label="Conversation"></ol>
   </main>
@@ -81,6 +184,7 @@
 
   <footer class="dock">
     <form class="composer" id="composer" autocomplete="off">
+      <span class="composer__prompt" aria-hidden="true">&gt;</span>
       <label class="sr-only" for="input" id="inputLabel">Message</label>
       <input class="composer__input" id="input" type="text" placeholder="Type a message…"
              autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" />
@@ -106,9 +210,163 @@
   </footer>
 </div>
 
+<!-- ============================================================
+     SETTINGS — the whole interface is one hue plus neutrals,
+     so this dial is the only colour control that exists.
+     ============================================================ -->
+<!-- ============================================================
+     CALENDAR — read-only view of klaus_memory's calendar_event.
+     Editing happens in conversation; direct controls come later.
+     ============================================================ -->
+<div class="sheet" id="calPanel" hidden>
+  <div class="sheet__box sheet__box--wide" role="dialog" aria-modal="false" aria-labelledby="calTitle">
+    <div class="sheet__head">
+      <h2 class="sheet__title" id="calTitle">KALENDÁŘ</h2>
+      <div class="cal__tools">
+        <button type="button" class="cal__btn" id="calPrev" aria-label="Předchozí měsíc">‹</button>
+        <button type="button" class="cal__btn" id="calToday">dnes</button>
+        <button type="button" class="cal__btn" id="calNext" aria-label="Další měsíc">›</button>
+        <button type="button" class="cal__btn" id="calReload" aria-label="Obnovit">↻</button>
+      </div>
+      <button type="button" class="sheet__close" id="calClose" aria-label="Zavřít">×</button>
+    </div>
+    <p class="cal__month" id="calMonth" aria-live="polite">—</p>
+    <p class="cal__meta" id="calMeta">—</p>
+    <div class="cal__jump" id="calJump" hidden></div>
+    <div class="cal__body" id="calBody"></div>
+    <p class="sheet__note">
+      ✎ upraví, × smaže (na dvě klepnutí). Nové události zakládej v konverzaci —
+      řekni Kacey, co má poznamenat.
+    </p>
+  </div>
+</div>
+
+<div class="sheet" id="settingsPanel" hidden>
+  <div class="sheet__box" role="dialog" aria-modal="false" aria-labelledby="sheetTitle">
+    <div class="sheet__head">
+      <h2 class="sheet__title" id="sheetTitle">VZHLED</h2>
+      <button type="button" class="sheet__close" id="settingsClose" aria-label="Zavřít">×</button>
+    </div>
+
+    <div class="dial">
+      <div class="dial__ring" id="hueRing" role="slider" tabindex="0"
+           aria-label="Hlavní barva rozhraní" aria-valuemin="0" aria-valuemax="359"
+           aria-valuenow="193" aria-valuetext="odstín 193">
+        <span class="dial__track" aria-hidden="true"></span>
+        <span class="dial__knob" id="hueKnob" aria-hidden="true"></span>
+        <span class="dial__hub" aria-hidden="true">
+          <span class="dial__value" id="hueValue">193</span>
+          <span class="dial__unit">HUE</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="swatches" aria-hidden="true">
+      <span class="swatch swatch--primary"><i></i>PRIMARY</span>
+      <span class="swatch swatch--accent"><i></i>ACCENT</span>
+      <span class="swatch swatch--danger"><i></i>ALERT</span>
+      <span class="swatch swatch--ink"><i></i>INK</span>
+    </div>
+
+    <div class="presets" id="huePresets">
+      <button type="button" class="preset" data-h="193" style="--p:193">CYAN</button>
+      <button type="button" class="preset" data-h="150" style="--p:150">JADE</button>
+      <button type="button" class="preset" data-h="88"  style="--p:88">LIME</button>
+      <button type="button" class="preset" data-h="33"  style="--p:33">AMBER</button>
+      <button type="button" class="preset" data-h="285" style="--p:285">VIOLET</button>
+      <button type="button" class="preset" data-h="330" style="--p:330">MAGENTA</button>
+    </div>
+
+    <p class="sheet__note">Ostatní barvy se odvozují — kontrast a čitelnost zůstávají.</p>
+
+    <div class="sheet__row">
+      <span class="sheet__rowLabel">
+        Budicí slovo „KC“
+        <em class="sheet__rowSub" id="vwState">nenastaveno</em>
+      </span>
+      <button type="button" class="cal__btn" id="vwOpen" aria-expanded="false" aria-controls="vwPanel">
+        nastavit
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     VOICEPRINT — the wake word matched against the owner's own
+     recordings instead of against guessed spellings of "KC".
+     All local: nothing here reaches the network.
+     ============================================================ -->
+<div class="sheet" id="vwPanel" hidden>
+  <div class="sheet__box sheet__box--wide" role="dialog" aria-modal="false" aria-labelledby="vwTitle">
+    <div class="sheet__head">
+      <h2 class="sheet__title" id="vwTitle">HLASOVÝ PODPIS</h2>
+      <button type="button" class="sheet__close" id="vwClose" aria-label="Zavřít">×</button>
+    </div>
+
+    <p class="vw__lede">
+      Nahraj, jak říkáš „KC“. Kacey pak porovnává zvuk s tvými nahrávkami —
+      bez přepisu, bez sítě. Mluv tak, jak budeš mluvit potom, a v místnosti,
+      kde Kacey používáš.
+    </p>
+
+    <div class="vw__modes" role="group" aria-label="Způsob rozpoznání">
+      <button type="button" class="vw__mode" id="vwModeVoice" aria-pressed="false">můj hlas</button>
+      <button type="button" class="vw__mode" id="vwModeAsr" aria-pressed="true">přepis</button>
+    </div>
+
+    <div class="vw__rec">
+      <button type="button" class="vw__recBtn" id="vwRec">nahrát vzorek</button>
+      <span class="vw__recNote" id="vwRecNote" aria-live="polite"></span>
+      <span class="vw__level" id="vwLevel" aria-hidden="true"></span>
+    </div>
+
+    <ul class="vw__list" id="vwList"></ul>
+    <p class="vw__spread" id="vwSpread">práh se spočítá ze tří a více vzorků</p>
+
+    <div class="vw__test">
+      <div class="vw__bar" aria-hidden="true">
+        <span class="vw__fill" id="vwFill"></span>
+        <span class="vw__thrMark"></span>
+      </div>
+      <p class="vw__score" id="vwScore" aria-live="off">—</p>
+    </div>
+
+    <label class="vw__sens" for="vwSens">
+      citlivost <input type="range" id="vwSens" min="0" max="100" step="1" value="50" />
+      <output id="vwSensVal">50 · 1.00×</output>
+    </label>
+
+    <div class="vw__foot">
+      <button type="button" class="vw__clear" id="vwClear">smazat vše</button>
+    </div>
+
+    <p class="sheet__note">
+      ▶ přehraje vzorek — takhle přesně ho Kacey slyší. Prostřední číslo je
+      vzdálenost od tvého posledního pokusu (zeleně = tenhle vzorek by stačil),
+      pravé číslo vzdálenost od ostatních vzorků (červeně = řekl jsi to jinak).
+      Doleva od půlky pruhu je shoda. Přehnaná citlivost spouští Kacey uprostřed
+      hovoru.
+    </p>
+  </div>
+</div>
+
 <!-- polite announcer for completed assistant turns (keeps the log from spamming SRs per chunk) -->
 <p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>
 
-<script src="app.js"></script>
+<!-- These two are classic scripts, not modules: the Node tests in test/ load
+     them by evaluating the source, and wake-worklet.js is fetched by relative
+     URL at runtime. Classic scripts run before deferred module scripts, so both
+     globals exist by the time app.js boots.
+
+     wake-voice.js defines window.KaceyWakeVoice — the local voice-template wake
+     word. Inert without enrolled samples. -->
+<script src="wake-voice.js"></script>
+<!-- closing.js defines window.KaceyClosing — recognises "to je vše, díky" and
+     friends, so the hands-free loop can be ended by saying so. -->
+<script src="closing.js"></script>
+
+<!-- The frontend proper: a native ES module that pulls in public/js/*. No build
+     step — the browser resolves the imports. -->
+<script type="module" src="app.js"></script>
 </body>
 </html>
