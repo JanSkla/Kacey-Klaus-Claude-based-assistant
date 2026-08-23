@@ -1,0 +1,501 @@
+<mxfile host="app.diagrams.net" version="24.7.17" type="device">
+  <diagram id="page-turn" name="1 · A turn, end to end">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="L1" value="USER · ROOM" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#c0c0c0;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontSize=13;fontStyle=1;fontColor=#8a8a8a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1420" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="L2" value="voice/ — the microphone and the speakers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#c0c0c0;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontSize=13;fontStyle=1;fontColor=#8a8a8a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1420" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="L3" value="net/protocol.js — one path in, one path out" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#c0c0c0;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontSize=13;fontStyle=1;fontColor=#8a8a8a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="450" width="1420" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="L4" value="server.js — KaceySession (one WebSocket == one continuous query())" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#c0c0c0;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontSize=13;fontStyle=1;fontColor=#8a8a8a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="660" width="1420" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="L5" value="Claude Agent SDK · klaus_memory MCP" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f7f7;strokeColor=#c0c0c0;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontSize=13;fontStyle=1;fontColor=#8a8a8a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="860" width="1420" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="U1" value="&lt;b&gt;User says &quot;Kacey…&quot;&lt;/b&gt;&lt;br/&gt;then speaks a request" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="100" y="60" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="U2" value="&lt;b&gt;…or types&lt;/b&gt;&lt;br/&gt;in the composer" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="60" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="U3" value="&lt;b&gt;User hears the reply&lt;/b&gt;&lt;br/&gt;sentence by sentence, as it arrives" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="55" width="200" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="W1" value="&lt;b&gt;wake.js / wake-panel.js&lt;/b&gt;&lt;div&gt;wake word heard (transcript match or voice template)&lt;/div&gt;&lt;div&gt;→ stopWake(true)&lt;/div&gt;&lt;div&gt;→ state.micDesired = true&lt;/div&gt;&lt;div&gt;→ playWakeChime()&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="90" y="175" width="210" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="R1" value="&lt;b&gt;recognition.js — dictation&lt;/b&gt;&lt;div&gt;onresult (final)&lt;/div&gt;&lt;div&gt;→ micDesired = false&lt;/div&gt;&lt;div&gt;→ resumeVoiceLoop = true&lt;/div&gt;&lt;div&gt;→ stopRecognition(false)&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="90" y="305" width="210" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="T1" value="&lt;b&gt;tts.js — feedTTS(delta)&lt;/b&gt;&lt;div&gt;sentences.js splits on whole sentences; each is spoken as soon as it is complete&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;• browser speechSynthesis, or XTTS via POST /api/tts (the fetch chain runs one sentence AHEAD of playback)&lt;/div&gt;&lt;div&gt;• stops dictation first — feedback guard&lt;/div&gt;&lt;div&gt;• noteSpoken(text) — echo guard for barge-in&lt;/div&gt;&lt;div&gt;• ttsPending++ → syncOrb() = &quot;speaking&quot;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="170" width="290" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="T2" value="&lt;b&gt;flushTTS() on &lt;i&gt;done&lt;/i&gt;&lt;/b&gt;&lt;div&gt;the last partial sentence is spoken&lt;/div&gt;&lt;div&gt;ttsPending hits 0 → onAllSpeechDone()&lt;/div&gt;&lt;div&gt;→ maybeResumeVoiceLoop() after 400 ms&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="365" width="290" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="P1" value="&lt;b&gt;submit(text)&lt;/b&gt;&lt;div&gt;primeTTS()&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="475" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="D1" value="closing.js&lt;br/&gt;&lt;b&gt;classify(text)&lt;/b&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="520" y="460" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="C1" value="&lt;b&gt;commands.js&lt;/b&gt; — bargeIn() / endListening()&lt;div&gt;✖ nothing is sent to the model&lt;/div&gt;&lt;div&gt;✖ nothing is written to the transcript&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="520" y="570" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="N1" value="&lt;i&gt;Invariant 3: the log mirrors what the model saw. A spoken command or a wake word must never appear in it. See page 2 for what happens next.&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacing=6;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="570" width="360" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="P2" value="&lt;b&gt;not a command&lt;/b&gt;&lt;div&gt;cancelSpeech() — silence the old answer&lt;/div&gt;&lt;div&gt;noteTurn()&lt;/div&gt;&lt;div&gt;addMessage('user') — textContent only&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="470" width="180" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="P3" value="&lt;b&gt;transport.send()&lt;/b&gt;&lt;div&gt;{ type: 'user_message', text }&lt;/div&gt;&lt;div&gt;&lt;i&gt;socket or mock — the pipeline never knows which&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="980" y="470" width="150" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="P4" value="&lt;b&gt;onServer(frame) — one switch&lt;/b&gt;&lt;div&gt;ready · session · thinking · delta · tool · done · error&lt;/div&gt;&lt;div&gt;&lt;i&gt;unknown types are ignored, not fatal (invariant 5)&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="470" width="290" height="85" as="geometry" />
+        </mxCell>
+
+        <mxCell id="S1" value="&lt;b&gt;/ws frame router&lt;/b&gt;&lt;div&gt;user_message | interrupt&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="980" y="690" width="150" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="S2" value="&lt;b&gt;onUserMessage(text)&lt;/b&gt;&lt;div&gt;turnActive = true&lt;/div&gt;&lt;div&gt;send { thinking }&lt;/div&gt;&lt;div&gt;pushUserMessage() — appends the per-turn Czech/gender nudge&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="680" width="220" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="S3" value="&lt;b&gt;userMessageStream()&lt;/b&gt;&lt;div&gt;async generator, awaits this.wake&lt;/div&gt;&lt;div&gt;→ one continuous query() in streaming-input mode, so Claude keeps the earlier turns with no history replay&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="680" width="240" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="S4" value="&lt;b&gt;handle(msg) — the filter&lt;/b&gt;&lt;div&gt;text_delta → { delta }&lt;/div&gt;&lt;div&gt;tool_use / tool_result → { tool, phase }&lt;/div&gt;&lt;div&gt;turn end → { done }&lt;/div&gt;&lt;div&gt;&lt;i&gt;thinking blocks, tool JSON and status events are dropped — delta must stay clean speech (invariant 1)&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="680" width="290" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="G1" value="&lt;b&gt;query()&lt;/b&gt; — Claude Agent SDK&lt;div&gt;systemPrompt = persona/kacey.md&lt;/div&gt;&lt;div&gt;tools: [] · allowedTools = allow-list&lt;/div&gt;&lt;div&gt;permissionMode: 'dontAsk' · strictMcpConfig&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d0cee2;strokeColor=#56517e;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="880" width="300" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="G2" value="&lt;b&gt;klaus_memory MCP&lt;/b&gt;&lt;div&gt;python -m … (stdio)&lt;/div&gt;&lt;div&gt;→ klaus.db&lt;/div&gt;&lt;div&gt;calendar · memory · journal&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d0cee2;strokeColor=#56517e;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="880" width="240" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="G3" value="&lt;b&gt;stream events&lt;/b&gt;&lt;div&gt;system/init · stream_event (text_delta)&lt;/div&gt;&lt;div&gt;assistant (tool_use) · user (tool_result)&lt;/div&gt;&lt;div&gt;result&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d0cee2;strokeColor=#56517e;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="880" width="290" height="105" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="U1" target="W1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="chime, then the mic is handed over" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="W1" target="R1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="submit(text)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="R1" target="P1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="form submit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="U2" target="P1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="P1" target="D1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="'interrupt' or 'end'" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#b85450;" edge="1" parent="1" source="D1" target="C1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=none;dashed=1;strokeColor=#b3b3b3;" edge="1" parent="1" source="C1" target="N1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="null" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="D1" target="P2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="P2" target="P3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="WebSocket · JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeWidth=2;" edge="1" parent="1" source="P3" target="S1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="S1" target="S2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="pending queue + wake()" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="S2" target="S3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="yield" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="S3" target="G1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="tool call / result" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;startArrow=blockThin;startFill=1;" edge="1" parent="1" source="G1" target="G2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="G2" target="G3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="G3" target="S4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" value="frames back over the same socket" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeWidth=2;" edge="1" parent="1" source="S4" target="P4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="{ thinking } — send→stop swaps, bubble opens" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;dashed=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="S2" target="P4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" value="{ delta } → appendDelta() → the bubble &lt;b&gt;and&lt;/b&gt; feedTTS()" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="P4" target="T1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" value="{ done }" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;exitX=0.15;exitY=0;exitDx=0;exitDy=0;entryX=0.15;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="P4" target="T2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="T1" target="U3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" value="hands-free loop: the mic re-opens by itself" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#82b366;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="T2" target="R1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1080" y="402" />
+              <mxPoint x="1080" y="387" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p1title" value="&lt;b&gt;Kacey — a turn, end to end.&lt;/b&gt; Speech never crosses the wire as audio: the browser turns voice into text and text into voice, and the socket carries JSON only. The single exception is POST /api/tts, which is still local.&lt;br/&gt;Speaking starts &lt;i&gt;before&lt;/i&gt; the reply has finished arriving — every complete sentence is spoken as soon as it is whole." style="text;html=1;align=left;verticalAlign=top;fontSize=12;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1020" width="1420" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="page-interrupt" name="2 · Interruptions">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="CORE_BG" value="the interrupt core — protocol.js / commands.js" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef8f8;strokeColor=#b85450;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=13;fontStyle=1;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="400" y="320" width="640" height="300" as="geometry" />
+        </mxCell>
+
+        <mxCell id="TA" value="&lt;b&gt;A · &quot;ticho&quot; / &quot;dost&quot;&lt;/b&gt;&lt;div&gt;said out loud &lt;b&gt;while she is still talking&lt;/b&gt;&lt;/div&gt;" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="TB" value="&lt;b&gt;B · the stop button&lt;/b&gt;&lt;div&gt;click ⏹ , or press Esc&lt;/div&gt;" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="40" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="TC" value="&lt;b&gt;C · a new message mid-reply&lt;/b&gt;&lt;div&gt;typed, or dictated over the top of her&lt;/div&gt;" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="40" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="TD" value="&lt;b&gt;D · &quot;to je vše, díky&quot;&lt;/b&gt;&lt;div&gt;said &lt;b&gt;after&lt;/b&gt; a reply — not an interrupt at all&lt;/div&gt;" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="40" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="BA" value="&lt;b&gt;barge.js — the third listener&lt;/b&gt;&lt;div&gt;A whole extra SpeechRecognition, continuous, interimResults = true, alive &lt;b&gt;only&lt;/b&gt; while ttsPending &amp;gt; 0.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Why it has to exist:&lt;/i&gt; dictation is deliberately closed while she speaks, so without this there is no channel an interrupt could arrive through — &quot;ticho&quot; would only be heard once she had finished, which is exactly too late.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Cost, stated:&lt;/i&gt; cloud ASR, so audio leaves the machine — scoped to the seconds she is talking and nothing more.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="150" width="300" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="BB" value="&lt;b&gt;app.js → protocol.interrupt()&lt;/b&gt;&lt;div&gt;guard: returns at once unless streaming or ttsPending &amp;gt; 0&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="150" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="BC" value="&lt;b&gt;protocol.submit(text)&lt;/b&gt;&lt;div&gt;classify() says it is not a command, so it is a real message — but the old answer still has to be silenced first&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="150" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="BD" value="&lt;b&gt;classify() = 'end'&lt;/b&gt; → commands.endListening()&lt;div&gt;This is a reply to the &lt;i&gt;interface&lt;/i&gt;, not to Kacey: an answer to &quot;that's all, thanks&quot; would be one more thing to sit through.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="150" width="320" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="GA1" value="classify(heard)&lt;br/&gt;== 'interrupt' ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="85" y="370" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="GA2" value="&lt;b&gt;spokenGuard()&lt;/b&gt;&lt;br/&gt;does the reply she is speaking&lt;br/&gt;itself contain the word?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="470" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="BAx" value="&lt;b&gt;stopBarge(true) → bargeIn()&lt;/b&gt;&lt;div&gt;the room said it, so act on it&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="600" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="DISC" value="&lt;b&gt;discarded&lt;/b&gt;&lt;div&gt;Everything the barge listener hears is thrown away except an interrupt phrase — and that is thrown away too if it was her own voice coming back through the speakers.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=left;verticalAlign=top;spacing=6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="690" width="300" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="K1" value="&lt;b&gt;cancelSpeech()&lt;/b&gt;&lt;div&gt;• xttsToken++ — orphans every queued and in-flight sentence&lt;/div&gt;&lt;div&gt;• both promise chains reset, so her &lt;i&gt;next&lt;/i&gt; first sentence does not wait behind audio we already threw away&lt;/div&gt;&lt;div&gt;• audio.pause() · synth.cancel()&lt;/div&gt;&lt;div&gt;• ttsPending = 0 · clearSpoken() · syncOrb()&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="360" width="290" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="K2" value="&lt;b&gt;if (state.streaming)&lt;/b&gt;&lt;div&gt;sendFrame({ type: 'interrupt' })&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Two halves, and they are separate: stopping the &lt;b&gt;voice&lt;/b&gt; is local and instant; stopping the &lt;b&gt;generation&lt;/b&gt; needs a round trip. If she was only speaking an already-finished reply, no frame is sent at all.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="730" y="360" width="290" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="K3" value="&lt;b&gt;endAssistant()&lt;/b&gt; — seal the streaming bubble&lt;div&gt;clearStaleComposer() — an unfinalised interim must not be adopted as next turn's prefix&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="515" width="290" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="K4" value="&lt;b&gt;playCloseChime() · flashHint() · syncOrb()&lt;/b&gt;&lt;div&gt;the orb drops out of &quot;speaking&quot; the moment ttsPending hits 0 — audio always wins the orb, because it is what the user actually perceives&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="730" y="515" width="290" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="MTITLE" value="&lt;b&gt;…and the one thing that differs: what happens to the microphone afterwards&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="400" y="680" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="M1" value="&lt;b&gt;A · bargeIn()&lt;/b&gt;&lt;div&gt;resumeVoiceLoop is &lt;b&gt;left alone&lt;/b&gt; → setTimeout(maybeResumeVoiceLoop, 400)&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;You said &quot;ticho&quot; to stop her talking, not to end the conversation — so the mic comes back.&lt;/i&gt;&lt;/div&gt;&lt;div&gt;cancelSpeech() zeroes ttsPending without firing onAllSpeechDone, so the loop has to be nudged by hand or the mic never returns.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="720" width="300" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="M2" value="&lt;b&gt;B · interrupt()&lt;/b&gt;&lt;div&gt;resumeVoiceLoop = &lt;b&gt;false&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;A deliberate press of stop ends the hands-free loop. The wake word stays armed — it is a separate setting with its own button.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="730" y="720" width="290" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="M3" value="&lt;b&gt;C · submit()&lt;/b&gt;&lt;div&gt;endAssistant(true), then the new turn proceeds normally — noteTurn(), user bubble, { user_message }&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;The interrupt is a side effect of sending, not the point of it.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="720" width="170" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="M4" value="&lt;b&gt;D · endListening()&lt;/b&gt;&lt;div&gt;micDesired = false&lt;/div&gt;&lt;div&gt;resumeVoiceLoop = false&lt;/div&gt;&lt;div&gt;stopRecognition(true)&lt;/div&gt;&lt;div&gt;&lt;b&gt;superviseWake()&lt;/b&gt; — hands the mic back to the wake listener&lt;/div&gt;&lt;div&gt;playCloseChime()&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Nothing is cancelled: she had already finished.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="720" width="200" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="SV" value="&lt;b&gt;server.js — onInterrupt()&lt;/b&gt;&lt;div&gt;if (!this.turnActive) return — nothing in flight, nothing to abort&lt;/div&gt;&lt;div&gt;await this.query?.interrupt() — aborts &lt;b&gt;this turn only&lt;/b&gt;; the continuous query() stays usable and Claude keeps everything said before it&lt;/div&gt;&lt;div&gt;on failure: turnActive = false and send { done } anyway, so the UI is never left spinning&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="920" width="620" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="SV2" value="&lt;b&gt;frames still owed to the browser&lt;/b&gt;&lt;div&gt;• any tool that never reported a result gets its { tool, phase: 'end' }&lt;/div&gt;&lt;div&gt;• then { done }&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;protocol.js handles them as usual: toolDepth = 0, unlockHint(), flushTTS() — which speaks nothing, because cancelSpeech() had already emptied the buffer.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="920" width="400" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="f1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="TA" target="BA">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f2" value="onresult (interim fires sooner, and &quot;asap&quot; is the point)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="BA" target="GA1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f3" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="GA1" target="GA2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f4" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#999999;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="GA1" target="DISC">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="380" y="410" />
+              <mxPoint x="380" y="715" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="f5" value="yes — that is the loudspeaker, not the room" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#999999;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="GA2" target="DISC">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="30" y="520" />
+              <mxPoint x="30" y="715" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="f6" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="GA2" target="BAx">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeWidth=2;strokeColor=#b85450;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="BAx" target="K1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="TB" target="BB">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="1" source="BB" target="K1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="TC" target="BC">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeWidth=2;strokeColor=#b85450;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="BC" target="K2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="TD" target="BD">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f13" value="skips the core entirely — nothing is cancelled" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#82b366;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="BD" target="M4">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1490" y="190" />
+              <mxPoint x="1490" y="690" />
+              <mxPoint x="1350" y="690" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="f14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="K1" target="K2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="K1" target="K3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="K3" target="K4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f17" value="{ type: 'interrupt' } over the WebSocket" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="K2" target="SV">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1035" y="430" />
+              <mxPoint x="1035" y="900" />
+              <mxPoint x="1020" y="900" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="f18" value="then, per path:" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="K4" target="M1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="K4" target="M2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f20" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="K4" target="M3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="SV" target="SV2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2title" value="&lt;b&gt;Four ways a reply gets cut off — and they are not the same thing.&lt;/b&gt; A · B · C all pass through the same core: silence the voice locally &lt;i&gt;first&lt;/i&gt;, then ask the server to abort generation. D looks similar and is the odd one out: it ends the hands-free loop and touches nothing else." style="text;html=1;align=left;verticalAlign=top;fontSize=12;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1075" width="1390" height="50" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="page-mic" name="3 · One microphone, four listeners">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="ORB" value="&lt;b&gt;ui/orb.js — the one derived state&lt;/b&gt;&lt;div&gt;&lt;i&gt;Nothing assigns it. Modules change state and call syncOrb(), which recomputes:&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;error&lt;/b&gt; · Date.now() &amp;lt; state.errorUntil&lt;/div&gt;&lt;div&gt;&lt;b&gt;offline&lt;/b&gt; · state.conn !== 'online'&lt;/div&gt;&lt;div&gt;&lt;b&gt;speaking&lt;/b&gt; · state.ttsPending &amp;gt; 0 ← audio wins&lt;/div&gt;&lt;div&gt;&lt;b&gt;thinking&lt;/b&gt; · state.streaming&lt;/div&gt;&lt;div&gt;&lt;b&gt;listening&lt;/b&gt; · state.listening&lt;/div&gt;&lt;div&gt;&lt;b&gt;idle&lt;/b&gt; · otherwise&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="60" width="330" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="BUS" value="&lt;b&gt;core/bus.js — the orb's followers&lt;/b&gt;&lt;div&gt;Published on &lt;b&gt;every&lt;/b&gt; syncOrb(), not only on transitions — the followers track things the orb state does not capture (queue depth, session id, whether the mic can be taken).&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;1 · telemetry.updateTelemetry&lt;/div&gt;&lt;div&gt;2 · &lt;b&gt;barge.superviseBarge&lt;/b&gt;&lt;/div&gt;&lt;div&gt;3 · log.followOrbHint&lt;/div&gt;&lt;div&gt;&lt;i&gt;(subscribed in app.js, in that order)&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="430" y="60" width="330" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="TIMER1" value="&lt;b&gt;setInterval(superviseWake, 1500)&lt;/b&gt;&lt;div&gt;&lt;i&gt;A dull polling loop rather than hooks on every transition (dictation start/stop, TTS, tab switch, reconnect, engine timeout) for one reason: &lt;b&gt;polling cannot get wedged&lt;/b&gt;, and this is supposed to be listening whenever you are not.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="60" width="300" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="TIMER2" value="&lt;b&gt;setInterval(superviseBarge, 300)&lt;/b&gt;&lt;div&gt;&lt;i&gt;Its own, much faster interval &lt;b&gt;and&lt;/b&gt; a bus subscription — a reply only lasts seconds, so 1.5 s is far too coarse a grain to arm and disarm on.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="205" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="WHY" value="&lt;b&gt;Why arbitration is needed at all&lt;/b&gt;&lt;div&gt;The browser will not let two SpeechRecognition instances hold the microphone at once, and the local voice detector holds it through getUserMedia. Four possible holders, one device.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacing=8;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="60" width="310" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="LN1" value="&lt;b&gt;1 · Dictation&lt;/b&gt;&lt;div&gt;&lt;i&gt;recognition.js&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Runs when the user pressed the mic (micDesired) or a wake word just fired.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Final result → submit(); resumeVoiceLoop = true keeps the hands-free conversation going.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="380" width="320" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="LN2" value="&lt;b&gt;2 · Wake word — transcript&lt;/b&gt;&lt;div&gt;&lt;i&gt;wake.js (the fallback path)&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;wakeShouldRun(): enabled &amp;amp;&amp;amp; !blocked &amp;amp;&amp;amp; !listening &amp;amp;&amp;amp; !micDesired &amp;amp;&amp;amp; ttsPending == 0 &amp;amp;&amp;amp; !document.hidden &amp;amp;&amp;amp; conn == 'online' &amp;amp;&amp;amp; past backoff&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Czech ASR spells &quot;KC&quot; a dozen ways, so it matches a stripped whole-word list.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="410" y="380" width="320" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="LN3" value="&lt;b&gt;3 · Wake word — voice template&lt;/b&gt;&lt;div&gt;&lt;i&gt;wake-panel.js + wake-worklet.js&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Preferred whenever samples are enrolled — voiceWakePriority() wins outright.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Holds the mic through getUserMedia + AudioWorklet, so nothing leaves the machine.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="380" width="320" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="LN4" value="&lt;b&gt;4 · Barge-in&lt;/b&gt;&lt;div&gt;&lt;i&gt;barge.js&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;bargeShouldRun(): &lt;b&gt;ttsPending &amp;gt; 0&lt;/b&gt; &amp;amp;&amp;amp; !listening &amp;amp;&amp;amp; !micDesired &amp;amp;&amp;amp; !document.hidden &amp;amp;&amp;amp; conn == 'online' &amp;amp;&amp;amp; past backoff&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;It cannot fight the other three: dictation is suspended during TTS and both wake listeners stand down on ttsPending &amp;gt; 0 — which is exactly when this one runs.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="380" width="340" height="190" as="geometry" />
+        </mxCell>
+
+        <mxCell id="MIC" value="&lt;b&gt;🎤 exactly ONE holder at a time&lt;/b&gt;&lt;div&gt;Arbitration is wake.superviseWake(): if voiceWakePriority() then stop the transcript listener and supervise the voice engine; otherwise voiceWakeStop() and run the transcript listener.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Invariant 4: a fifth listener goes &lt;b&gt;through&lt;/b&gt; superviseWake with its own shouldRun() predicate — never around it.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacing=8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="640" width="600" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="GD1" value="&lt;b&gt;Feedback guard&lt;/b&gt;&lt;div&gt;tts.js stops dictation before it speaks and re-opens it once the queue drains, so the microphone never hears Kacey.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="820" width="440" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="GD2" value="&lt;b&gt;Self-hearing guard&lt;/b&gt;&lt;div&gt;The barge listener hears her through the speakers. barge.js owns the text of the reply being spoken (noteSpoken / clearSpoken) and ignores &quot;ticho&quot; if the reply itself contains it.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="530" y="820" width="440" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="GD3" value="&lt;b&gt;Race guard&lt;/b&gt;&lt;div&gt;superviseBarge() calls voiceWakeStop() itself rather than waiting: the wake supervisor only runs every 1.5 s, far too slow to have let go of getUserMedia by the time a reply starts.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="820" width="450" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="g1" value="publish 'orb'" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="ORB" target="BUS">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;dashed=1;" edge="1" parent="1" source="BUS" target="LN4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g3" value="arbitrate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="TIMER1" target="LN2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g4" value="arbitrate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="TIMER1" target="LN3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g5" value="arm / disarm" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="TIMER2" target="LN4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="LN1" target="MIC">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="LN2" target="MIC">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="LN3" target="MIC">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;" edge="1" parent="1" source="LN4" target="MIC">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g10" value="wake fires → micDesired = true → startRecognition() after the chime" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#82b366;strokeWidth=2;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="LN2" target="LN1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g11" value="fires the same way" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#82b366;dashed=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="LN3" target="LN1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="920" y="350" />
+              <mxPoint x="220" y="350" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="g12" value="&quot;ticho&quot; → see page 2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=10;endArrow=blockThin;endFill=1;strokeColor=#b85450;strokeWidth=2;exitX=0.9;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="LN4" target="GD3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1516" y="875" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p3title" value="&lt;b&gt;Three listeners plus dictation, one device.&lt;/b&gt; The constraint that ties the eight files of voice/ together is that exactly one of them may hold the microphone at any moment — and the two supervisors are the only things allowed to decide which." style="text;html=1;align=left;verticalAlign=top;fontSize=12;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="60" y="950" width="1390" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="page-frames" name="4 · Wire protocol">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="h1" value="&lt;b&gt;Browser → server&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="50" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="o1" value="&lt;b&gt;{ type: 'user_message', text }&lt;/b&gt;&lt;div&gt;A real turn. Queued into the live query(); the server answers with { thinking } immediately.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="90" width="500" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="o2" value="&lt;b&gt;{ type: 'interrupt' }&lt;/b&gt;&lt;div&gt;Abort the in-flight turn. Sent only if state.streaming — stopping the &lt;i&gt;voice&lt;/i&gt; is purely local and needs no frame at all.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="180" width="500" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h2" value="&lt;b&gt;Server → browser&lt;/b&gt; — one switch in net/protocol.js" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="620" y="50" width="500" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="i1" value="&lt;b&gt;ready&lt;/b&gt; { model, mcpServers }&lt;div&gt;Build the connection line, set the model rail, flash the hint.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="90" width="500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="i2" value="&lt;b&gt;session&lt;/b&gt; { sessionId }&lt;div&gt;Record it on state, show it in the pill's title.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="160" width="500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="i3" value="&lt;b&gt;thinking&lt;/b&gt;&lt;div&gt;streaming = true, swap send→stop, open a bubble.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="230" width="500" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="i4" value="&lt;b&gt;delta&lt;/b&gt; { text }&lt;div&gt;appendDelta() → text into the bubble &lt;b&gt;and&lt;/b&gt; into feedTTS().&lt;/div&gt;&lt;div&gt;&lt;i&gt;Invariant 1: this is assistant speech, verbatim, and nothing else. A status line leaking in gets read out loud.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d0cee2;strokeColor=#56517e;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="300" width="500" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="i5" value="&lt;b&gt;tool&lt;/b&gt; { name, phase: 'start' | 'end' }&lt;div&gt;The &lt;b&gt;first&lt;/b&gt; tool of a turn seals the preamble bubble, so the opening line is spoken now rather than after the lookup. A calendar tool refreshes an open viewer on the way out.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="400" width="500" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="i6" value="&lt;b&gt;done&lt;/b&gt;&lt;div&gt;flushTTS(), close the bubble, and re-open the mic straight away if nothing is going to speak (muted).&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="500" width="500" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="i7" value="&lt;b&gt;error&lt;/b&gt; { message }&lt;div&gt;cancelSpeech(), close quietly, alert, and stop the hands-free loop.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="580" width="500" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="i8" value="&lt;b&gt;anything else&lt;/b&gt;&lt;div&gt;&lt;i&gt;Invariant 5: unknown frame types are ignored, not fatal. A newer server must not be able to break an older page — so adding a frame is a case in this switch plus a row in the README, and nothing more.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=left;verticalAlign=top;spacing=8;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="660" width="500" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note1" value="&lt;b&gt;Not on the socket&lt;/b&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;POST /api/tts&lt;/b&gt; — one sentence in, a WAV out, from the local XTTS server. Carries X-Tts-Ms, which is the number the synthesis rail shows.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;GET /api/calendar&lt;/b&gt; (+ update / delete) — the viewer, refreshed whenever a calendar tool finishes.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;/api/health&lt;/b&gt; · &lt;b&gt;/api/voices&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Audio never crosses the wire as input. The browser does all of the recognition; /api/tts is output only, and local.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacing=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="300" width="500" height="270" as="geometry" />
+        </mxCell>
+        <mxCell id="note2" value="&lt;b&gt;?mock=1&lt;/b&gt; replays this whole frame sequence with no backend, no API key and no memory database. Both transports implement { start, send, isOpen, stop, resume } and protocol.js never knows which one it is holding — which is what makes the mock worth having: anything that works in mock mode works for real.&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Type &lt;b&gt;/error&lt;/b&gt;, &lt;b&gt;/offline&lt;/b&gt; or &lt;b&gt;/long&lt;/b&gt; in mock mode to exercise those branches.&lt;/div&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=left;verticalAlign=top;spacing=8;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="590" width="500" height="160" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

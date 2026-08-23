@@ -87,6 +87,7 @@ function wakeShouldRun() {
   return wakeEnabled && !wakeBlocked && recognitionAvailable() &&
     !state.listening && !state.micDesired &&
     state.ttsPending === 0 &&            // never let it hear Kacey's own voice
+    !state.streaming &&                  // her turn belongs to the barge listener
     !document.hidden &&
     state.conn === 'online' &&
     Date.now() >= wakeBackoffUntil;

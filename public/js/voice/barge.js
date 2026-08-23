@@ -5,16 +5,18 @@
    without this there is no channel an interrupt could arrive through: "ticho"
    would only be heard once she had finished, which is exactly too late.
 
-   So: a THIRD recognition instance, continuous, alive only while a reply is
-   actually being spoken. Everything it hears is discarded except the
-   interrupt phrases. It cannot fight the other two for the microphone —
-   dictation is suspended during TTS and the wake listener stands down on
-   ttsPending > 0, which is precisely when this one runs.
+   So: a THIRD recognition instance, continuous, alive for the whole of her turn
+   — from the moment she starts working to the last spoken sentence. Everything
+   it hears is discarded except the interrupt phrases. It cannot fight the other
+   two for the microphone — dictation is suspended for the duration of a turn,
+   and both wake detectors stand down while `streaming` or `ttsPending` is set,
+   which is precisely when this one runs.
 
    Two costs, stated rather than buried:
    - It uses the CLOUD recogniser, so audio leaves the machine while she is
-     speaking. That is the cost the local wake word was built to avoid, and it
-     is why this is scoped to the seconds she is talking and nothing more.
+     working. That is the cost the local wake word was built to avoid, and it
+     is why this is scoped to her turn and nothing more — it opens on the first
+     `thinking` and closes on the last sentence, never while you are idle.
    - It hears her through the speakers. Echo cancellation helps; the guard
      below is what stops her from interrupting herself when the reply happens
      to contain the word.
@@ -23,7 +25,7 @@
 import { state } from '../core/state.js';
 import { SR, recognitionAvailable } from './recognition.js';
 import { voiceWakeStop } from './wake-panel.js';
-import { bargeIn } from './commands.js';
+import { pauseReply, stopAndEnd } from './commands.js';
 
 /* ---- the self-hearing guard --------------------------------------------
    The text of the reply currently being spoken. It lives here rather than in
@@ -51,9 +53,15 @@ function bargeShouldRun() {
   if (state.listening || state.micDesired) return false;   // dictation owns the mic
   if (document.hidden || state.conn !== 'online') return false;
   if (Date.now() < bargeBackoffUntil) return false;
-  // Only while she is actually speaking. Muted replies have no voice to cut
-  // off, and the stop button already covers stopping generation.
-  return state.ttsPending > 0;
+  /* The whole turn, not only the part you can hear. "Ticho" during the pause
+     before she starts talking used to land on a closed microphone — and that is
+     the moment you most want to stop a wrong answer, rather than sitting through
+     it first.
+
+     ttsPending covers speaking; streaming covers thinking and tool use. A muted
+     reply has no voice to cut off but still has generation to stop, which is
+     what streaming catches. */
+  return state.ttsPending > 0 || state.streaming;
 }
 
 function buildBarge() {
@@ -73,13 +81,17 @@ function buildBarge() {
       if (alt) heard += ' ' + alt.transcript;
     }
     if (!heard.trim() || !window.KaceyClosing) return;
-    if (window.KaceyClosing.classify(heard) !== 'interrupt') return;
+    var cmd = window.KaceyClosing.classify(heard);
+    // The only two things worth hearing over her own voice. "to je vše" is
+    // deliberately not one of them: that is said once she has finished.
+    if (cmd !== 'interrupt' && cmd !== 'pause') return;
     // She is saying the word herself — that is the loudspeaker, not the room.
     if (spokenGuard()) return;
 
     bargeHits++;
     stopBarge(true);
-    bargeIn();
+    if (cmd === 'interrupt') stopAndEnd();
+    else pauseReply();
   };
 
   r.onerror = function (ev) {

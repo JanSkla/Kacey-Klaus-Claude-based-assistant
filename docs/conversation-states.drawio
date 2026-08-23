@@ -1,0 +1,137 @@
+<mxfile host="app.diagrams.net" version="24.7.17" type="device">
+  <diagram id="talking-to-kacey" name="Talking to Kacey — the four states">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="&lt;b style=&quot;font-size: 20px&quot;&gt;Talking to Kacey&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size: 13px&quot;&gt;Four states, and everything you can say or press to move between them. What she is listening for changes with the state — that is the whole thing worth knowing.&lt;/span&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=13;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="60" y="24" width="1100" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="START" value="" style="ellipse;html=1;fillColor=#333333;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="70" y="368" width="24" height="24" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ASLEEP" value="&lt;b style=&quot;font-size: 15px&quot;&gt;😴 &amp;nbsp;Asleep&lt;/b&gt;&lt;div&gt;&lt;i&gt;the orb is dim · „Klepni a mluv“&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;No conversation is open — but she is listening for her name, all the time.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;Only „KC“ gets through here.&lt;/b&gt; Anything else you say in the room is ignored.&lt;/div&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;strokeWidth=2;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="120" y="290" width="250" height="190" as="geometry" />
+        </mxCell>
+
+        <mxCell id="LISTENING" value="&lt;b style=&quot;font-size: 15px&quot;&gt;🎤 &amp;nbsp;Listening&lt;/b&gt;&lt;div&gt;&lt;i&gt;„Poslouchám…“&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;Everything you say now becomes a message to her&lt;/b&gt; — except the command phrases, which are for the interface and never reach her.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Just stop talking. A short silence sends it.&lt;/div&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="130" width="260" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="THINKING" value="&lt;b style=&quot;font-size: 15px&quot;&gt;💭 &amp;nbsp;Working&lt;/b&gt;&lt;div&gt;&lt;i&gt;„Kacey přemýšlí…“&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;If she needs to look something up, she says so first and the hint line names what she is using.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;Both stop-words already work here&lt;/b&gt; — you can cut off a wrong answer before she says a word of it.&lt;/div&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="880" y="130" width="260" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="SPEAKING" value="&lt;b style=&quot;font-size: 15px&quot;&gt;🔊 &amp;nbsp;Speaking&lt;/b&gt;&lt;div&gt;&lt;i&gt;„Kacey mluví…“&lt;/i&gt;&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;She starts talking before the whole answer is ready, one sentence at a time.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;Only „počkej“ and „ticho“ are heard here.&lt;/b&gt; Everything else you say is discarded — including „to je vše“.&lt;/div&gt;" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="880" y="400" width="260" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="N_HEARS" value="&lt;b style=&quot;font-size: 14px&quot;&gt;What she can hear, state by state&lt;/b&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;This is the part that surprises people. The microphone is not simply „on“ — what it is listening &lt;i&gt;for&lt;/i&gt; changes.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;😴 &lt;b&gt;Asleep&lt;/b&gt;&lt;/div&gt;&lt;div&gt;Her name. Nothing else.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;🎤 &lt;b&gt;Listening&lt;/b&gt;&lt;/div&gt;&lt;div&gt;Everything. It all becomes a message, unless it is one of the command phrases.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;💭 &lt;b&gt;Working&lt;/b&gt; and 🔊 &lt;b&gt;Speaking&lt;/b&gt;&lt;/div&gt;&lt;div&gt;Identical, and only two things: „počkej“ and „ticho“. Her name does nothing — once a turn is running, the microphone is listening for „stop“, not for „Kacey“.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;„To je vše“ does not land during a turn. Wait for her to finish, or say „ticho“ — which now does both jobs at once.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#f9f9f9;strokeColor=#b3b3b3;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="130" width="350" height="450" as="geometry" />
+        </mxCell>
+
+        <mxCell id="N_PHRASES" value="&lt;b style=&quot;font-size: 14px&quot;&gt;The phrases the interface keeps for itself&lt;/b&gt;&lt;div&gt;None of these is sent to Kacey, none shows up in the transcript, and she never answers them — a reply to „to je vše, díky“ would just be one more thing to sit through.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;⏸ &amp;nbsp;„počkej“ — stop, but stay&lt;/b&gt; &amp;nbsp;&lt;i&gt;during her turn&lt;/i&gt;&lt;/div&gt;&lt;div&gt;počkej · počkej chvilku · počkejte · moment · momentík · chvilku · zadrž · vydrž · pauza&lt;/div&gt;&lt;div&gt;wait · wait a moment · hold on · hang on · one moment · pause&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;🤫 &amp;nbsp;„ticho“ — stop, and we are done&lt;/b&gt; &amp;nbsp;&lt;i&gt;during her turn&lt;/i&gt;&lt;/div&gt;&lt;div&gt;ticho · buď ticho · mlč · mlčte · potichu · buď potichu · přestaň mluvit · nemluv · dost už&lt;/div&gt;&lt;div&gt;quiet · be quiet · hush · stop talking · shut up&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;👋 &amp;nbsp;„to je vše“ — we are done&lt;/b&gt; &amp;nbsp;&lt;i&gt;after her turn&lt;/i&gt;&lt;/div&gt;&lt;div&gt;to je vše · to je všechno · stačí · už stačí · nic · nic dalšího · končíme · hotovo · dobrou noc · na shledanou · můžeš jít · nech mě být · vypni mikrofon&lt;/div&gt;&lt;div&gt;that’s all · goodbye · we’re done · good night · leave me alone&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Keep them short and plain. Politeness around them is fine — „tak to je vše, díky Kacey“ still lands. But „to je vše, co potřebuju vědět o té schůzce“ is a question, and she answers it as one.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fef8f8;strokeColor=#b85450;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="120" y="660" width="700" height="340" as="geometry" />
+        </mxCell>
+
+        <mxCell id="N_DIFF" value="&lt;b style=&quot;font-size: 14px&quot;&gt;„počkej“ is not „ticho“&lt;/b&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Both stop her instantly, whether she is still working or already talking. They differ in what happens next, and that is the only thing to remember.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;⏸ „počkej“ — the conversation stays open.&lt;/b&gt;&lt;/div&gt;&lt;div&gt;The microphone comes straight back and you carry on talking. Use it when she is saying more than you needed.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;🤫 „ticho“ — the conversation closes.&lt;/b&gt;&lt;/div&gt;&lt;div&gt;The microphone shuts and stays shut. Exactly the same ending as „to je vše“, so there is one ending to understand rather than two. The ⏹ button does this too.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;Neither touches the wake word, so &lt;b&gt;„KC“ is the way back&lt;/b&gt; from an ending — the same as it has always been.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;Both play a short tone, so you know it landed without looking at the screen.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff9e6;strokeColor=#d6b656;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="850" y="660" width="340" height="340" as="geometry" />
+        </mxCell>
+
+        <mxCell id="N_TROUBLE" value="&lt;b style=&quot;font-size: 14px&quot;&gt;📴 &amp;nbsp;If the connection drops&lt;/b&gt;&lt;div&gt;From any state: she goes quiet, the pill counts down, and she reconnects on her own. You land back at &lt;b&gt;Asleep&lt;/b&gt; — nothing you had said is lost, but the turn in flight is.&lt;/div&gt;&lt;div&gt;&lt;br/&gt;&lt;/div&gt;&lt;div&gt;&lt;i&gt;You can keep typing while it reconnects.&lt;/i&gt;&lt;/div&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;align=left;verticalAlign=top;spacing=10;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="660" width="330" height="340" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t0" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeWidth=2;" edge="1" parent="1" source="START" target="ASLEEP">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t1" value="say &lt;b&gt;„KC“&lt;/b&gt; — a soft chime,&lt;br/&gt;then she is listening&lt;br/&gt;&lt;i&gt;(or just tap the microphone)&lt;/i&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=3;strokeColor=#82b366;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;verticalAlign=bottom;" edge="1" parent="1" source="ASLEEP" target="LISTENING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t2" value="type it and press Enter — no voice involved at all" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;dashed=1;strokeColor=#999999;exitX=0.3;exitY=0;exitDx=0;exitDy=0;entryX=0.55;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ASLEEP" target="THINKING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="195" y="88" />
+              <mxPoint x="1023" y="88" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t3" value="you stop talking;&lt;br/&gt;a short pause sends it" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="LISTENING" target="THINKING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t4" value="her first sentence is ready" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="THINKING" target="SPEAKING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t5" value="&lt;b&gt;she finishes&lt;/b&gt; — the microphone&lt;br/&gt;re-opens on its own, hands free" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=3;strokeColor=#82b366;exitX=0;exitY=0.2;exitDx=0;exitDy=0;entryX=1;entryY=0.55;entryDx=0;entryDy=0;" edge="1" parent="1" source="SPEAKING" target="LISTENING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="843" y="436" />
+              <mxPoint x="843" y="229" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t6" value="&lt;b&gt;„počkej“&lt;/b&gt; — she stops,&lt;br/&gt;the conversation stays open" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=3;strokeColor=#3d85c6;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.9;entryDx=0;entryDy=0;align=right;" edge="1" parent="1" source="SPEAKING" target="LISTENING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="800" y="553" />
+              <mxPoint x="800" y="292" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t7" value="&lt;b&gt;„počkej“&lt;/b&gt; — stops her before&lt;br/&gt;she has said a word" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=3;strokeColor=#3d85c6;exitX=0.08;exitY=0;exitDx=0;exitDy=0;entryX=0.42;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="THINKING" target="LISTENING">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="901" y="114" />
+              <mxPoint x="609" y="114" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t8" value="&lt;b&gt;„to je vše“&lt;/b&gt; · „dobrou noc“ · „stačí“&lt;br/&gt;a closing tone, and the microphone shuts&lt;br/&gt;&lt;i&gt;(or tap the microphone again)&lt;/i&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=2;strokeColor=#d79b00;exitX=0.15;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.8;entryDx=0;entryDy=0;" edge="1" parent="1" source="LISTENING" target="ASLEEP">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="539" y="442" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t9" value="&lt;b&gt;„ticho“&lt;/b&gt; — she stops, and we are done.&lt;br/&gt;Same ending as „to je vše“: the microphone shuts&lt;br/&gt;and „KC“ starts the next conversation.&lt;br/&gt;&lt;i&gt;(the ⏹ button and Esc do this too)&lt;/i&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=3;strokeColor=#b85450;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0.72;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="SPEAKING" target="ASLEEP">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="958" y="600" />
+              <mxPoint x="300" y="600" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t10" value="&lt;b&gt;„ticho“&lt;/b&gt; — works here as well" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;strokeWidth=3;strokeColor=#b85450;exitX=1;exitY=0.85;exitDx=0;exitDy=0;entryX=0.35;entryY=1;entryDx=0;entryDy=0;align=left;" edge="1" parent="1" source="THINKING" target="ASLEEP">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1172" y="283" />
+              <mxPoint x="1172" y="626" />
+              <mxPoint x="208" y="626" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="t11" value="send a new message&lt;br/&gt;over the top of her —&lt;br/&gt;she drops the old answer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;fontSize=11;endArrow=blockThin;endFill=1;dashed=1;strokeColor=#999999;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0.85;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="SPEAKING" target="THINKING">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend" value="&lt;b&gt;Reading the arrows:&lt;/b&gt; &amp;nbsp;solid = something you say &amp;nbsp;·&amp;nbsp; dashed = something you press or type &amp;nbsp;·&amp;nbsp; &lt;span style=&quot;color: #82b366&quot;&gt;&lt;b&gt;green&lt;/b&gt;&lt;/span&gt; = the ordinary hands-free loop &amp;nbsp;·&amp;nbsp; &lt;span style=&quot;color: #3d85c6&quot;&gt;&lt;b&gt;blue&lt;/b&gt;&lt;/span&gt; = stopping her but staying &amp;nbsp;·&amp;nbsp; &lt;span style=&quot;color: #b85450&quot;&gt;&lt;b&gt;red&lt;/b&gt;&lt;/span&gt; = stopping her and finishing &amp;nbsp;·&amp;nbsp; &lt;span style=&quot;color: #d79b00&quot;&gt;&lt;b&gt;amber&lt;/b&gt;&lt;/span&gt; = finishing after she is done" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="120" y="1015" width="1430" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -55,6 +55,26 @@ const CLOSE = [
   'You can go.',
 ];
 
+// "počkej" stops her but keeps the conversation; "ticho" stops her and ends it.
+// The two families must never bleed into each other — mixing them up is either a
+// conversation that ends when you wanted to carry on, or one that stays open when
+// you wanted to be left alone.
+const PAUSE = [
+  'Počkej',
+  'Počkej.',
+  'Počkej chvilku.',
+  'Počkejte prosím.',
+  'Moment.',
+  'Momentík.',
+  'Zadrž.',
+  'Vydrž.',
+  'Wait.',
+  'Wait a moment.',
+  'Hold on.',
+  'Hang on.',
+  'One moment, please.',
+];
+
 const INTERRUPT = [
   // the words that cut her off mid-reply
   'Ticho',
@@ -105,6 +125,11 @@ const MUST_NOT = [
   // "nic" as part of an instruction
   'Nic si nezapisuj.',
   'Nic z toho nemaž.',
+  // pause words inside a genuine request must not stop her
+  'Za chvilku to bude.',
+  'Počkej mě vyzvedne v pět.',
+  'Zapiš mi, že moment setrvačnosti je téma na zkoušku.',
+  'Wait for the delivery on Tuesday.',
   // ordinary requests
   'Kolik toho ještě zbývá?',
   'Přečti mi to znovu.',
@@ -128,14 +153,17 @@ const report = (label, input, got, want) => {
 
 console.log('--- must classify as end (stop the hands-free loop) ---');
 for (const s of CLOSE) report('end', s, C.classify(s), 'end');
-console.log('\n--- must classify as interrupt (be quiet NOW) ---');
+console.log('\n--- must classify as pause (stop, but stay in the conversation) ---');
+for (const s of PAUSE) report('pause', s, C.classify(s), 'pause');
+console.log('\n--- must classify as interrupt (be quiet, and we are done) ---');
 for (const s of INTERRUPT) report('interrupt', s, C.classify(s), 'interrupt');
 console.log('\n--- former hush phrases are ordinary goodbyes now ---');
 for (const s of END_WAS_HUSH) report('end', s, C.classify(s), 'end');
 console.log('\n--- must NOT match (false positives break the app quietly) ---');
 for (const s of MUST_NOT) report('pass-thru', s, C.classify(s), null);
 
-const n = CLOSE.length + INTERRUPT.length + END_WAS_HUSH.length + MUST_NOT.length;
+const n = CLOSE.length + PAUSE.length + INTERRUPT.length +
+  END_WAS_HUSH.length + MUST_NOT.length;
 console.log(`\nphrase table: ${JSON.stringify(C._counts())}`);
 console.log(`${n - bad}/${n} passed`);
 process.exit(bad ? 1 : 0);

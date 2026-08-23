@@ -44,7 +44,7 @@ var STR = {
     wakeBlocked: 'Mikrofon není povolen, „KC“ nefunguje',
     wakeCfgHint: 'podržením nastavíš hlasový podpis',
     closed: 'Hovor ukončen. Řekni „KC“, až budeš chtít pokračovat.',
-    silenced: 'Ticho.'
+    paused: 'Počkám.'
   },
   'en-US': {
     you: 'You', kacey: 'Kacey',
@@ -80,7 +80,7 @@ var STR = {
     wakeBlocked: 'Microphone not allowed, "KC" cannot work',
     wakeCfgHint: 'hold to set up your voiceprint',
     closed: 'Conversation ended. Say "KC" when you want to continue.',
-    silenced: 'Quiet.'
+    paused: 'Waiting.'
   }
 };
 

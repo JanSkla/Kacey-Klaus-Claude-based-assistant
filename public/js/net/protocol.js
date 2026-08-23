@@ -25,7 +25,7 @@ import { cancelSpeech, flushTTS, primeTTS } from '../voice/tts.js';
 import {
   recognitionAvailable, stopRecognition, maybeResumeVoiceLoop, clearBaseText
 } from '../voice/recognition.js';
-import { bargeIn, endListening } from '../voice/commands.js';
+import { pauseReply, stopAndEnd, endListening } from '../voice/commands.js';
 import { refreshCalendar } from '../ui/calendar.js';
 import { makeSocketTransport } from './transport-socket.js';
 import { makeMockTransport } from './transport-mock.js';
@@ -168,7 +168,8 @@ export function submit(text) {
     dom.input.value = '';
     clearBaseText();
     dom.input.classList.remove('is-interim');
-    if (cmd === 'interrupt') bargeIn();
+    if (cmd === 'interrupt') stopAndEnd();
+    else if (cmd === 'pause') pauseReply();
     else endListening();
     return;
   }

@@ -27,6 +27,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 os.environ.setdefault("COQUI_TOS_AGREED", "1")
 
+# Every log line below is non-ASCII somewhere — the em-dash and ellipsis in the
+# startup banner, and speaker names like "Aslı Çetinkaya" in the per-request
+# line. On a Czech console (cp1250) that is a UnicodeEncodeError inside print(),
+# which kills the request. Force UTF-8 on our own streams.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass                                   # already redirected or not a TTY
+
 PORT = int(os.environ.get("XTTS_PORT", "8790"))
 # Loopback by default. Set XTTS_HOST=0.0.0.0 to serve a laptop from a GPU box —
 # but there is NO authentication here, so only do that on a network you trust,
@@ -116,12 +126,47 @@ def stream_pcm(text: str, speaker: str, language: str = "cs", speed: float = 1.0
             yield pcm16(chunk.squeeze().tolist() if hasattr(chunk, "squeeze") else chunk)
 
 
+# XTTS ends every clip with roughly 0.55-0.6 s of near-silence (measured across
+# Nova Hogarth, Tammie Ema, Uta Obando and Lidiya Szekeres: 561-584 ms). Inside a
+# single clip that is a natural tail; played back one sentence at a time it is a
+# stop between every sentence, and it accumulates — three sentences, nearly two
+# seconds of nothing. Trim it back to a breath.
+#
+# The threshold is relative to the clip's own peak, because the voices differ in
+# level by a third. KEEP is what survives the trim: enough that the final
+# consonant is not clipped, short enough not to read as a stop.
+TAIL_THRESHOLD = 0.01           # 1% of peak == silence for this purpose
+TAIL_KEEP_SECONDS = 0.06
+# Set XTTS_TRIM_TAIL=0 to hear the model's own tail again.
+TRIM_TAIL = os.environ.get("XTTS_TRIM_TAIL", "1") != "0"
+
+
+def trim_tail(samples: list, rate: int) -> list:
+    """Drop the trailing near-silence, keeping TAIL_KEEP_SECONDS of it."""
+    if not TRIM_TAIL or not samples:
+        return samples
+    peak = max(abs(float(s)) for s in samples)
+    if peak <= 0:
+        return samples                             # all silence; nothing to judge
+    floor = peak * TAIL_THRESHOLD
+    last = -1
+    for i in range(len(samples) - 1, -1, -1):
+        if abs(float(samples[i])) > floor:
+            last = i
+            break
+    if last < 0:
+        return samples
+    end = min(len(samples), last + 1 + int(TAIL_KEEP_SECONDS * rate))
+    return samples[:end]
+
+
 def synth_wav(text: str, speaker: str, language: str = "cs", speed: float = 1.0) -> bytes:
     """Synthesise and return a WAV container (the model yields raw float samples)."""
     with _lock:
         wav = _tts.tts(text=text, speaker=speaker, language=language, speed=speed)
 
     rate = _tts.synthesizer.output_sample_rate
+    wav = trim_tail(list(wav), rate)
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)

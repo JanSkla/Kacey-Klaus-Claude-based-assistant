@@ -15,6 +15,16 @@ import time
 
 os.environ.setdefault("COQUI_TOS_AGREED", "1")
 
+# Speaker names are not ASCII — "Aslı Çetinkaya" has a dotless ı, which a Czech
+# console (cp1250) cannot encode, and printing the speaker list then dies with
+# UnicodeEncodeError before a single sample is synthesised. Force UTF-8 on our
+# own streams rather than making the caller remember PYTHONUTF8=1.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass                                   # already redirected or not a TTY
+
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "samples")
 os.makedirs(OUT, exist_ok=True)
 
