@@ -12,159 +12,27 @@
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-
-// ---------------------------------------------------------------------------
-// Config (env with sane defaults)
-// ---------------------------------------------------------------------------
-
-const PORT = Number(process.env.PORT || 8787);
-const MODEL = process.env.KACEY_MODEL || 'claude-opus-5';
-const PERSONA_PATH = process.env.KACEY_PERSONA_PATH || path.join(HERE, 'persona', 'kacey.md');
-const PUBLIC_DIR = path.join(HERE, 'public');
-
-// klaus_memory lives at <KLAUS_MEMORY_PYTHONPATH>/klaus_memory and is pure stdlib,
-// so there is nothing to pip install. The --db flag ALWAYS wins over the KLAUS_DB
-// env var (cli.py does Config.from_env().with_(db_path=...) and --db defaults to
-// "klaus-memory.db"), so we must pass it explicitly or the server silently creates
-// a fresh empty database in the current working directory.
-const PYTHON_BIN = process.env.PYTHON_BIN || 'python';
-// Klaus\memory\ was renamed to Klaus\Kacey-mvp\ — both paths below moved with it.
-// This is the populated database (3.5 MB, real facts + FTS + embeddings); the
-// sibling C:\repos\hobby\lukas\Klaus\klaus.db is schema-only with zero facts, so
-// pointing at that one makes Kacey start with no memory and no error.
-const KLAUS_DB =
-  process.env.KLAUS_DB || 'C:\\repos\\hobby\\lukas\\Klaus\\Kacey-mvp\\klaus.db';
-// Directory CONTAINING the klaus_memory package, not the package itself.
-const KLAUS_MEMORY_PYTHONPATH =
-  process.env.KLAUS_MEMORY_PYTHONPATH || 'C:\\repos\\hobby\\lukas\\Klaus\\Kacey-mvp';
-
-const MCP_SERVER_NAME = 'klaus-memory';
-
-const MCP_SERVERS = {
-  [MCP_SERVER_NAME]: {
-    type: 'stdio',
-    command: PYTHON_BIN,
-    args: ['-m', 'klaus_memory', '--db', KLAUS_DB, 'mcp'],
-    env: { ...process.env, PYTHONPATH: KLAUS_MEMORY_PYTHONPATH },
-    // Block startup until the server is connected, so the memory tools are
-    // present in the very first prompt instead of appearing a turn late.
-    alwaysLoad: true,
-  },
-};
-
-// ---------------------------------------------------------------------------
-// TOOL ALLOW-LIST  <-- the one place to widen Kacey's permissions
-// ---------------------------------------------------------------------------
-//
-// Kacey runs with NO built-in tools at all (`tools: []` below): no Bash, no
-// Read/Write/Edit, no Grep/Glob, no WebFetch/WebSearch. A voice assistant has no
-// business touching the filesystem or a shell, and there is no human watching a
-// terminal to approve anything.
-//
-// The only tools she gets are the klaus_memory MCP tools named here. Names are
-// the SDK-prefixed form: mcp__<server name>__<tool>.
-//
-// To widen: add the bare tool name to MEMORY_TOOLS. To see every tool the memory
-// server offers, start the server and read the log line it prints on boot, or run:
-//   python -m klaus_memory --db <path> mcp        (and speak MCP tools/list to it)
-//
-// Deliberately NOT allowed, though the server offers them:
-//   calendar_sync                   - the ONLY calendar call that reaches the
-//                                     external backend (calendar_mirror.sync ->
-//                                     backend.list_range). Also an orchestrator
-//                                     batch job. calendar_create by contrast is a
-//                                     plain local INSERT INTO calendar_event, so
-//                                     it is allowed: the persona requires it
-//                                     ("datum + cas = zavazek -> kalendar") and
-//                                     tells her to confirm the day, time and who
-//                                     with, which is the real guard against a
-//                                     mis-heard event.
-//   memory_replay, memory_reembed, memory_rebuild_indexes, dream_run,
-//   dream_catchup                   - long-running maintenance / rebuild jobs.
-//   memory_cache_put, memory_build_prompt, memory_config, memory_stats,
-//   dream_status                    - plumbing, not conversation.
-const MEMORY_TOOLS = [
-  // recall
-  'memory_search',
-  'memory_get_facts',
-  'memory_entity_candidates',
-  'memory_briefing',
-  // write
-  'memory_remember',
-  'memory_retract_fact',
-  // episodes
-  'memory_open_session',
-  'memory_close_session',
-  'memory_ingest_turn',
-  // journal (episodic recall: "what did I do on Thursday")
-  'journal_day',
-  'journal_search',
-  // calendar: local DB only. calendar_sync (external, wholesale) stays out.
-  // update/delete DO write through to the external backend per event, which is
-  // the point — the persona already makes her confirm day, time and who with.
-  'calendar_day',
-  'calendar_conflicts',
-  'calendar_create',
-  'calendar_update',
-  'calendar_delete',
-];
-
-const ALLOWED_TOOLS = MEMORY_TOOLS.map((t) => `mcp__${MCP_SERVER_NAME}__${t}`);
-
-// Defense in depth: even if a future SDK default or a plugin re-introduced the
-// built-in tools, these stay removed from the model's context entirely.
-const DISALLOWED_TOOLS = [
-  'Bash', 'BashOutput', 'KillShell', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
-  'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill',
-];
+import {
+  HERE, PORT, MODEL, PERSONA_PATH, PUBLIC_DIR,
+  PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
+  MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
+  FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
+  XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS,
+  LOGICAL_DAY_START_HOUR,
+} from './config.js';
 
 // ---------------------------------------------------------------------------
 // Persona
 // ---------------------------------------------------------------------------
 
-const FALLBACK_PERSONA = [
-  'You are Kacey, a warm and direct personal assistant.',
-  'Your replies are spoken aloud, so: short sentences, no markdown, no lists,',
-  'no code blocks, no emoji, and never read URLs or file paths aloud.',
-  'A few sentences is a complete answer. Do not be sycophantic.',
-  'Mirror the user\'s language: Czech in, Czech out; English in, English out.',
-  'Use the klaus_memory tools: recall relevant facts before answering anything',
-  'personal, and store durable new facts. Follow the memory server\'s own',
-  '`instructions` field, including calling memory_entity_candidates before',
-  'memory_remember.',
-].join(' ');
-
-// Who Kacey is serving. She addresses the owner as "pane"/"paní", so grammatical
-// gender matters — Czech has no neutral form here. Override with KACEY_OWNER.
-const OWNER_PROFILE =
-  process.env.KACEY_OWNER ||
-  'Muž, oslovuj ho „pane“. Mluví česky, žije v časové zóně Europe/Prague. ' +
-    'Jeho jméno si ověř v paměti (memory_search) — nedomýšlej si ho.';
-
-// The persona is a template. These blocks come from the source document
-// (Klaus/docs/kacey-system-prompt.md) and MUST all be substituted — an
-// unreplaced {{...}} would reach the model as literal text.
-//
-// TURN_CONTEXT replaces the document's {{RETRIEVED_FACTS}} / {{RECENT_JOURNAL}} /
-// {{L0_TAIL}} trio. Those assume a wrapper that pre-retrieves per turn and rebuilds
-// the system prompt each time; the Agent SDK fixes the system prompt for the whole
-// session, so retrieval here is tool-driven instead — she calls memory_search /
-// memory_briefing herself, which the Paměť section already instructs.
-const TURN_CONTEXT =
-  'Kontext se ti nepředává předem. Vytáhni si ho sama nástroji nad `klaus_memory` ' +
-  '(memory_search, memory_get_facts, journal_day, calendar_day, memory_briefing) ' +
-  'podle sekce Paměť, a to ještě než odpovíš.';
-
 // The logical day ends at 04:00, so 01:30 still belongs to the previous date.
 function logicalNow(now = new Date()) {
-  const shifted = new Date(now.getTime() - 4 * 3600 * 1000);
+  const shifted = new Date(now.getTime() - LOGICAL_DAY_START_HOUR * 3600 * 1000);
   const today = `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}-${String(shifted.getDate()).padStart(2, '0')}`;
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   return { today, time };
@@ -214,6 +82,16 @@ const log = (...a) => console.log('[kacey]', ...a);
 const shortToolName = (name) =>
   name?.startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name;
 
+/* What the user is told when a turn dies on us. Deliberately vague: this text is
+   SPOKEN aloud and shown in her own voice, and the SDK's own wording is English
+   diagnostics ("[ede_diagnostic] result_type=user stop_reason=tool_use") that
+   means nothing to the person in the room. The real detail goes to the log. */
+const ERR_TURN = 'Něco se nepovedlo. Zkus to prosím znovu.';
+
+/* Not a failure but a real loss of capability, so it is worth saying out loud —
+   she will answer, just without knowing anything about you. */
+const ERR_NO_MEMORY = 'Teď nemám přístup k paměti ani ke kalendáři.';
+
 const AUTH_HINT =
   'Claude is not authenticated. Open a terminal, run `claude`, log in, then restart Kacey. ' +
   '(Alternatively set ANTHROPIC_API_KEY in the environment.)';
@@ -251,6 +129,10 @@ class KaceySession {
     this.sawTextDelta = false;
 
     this.turnActive = false;
+
+    // Set when the user cancels a turn ("ticho", or the stop button), so the
+    // `result` that follows is not reported to them as a failure.
+    this.interrupted = false;
   }
 
   send(frame) {
@@ -351,7 +233,7 @@ class KaceySession {
     } catch (err) {
       if (this.closed) return;
       log('session error:', err?.message || err);
-      this.send({ type: 'error', message: `Session error: ${err?.message || String(err)}` });
+      this.send({ type: 'error', message: ERR_TURN });
       this.send({ type: 'done' });
       this.turnActive = false;
     }
@@ -372,9 +254,8 @@ class KaceySession {
           );
           for (const s of servers) {
             if (s.status !== 'connected') {
-              const m = `Memory server "${s.name}" is ${s.status} — Kacey has no memory this session.`;
-              log('WARNING:', m);
-              this.send({ type: 'error', message: m });
+              log(`WARNING: memory server "${s.name}" is ${s.status} — no memory this session.`);
+              this.send({ type: 'error', message: ERR_NO_MEMORY });
             }
           }
         }
@@ -402,9 +283,10 @@ class KaceySession {
         // text is the error string. Surface it as `error` — never as `delta`, or
         // the browser would read "Failed to authenticate..." out loud.
         if (msg.error) {
-          const message = isAuthError(msg.error)
-            ? AUTH_HINT
-            : `Model error (${msg.error}).`;
+          // AUTH_HINT is the one exception: it is actionable setup instructions
+          // for whoever runs Kacey. Everything else gets the plain sentence, and
+          // the model's own error code goes to the log.
+          const message = isAuthError(msg.error) ? AUTH_HINT : ERR_TURN;
           log('assistant error:', msg.error);
           this.send({ type: 'error', message });
           return;
@@ -440,10 +322,24 @@ class KaceySession {
       }
 
       case 'result': {
-        // End of a turn — success or failure.
+        // End of a turn: success, failure, or a turn the user cancelled.
         if (msg.subtype !== 'success') {
           const detail = (msg.errors || []).join('; ') || msg.subtype;
-          this.send({ type: 'error', message: `Turn failed: ${detail}` });
+          if (this.interrupted) {
+            /* The user said "ticho" or pressed stop. The SDK reports the aborted
+               turn as a failure, which it is not — it is exactly what was asked
+               for, and there is nothing to tell anyone.
+
+               Staying quiet also matters beyond the wording: an `error` frame
+               clears resumeVoiceLoop in the browser, which would kill the
+               hands-free loop that barge-in deliberately keeps alive. Saying
+               "ticho" is meant to stop her talking, not to end the
+               conversation. */
+            log(`turn cancelled by the user (${detail})`);
+          } else {
+            log(`turn failed: ${detail}`);
+            this.send({ type: 'error', message: ERR_TURN });
+          }
         }
         for (const denial of msg.permission_denials || []) {
           log('permission denied:', denial.tool_name);
@@ -455,6 +351,7 @@ class KaceySession {
         this.toolNames.clear();
 
         this.turnActive = false;
+        this.interrupted = false;
         this.send({ type: 'done' });
         return;
       }
@@ -468,12 +365,14 @@ class KaceySession {
 
   onUserMessage(text) {
     this.turnActive = true;
+    this.interrupted = false;
     this.send({ type: 'thinking' });
     this.pushUserMessage(text);
   }
 
   async onInterrupt() {
     if (!this.turnActive) return;
+    this.interrupted = true;
     try {
       await this.query?.interrupt();
       log('turn interrupted');
@@ -513,29 +412,6 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, model: MODEL, mcpServers: Object.keys(MCP_SERVERS) });
 });
 
-/* ---------------------------------------------------------------------------
- * Voice. Chosen in the Voice Lab on 2026-08-17 by listening to all 58 XTTS
- * studio speakers. Note the spellings — "Ana" not "Anna", "María" with the
- * accent, "Lidiya" not "Lidia"; XTTS matches the speaker name exactly and a
- * near-miss is a 500, not a fallback.
- *
- * Synthesis runs through the local XTTS server (voicelab/xtts_server.py, port
- * 8790), so nothing leaves the machine. It is slower than real time on CPU —
- * the browser voice stays available as the fast fallback.
- * ------------------------------------------------------------------------- */
-
-const XTTS_URL = process.env.XTTS_URL || 'http://127.0.0.1:8790';
-
-const VOICES = [
-  { id: 'Nova Hogarth', label: 'Nova Hogarth', preferred: true },
-  { id: 'Ana Florence', label: 'Ana Florence' },
-  { id: 'Alma María', label: 'Alma María' },
-  { id: 'Uta Obando', label: 'Uta Obando' },
-  { id: 'Lidiya Szekeres', label: 'Lidiya Szekeres' },
-];
-
-const DEFAULT_VOICE = process.env.KACEY_TTS_VOICE || 'Nova Hogarth';
-
 app.get('/api/voices', async (_req, res) => {
   let available = false;
   try {
@@ -562,8 +438,6 @@ app.get('/api/voices', async (_req, res) => {
  * Day boundaries follow klaus_memory's logical day, which ends at 04:00 — an
  * event at 01:30 belongs to the previous date, same rule the persona uses.
  * ------------------------------------------------------------------------- */
-
-const LOGICAL_DAY_START_HOUR = 4;
 
 /** Local calendar date of a Date, as 'YYYY-MM-DD'. */
 function calDayOf(d) {
@@ -754,7 +628,13 @@ function calendarWrite(payload) {
   return new Promise((resolve) => {
     const child = spawn(
       PYTHON_BIN,
-      [path.join(HERE, 'tools', 'calendar_write.py'), '--db', KLAUS_DB],
+      // Same two flags as the MCP server: without them a write to an external
+      // event fails with "neznámý kalendářní zdroj 'osobní'".
+      [
+        path.join(HERE, 'tools', 'calendar_write.py'), '--db', KLAUS_DB,
+        ...(existsSync(KLAUS_CALENDARS) ? ['--calendars', KLAUS_CALENDARS] : []),
+        ...(existsSync(KLAUS_ENV_FILE) ? ['--env', KLAUS_ENV_FILE] : []),
+      ],
       {
         env: { ...process.env, PYTHONPATH: KLAUS_MEMORY_PYTHONPATH, PYTHONIOENCODING: 'utf-8' },
       },
@@ -824,8 +704,6 @@ app.post('/api/calendar/:id/delete', express.json({ limit: '4kb' }), async (req,
  *
  * Set KACEY_TTS_DOTS=keep to send the text through untouched.
  */
-const TTS_DOTS = process.env.KACEY_TTS_DOTS || 'comma';
-
 function ttsText(input) {
   let s = String(input);
   if (TTS_DOTS !== 'comma') return s.trim();
@@ -893,7 +771,7 @@ wss.on('connection', (ws) => {
     session.start();
   } catch (err) {
     log('failed to start session:', err?.message || err);
-    session.send({ type: 'error', message: `Could not start Claude: ${err?.message || err}` });
+    session.send({ type: 'error', message: ERR_TURN });
   }
 
   ws.on('message', async (raw) => {
@@ -931,6 +809,23 @@ server.listen(PORT, () => {
   log(`listening on http://localhost:${PORT}  (ws://localhost:${PORT}/ws)`);
   log(`model=${MODEL}`);
   log(`memory db=${KLAUS_DB}`);
+  // A missing database is not an error to SQLite — it creates an empty one and
+  // Kacey then runs with no memory and no calendar. Say so at startup instead.
+  if (!existsSync(KLAUS_DB)) {
+    log(`WARNING: ${KLAUS_DB} does not exist — an empty one will be created ` +
+        'and Kacey will have no memory and no calendar. Set KLAUS_DB.');
+  }
+  /* Say plainly whether the external calendars are wired up. Silence here is
+     what made this hard to find: reads come from the mirror in SQLite and look
+     perfectly healthy, and only a write says "neznámý kalendářní zdroj". */
+  if (existsSync(KLAUS_CALENDARS)) {
+    log(`calendars=${KLAUS_CALENDARS}` +
+        (existsSync(KLAUS_ENV_FILE) ? ` env=${KLAUS_ENV_FILE}` : ' (no .env — Google not authorised)'));
+  } else {
+    log(`WARNING: ${KLAUS_CALENDARS} not found — the calendar runs in memory. ` +
+        'Reads still work (they come from the mirror), but deleting or editing ' +
+        'an event from Google or TimeTree will fail. Set KLAUS_CALENDARS.');
+  }
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
 });
 

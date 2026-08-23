@@ -14,7 +14,7 @@
 import { state } from './core/state.js';
 import { orbState } from './ui/orb.js';
 import { submit, onServer, onConn } from './net/protocol.js';
-import { endListening, bargeIn } from './voice/commands.js';
+import { endListening, pauseReply, stopAndEnd } from './voice/commands.js';
 import { bargeStatus } from './voice/barge.js';
 import { isWakePhrase, normalizeHeard, wakeStatus, feedWake } from './voice/wake.js';
 import { setWakeMode, openVoicePanel, onVoiceDetect } from './voice/wake-panel.js';
@@ -41,7 +41,8 @@ export function installDebugSurface() {
       return window.KaceyClosing ? window.KaceyClosing.classify(s) : null;
     },
     endListening: endListening,
-    bargeIn: bargeIn,
+    pauseReply: pauseReply,
+    stopAndEnd: stopAndEnd,
     barge: bargeStatus,
     send: submit,
     inject: onServer,

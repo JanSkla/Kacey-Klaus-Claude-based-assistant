@@ -62,7 +62,17 @@
     'cool', 'great', 'so', 'well', 'hey', 'and', 'then', 'now'
   ];
 
-  /* ---- 'interrupt': be quiet, right now -------------------------------
+  /* ---- 'pause': stop, but stay -----------------------------------------
+     Hold that thought. She stops talking, the turn is abandoned, and the
+     microphone comes straight back so the conversation continues. */
+  var PAUSE = [
+    'pockej', 'pockej chvilku', 'pockej chvili', 'pockejte',
+    'moment', 'momentik', 'chvilku', 'zadrz', 'vydrz', 'pauza',
+    'wait', 'wait a moment', 'wait a second', 'hold on', 'hang on',
+    'one moment', 'just a moment', 'pause'
+  ];
+
+  /* ---- 'interrupt': be quiet, and we are finished ----------------------
      Checked before 'end', because it is the more urgent of the two and because
      these phrases are about her OUTPUT, not about the microphone. */
   var INTERRUPT = [
@@ -128,8 +138,11 @@
   }
 
   var END_SET = prep(END);
+  var PAUSE_SET = prep(PAUSE);
   var INTERRUPT_SET = prep(INTERRUPT);
-  var INTERRUPT_ARR = prepArr(INTERRUPT);
+  /* Both families are things said AT her while she talks, so both have to be
+     screened out of her own speech by the echo guard below. */
+  var HUSH_ARR = prepArr(INTERRUPT.concat(PAUSE));
   var TAIL_ARR = prepArr(END_TAIL);
   var PAD_SET = prep(PAD);
 
@@ -149,7 +162,7 @@
     return true;
   }
 
-  /* -> 'interrupt' | 'end' | null */
+  /* -> 'pause' | 'interrupt' | 'end' | null */
   function classify(text) {
     var norm = normalize(text);
     if (!norm) return null;
@@ -162,6 +175,7 @@
     var joined = core.join(' ');
 
     if (INTERRUPT_SET[joined] || INTERRUPT_SET[norm]) return 'interrupt';
+    if (PAUSE_SET[joined] || PAUSE_SET[norm]) return 'pause';
     if (END_SET[joined] || END_SET[norm]) return 'end';
 
     for (var i = 0; i < TAIL_ARR.length; i++) {
@@ -170,17 +184,17 @@
     return null;
   }
 
-  /* Does this text CONTAIN an interrupt phrase anywhere?
+  /* Does this text CONTAIN a 'pause' or 'interrupt' phrase anywhere?
 
      Used to stop Kacey interrupting herself. The barge-in listener hears her
-     through the speakers, so if the reply being spoken contains "ticho", a
-     microphone hearing "ticho" is the loudspeaker rather than the room. */
+     through the speakers, so if the reply being spoken contains "ticho" or
+     "počkej", a microphone hearing it is the loudspeaker rather than the room. */
   function mentionsInterrupt(text) {
     var n = normalize(text);
     if (!n) return false;
     var padded = ' ' + n + ' ';
-    for (var i = 0; i < INTERRUPT_ARR.length; i++) {
-      if (padded.indexOf(' ' + INTERRUPT_ARR[i] + ' ') !== -1) return true;
+    for (var i = 0; i < HUSH_ARR.length; i++) {
+      if (padded.indexOf(' ' + HUSH_ARR[i] + ' ') !== -1) return true;
     }
     return false;
   }
@@ -193,7 +207,7 @@
     _counts: function () {
       return {
         end: END.length, tail: END_TAIL.length,
-        interrupt: INTERRUPT.length, pad: PAD.length
+        interrupt: INTERRUPT.length, pause: PAUSE.length, pad: PAD.length
       };
     }
   };

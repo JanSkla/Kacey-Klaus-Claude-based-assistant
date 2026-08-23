@@ -13,6 +13,7 @@ Browser (voice + text UI)  ->  this server (Node)  ->  Claude Agent SDK  ->  kla
 
 ```sh
 npm install
+claude mcp add klaus-memory -- python -m klaus_memory --db D:/code/hobby/lukas/Klaus/Kacey-mvp/klaus.db --calendars D:/code/hobby/lukas/Klaus/Kacey-mvp/calendars.json mcp
 npm start
 ```
 
@@ -36,11 +37,73 @@ curl http://localhost:8787/api/health
 # {"ok":true,"model":"claude-opus-5","mcpServers":["klaus-memory"]}
 ```
 
+## The XTTS voices (optional)
+
+Without this, the voice picker offers only the browser engine — which is the
+designed fallback, not a failure. The neural voices need a separate Python
+environment, because Coqui TTS pins versions that have no business near
+anything else.
+
+One-time setup. **Python 3.11**, not 3.13+: Coqui TTS does not support them.
+The venv path is hardcoded in `package.json`, so the name matters.
+
+```sh
+py -3.11 -m venv .venv-xtts
+.venv-xtts\Scripts\python.exe -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+.venv-xtts\Scripts\python.exe -m pip install coqui-tts "transformers<5"
+```
+
+Three things in there are not optional and each fails in its own way:
+
+- **CUDA wheels first.** Install `coqui-tts` before torch and pip resolves the
+  CPU-only build, which is slower than real time — the difference between
+  continuous speech and audible gaps.
+- **`torchaudio` explicitly.** `coqui-tts` imports it but does not depend on it,
+  so the venv installs clean and then dies with `ModuleNotFoundError` on the
+  first import.
+- **`transformers<5`.** XTTS imports `isin_mps_friendly`, which 5.x removed. The
+  symptom is an `ImportError` deep inside the Tortoise layers, not a version
+  complaint.
+
+Then download the model (~1.8 GB) and audition a few speakers into
+`voicelab/samples/`:
+
+```sh
+.venv-xtts\Scripts\python.exe voicelab/xtts_fetch.py "Nova Hogarth" "Tammie Ema"
+```
+
+With no arguments it renders the first six of the 58 studio speakers. Note that
+this script runs on the **CPU** — ~20 s a sentence is expected here and says
+nothing about the server, which uses the GPU when there is one.
+
+Start the voice server (leave it running; it holds the model in memory):
+
+```sh
+npm run xtts
+```
+
+Wait for `[xtts] ready` and then `[xtts] warmed up` — it burns the expensive
+first inference at startup so a real request never pays it. Confirm the GPU was
+picked up, and which speakers exist:
+
+```sh
+curl http://127.0.0.1:8790/health
+```
+
+Restart Kacey and the picker gains the voices from `VOICES` in `config.js`.
+Those five names are an allow-list: `/api/tts` rejects anything else, and XTTS
+matches speaker names exactly, so `Ana` / `Anna` and `Lidiya` / `Lidia` are the
+difference between a voice and a 500.
+
+XTTS-v2 is **CPML — non-commercial only**, and only the built-in studio speakers
+are used. Cloning a real person's voice would need that person's consent.
+
 ## Files
 
 | Path                 | What it is                                                    |
 | -------------------- | ------------------------------------------------------------- |
-| `server.js`          | The whole backend: HTTP, WebSocket, SDK session, MCP          |
+| `server.js`          | The backend: HTTP, WebSocket, SDK session, MCP                 |
+| `config.js`          | Every knob, the MCP launch command and the tool allow-list      |
 | `persona/kacey.md`   | Kacey's system prompt — edit and restart, no code change      |
 | `.env.example`       | Every configuration knob with explanation                     |
 | `public/index.html`  | The markup, and the only place scripts are loaded             |
@@ -109,7 +172,7 @@ All environment variables, all with working defaults — see `.env.example`.
 Kacey runs with **no built-in tools at all** — no shell, no file read or write, no
 web access. She gets only an explicit allow-list of `klaus_memory` tools.
 
-The allow-list is the `MEMORY_TOOLS` array near the top of `server.js`, with a
+The allow-list is the `MEMORY_TOOLS` array in `config.js`, with a
 comment explaining how to widen it and why certain tools are left out. Three layers
 enforce it:
 

@@ -70,8 +70,10 @@ export function voiceWakeActive() { return mode === 'voice' && voiceWakeReady();
 function voiceShouldRun() {
   if (!voiceWakeUsable() || Date.now() < voiceFailUntil) return false;
   // Never while Kacey is speaking: echo cancellation helps but does not make
-  // her own voice inaudible to her own detector.
-  if (state.ttsPending > 0 || document.hidden) return false;
+  // her own voice inaudible to her own detector. And never during the rest of
+  // her turn either — the barge listener owns the microphone from the moment she
+  // starts working, so that "ticho" is heard before she has said anything.
+  if (state.ttsPending > 0 || state.streaming || document.hidden) return false;
   if (vwPanelOpen) return true;                 // tuning needs it live
   if (!wakeIsEnabled() || wakeIsBlocked()) return false;
   if (state.listening || state.micDesired) return false;

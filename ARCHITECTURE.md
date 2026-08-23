@@ -169,8 +169,8 @@ that persists a preference. The engine it selects lives in `voice/tts.js`.
 | `chime.js`       | The two confirmation sounds, and the Web Audio unlock         |
 | `tts.js`         | Speaking the reply aloud: browser engine or XTTS              |
 | `recognition.js` | Dictation — the microphone the user presses                   |
-| `commands.js`    | "to je vše" / "ticho" — said to the interface, not to Kacey   |
-| `barge.js`       | Hearing "ticho" while she is still talking                    |
+| `commands.js`    | "počkej" / "ticho" / "to je vše" — said to the interface, not to Kacey |
+| `barge.js`       | Hearing "počkej" or "ticho" over the top of her                |
 | `wake.js`        | The wake word, and which detector holds the microphone        |
 | `wake-panel.js`  | The voice-template detector and its tuning sheet              |
 
@@ -293,12 +293,19 @@ four possible holders and a supervisor that ensures at most one is live.
 | Listener                     | Lives in           | Runs when                                    |
 | ---------------------------- | ------------------ | -------------------------------------------- |
 | Dictation                    | `recognition.js`   | The user pressed the mic, or a wake word fired |
-| Wake word (transcript)       | `wake.js`          | Idle, online, visible, not speaking — and the voice detector is not usable |
+| Wake word (transcript)       | `wake.js`          | Idle, online, visible, **no turn in flight** — and the voice detector is not usable |
 | Wake word (voice template)   | `wake-panel.js`    | Same, but preferred whenever samples are enrolled |
-| Barge-in                     | `barge.js`         | **Only** while a reply is actually being spoken |
+| Barge-in                     | `barge.js`         | **For the whole of a turn** — from `thinking` to the last spoken sentence |
+
+The handoff at the turn boundary is what makes this hold: `streaming` or
+`ttsPending` being set means the barge listener owns the microphone, and all three
+wake predicates stand down on exactly that condition. So "ticho" is heard from the
+moment she starts working — which is the moment you most want to stop a wrong
+answer, rather than sitting through it first — and no two listeners ever want the
+device at once.
 
 Arbitration is `wake.superviseWake()`, called from a 1.5s interval; barge-in gets
-its own 300ms interval because a reply only lasts seconds. Both are dull polling
+its own 300ms interval because a turn only lasts seconds. Both are dull polling
 loops rather than hooks on every transition (dictation start/stop, TTS, tab
 switch, reconnect, engine timeout) for one reason: **polling cannot get wedged**,
 and this is something that is supposed to be listening whenever you are not.
@@ -308,8 +315,25 @@ Two guards are easy to miss and both exist because of real failures:
 - **Feedback loop.** `tts.js` stops dictation before it speaks and re-opens it once
   the queue drains, so the microphone never hears Kacey.
 - **Self-hearing.** The barge-in listener hears her through the speakers. Before
-  acting on "ticho" it checks whether the reply being spoken contains the word —
-  `barge.js` owns that text, because it is the only module that reads it.
+  acting on it, `barge.js` checks whether the reply being spoken contains the
+  phrase — it owns that text, because it is the only module that reads it.
+
+### The three spoken commands
+
+They are one gesture with three intents, and the distinction is entirely in what
+happens to the microphone afterwards. `commands.js` composes them from two
+independent halves — silence the output, and close the conversation — so there is
+no third code path to keep in step:
+
+| Phrase        | Silences her | Closes the conversation | Said |
+| ------------- | ------------ | ----------------------- | ---- |
+| "počkej"      | yes          | no — the mic comes back | during a turn |
+| "ticho"       | yes          | yes                     | during a turn |
+| "to je vše"   | nothing to silence | yes               | after a turn  |
+
+"ticho" and "to je vše" deliberately share one ending, `endListening()`, so there
+is one ending to understand rather than two. Neither touches the wake word, so
+"KC" is the way back from both.
 
 ## Who owns which state
 
@@ -359,13 +383,25 @@ mock transport receives `submit` as an argument for exactly this reason.
 
 ## Backend
 
-`server.js` is one file on purpose — it is one concern (bridge the browser to the
-SDK) and splitting it would mean inventing seams that the code does not have.
+The backend is **two** files, and the seam between them is the only one the code
+actually has: `config.js` is what you may change without reading anything, and
+`server.js` is the behaviour.
+
+`config.js` holds constants and nothing else — the environment knobs and their
+defaults, the `klaus_memory` launch command, the tool allow-list, the voice table,
+the persona's substitution blocks. No runtime state, no connections, no I/O beyond
+the `existsSync()` checks that decide which flags the memory server can be given.
+It is the same rule `core/` follows on the frontend: a sink that everything reads
+and that reads nothing back. If something there needed to know about a session, a
+socket or a request, it would belong in `server.js`.
+
+`server.js` is otherwise one file on purpose — bridging the browser to the SDK is
+one concern, and splitting it further would mean inventing seams the code does not
+have.
 
 | Section                | What it does                                                |
 | ---------------------- | ----------------------------------------------------------- |
-| Configuration          | Every knob from the environment, all with working defaults   |
-| `MCP_SERVERS`, `MEMORY_TOOLS` | The `klaus_memory` launch command and the tool allow-list |
+| `config.js`            | Every knob from the environment, all with working defaults; `MCP_SERVERS` and `MEMORY_TOOLS` |
 | Persona loading        | `persona/kacey.md` read at startup, `{{TODAY}}`/`{{NOW}}` rendered per connection |
 | `KaceySession`         | One WebSocket == one continuous `query()` in streaming-input mode |
 | HTTP routes            | `/api/health` `/api/voices` `/api/calendar` (+ update/delete) `/api/tts`, then static `public/` |
@@ -461,9 +497,12 @@ branch, keep the finish-path guards, and offer it through
 `ui/voice-picker.js` — including what the picker says when the engine is missing.
 
 **A new spoken command.** The phrase goes in `closing.js` (with a test in
-`test/closing.mjs`); what it does goes in `voice/commands.js`. The matcher is
-deliberately narrow — read the comment at the top of `closing.js` before widening
-it.
+`test/closing.mjs`, including at least one MUST_NOT case that contains the words
+inside a genuine request); what it does goes in `voice/commands.js`, composed from
+`silenceReply()` and `endListening()` rather than written out again. A new family
+also needs a branch in `barge.js` if it is meant to be heard over her voice, and
+in `protocol.js` for the typed path. The matcher is deliberately narrow — read the
+comment at the top of `closing.js` before widening it.
 
 **Anything that needs a fourth listener on the microphone.** Reconsider. If it is
 genuinely necessary, it gets a `shouldRun()` predicate and a branch in

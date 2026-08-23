@@ -117,13 +117,32 @@ export function flushTTS() {
 }
 
 /* ---- XTTS voice ------------------------------------------------------
-   The five studio voices chosen in the Voice Lab, synthesised locally by
-   xtts_server.py. Sentences must be spoken in the order they were produced,
-   but synthesis is slow and asynchronous, so each one is chained onto the
-   previous rather than fired off in parallel. A generation token lets an
-   interrupt orphan everything still queued. ---------------------------- */
+   The studio voices chosen in the Voice Lab, synthesised locally by
+   xtts_server.py. Sentences must be SPOKEN in the order they were produced,
+   but they do not have to be SYNTHESISED in lockstep with playback, and that
+   distinction is the whole difference between continuous speech and a stutter.
+
+   Two chains, not one:
+
+     xttsFetchChain  - one request at a time, in order. The model holds a lock
+                       and serves one sentence at a time anyway, so firing them
+                       all at once would only queue them somewhere less visible
+                       and waste GPU on sentences a barge-in is about to orphan.
+     xttsChain       - playback, in the same order.
+
+   The fetch chain runs AHEAD of the playback chain: while sentence N is
+   playing, N+1 is already being synthesised. At the measured RTF of ~0.55 the
+   next clip is ready well before the current one ends, so the gap closes to the
+   time it takes to swap a blob into the <audio> element.
+
+   Previously both lived on one chain, which meant the request for N+1 was not
+   even sent until N had finished playing — every sentence boundary cost a full
+   synthesis, 0.75-1.9 s of silence measured locally.
+
+   A generation token lets an interrupt orphan everything still queued. ---- */
 
 var xttsChain = Promise.resolve();
+var xttsFetchChain = Promise.resolve();
 var xttsToken = 0;
 var xttsAudio = null;
 
@@ -142,8 +161,10 @@ function speakChunkXtts(text) {
     if (state.ttsPending === 0) onAllSpeechDone();
   }
 
-  xttsChain = xttsChain.then(function () {
-    if (token !== xttsToken) { finish(); return; }
+  /* Synthesis starts as soon as the sentence exists — behind the previous
+     REQUEST, not behind the previous playback. */
+  var pending = xttsFetchChain.then(function () {
+    if (token !== xttsToken) return null;         // interrupted before we asked
     return fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -159,9 +180,18 @@ function speakChunkXtts(text) {
         var ms = r.headers.get('X-Tts-Ms');
         if (ms) noteSynthMs(ms);
         return r.blob();
-      })
+      });
+  });
+
+  /* The next sentence may be requested once this request is done, whatever it
+     returned — a failed sentence must not stall the ones behind it. */
+  xttsFetchChain = pending.catch(function () { return null; });
+
+  xttsChain = xttsChain.then(function () {
+    if (token !== xttsToken) { finish(); return; }
+    return pending
       .then(function (blob) {
-        if (token !== xttsToken) { finish(); return; }
+        if (token !== xttsToken || !blob) { finish(); return; }
         return new Promise(function (resolve) {
           var a = audioEl();                  // the primed element, not a new one
           var url = URL.createObjectURL(blob);
@@ -243,6 +273,11 @@ export function cancelSpeech() {
   if (synth) { try { synth.cancel(); } catch (e) {} }
   // Orphan anything queued or in flight on the XTTS chain, and stop audio now.
   xttsToken++;
+  /* Both chains start fresh. Leaving the fetch chain in place would make the
+     first sentence of her NEXT reply wait behind a request whose audio we have
+     already decided to throw away. */
+  xttsChain = Promise.resolve();
+  xttsFetchChain = Promise.resolve();
   if (xttsAudio) { try { xttsAudio.pause(); } catch (e) {} xttsAudio = null; }
   state.ttsPending = 0;
   syncOrb();
