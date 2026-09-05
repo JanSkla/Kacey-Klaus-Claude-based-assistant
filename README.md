@@ -153,11 +153,24 @@ All environment variables, all with working defaults — see `.env.example`.
 | `KACEY_MODEL`             | `claude-opus-5`                        |                                           |
 | `KACEY_PERSONA_PATH`      | `./persona/kacey.md`                   | Missing file → built-in default + warning |
 | `PYTHON_BIN`              | `python`                               | Launches the MCP server                   |
-| `KLAUS_DB`                | `C:\repos\hobby\lukas\Klaus\klaus.db`  | Passed as `--db`                          |
-| `KLAUS_MEMORY_PYTHONPATH` | `C:\repos\hobby\lukas\Klaus\memory`    | Directory *containing* `klaus_memory`     |
+| `KLAUS_DB`                | `<PYTHONPATH>\klaus.db`                | Passed as `--db`                          |
+| `KLAUS_MEMORY_PYTHONPATH` | `..\Klaus\Kacey-mvp`                   | Directory *containing* `klaus_memory`     |
+| `KLAUS_CALENDARS`         | `<PYTHONPATH>\calendars.json`          | Passed as `--calendars` when present      |
+| `KLAUS_ENV_FILE`          | `<PYTHONPATH>\.env`                    | Passed as `--env`; OAuth credentials      |
 
 `klaus_memory` is pure standard library (sqlite3/json/urllib) — there is nothing to
 `pip install`.
+
+> **Without `--calendars` there is no calendar.** `klaus_memory` then falls back to
+> a single in-memory source named `local`. Reads keep working, because they come
+> from the mirror table in SQLite, so the failure stays invisible until a *write*:
+> every stored event says `osobní`, `práce` or `rodina`, none of which the session
+> knows, and the delete fails with `neznámý kalendářní zdroj 'osobní'`. `--env` is
+> explicit for a related reason — `.env` is searched from the working directory
+> *upwards*, and the server spawns Python from this repo, so the memory tree's
+> `.env` sits on a sibling branch and is never reached. Both flags are passed only
+> when the file actually exists: pointing `--calendars` at nothing is a hard startup
+> failure, which would take the whole assistant down rather than just the calendar.
 
 > **The `--db` flag always wins.** Inside `klaus_memory`, `--db` overrides the
 > `KLAUS_DB` environment variable and defaults to `klaus-memory.db`. The server
