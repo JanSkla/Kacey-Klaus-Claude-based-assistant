@@ -1,44 +1,52 @@
 /* =========================================================================
-   THE CALENDAR VIEWER.
+   THE CALENDAR.
 
    Reads /api/calendar, which reads klaus_memory's `calendar_event` table
    directly. Writes go through /api/calendar/:id/{update,delete}, which run
    klaus_memory rather than touching SQLite — conflicts, updated_at and the
    external write-through all belong to it.
 
+   Three things draw from the same fetched month:
+     - the month grid, which says which days hold anything;
+     - the day lane, an hour-ruled column with the week's routine painted
+       underneath and the day's real events sitting on top of it;
+     - the "Today" panel on the main view.
+
    Kacey also writes the calendar through conversation, so protocol.js calls
    refreshCalendar() when one of her calendar tools finishes; otherwise an open
-   viewer would sit on rows that are no longer true.
+   view would sit on rows that are no longer true.
 
    Titles come from the model and from external calendars, so every one of them
    reaches the DOM through textContent.
    ========================================================================= */
 
-/* The whole module is inert without its panel — index.html may not have it. */
-var btn = document.getElementById('calBtn');
-var sheet = document.getElementById('calPanel');
-var present = !!(btn && sheet);
+import { $ } from '../core/dom.js';
+import { el, fill, hhmm as fmtMin } from '../core/el.js';
+import * as store from '../core/store.js';
+import { go, onEnter } from './router.js';
+import { say } from './toast.js';
+import { blocksFor, CATS, dayIndexOfDate } from '../views/routine.js';
 
-
-var closeBtn = document.getElementById('calClose');
-var reloadBtn = document.getElementById('calReload');
-var prevBtn = document.getElementById('calPrev');
-var nextBtn = document.getElementById('calNext');
-var todayBtn = document.getElementById('calToday');
-var body = document.getElementById('calBody');
-var meta = document.getElementById('calMeta');
-var monthEl = document.getElementById('calMonth');
-var jumpEl = document.getElementById('calJump');
-
-var DOW = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
-// genitive for "3. srpna", nominative for the month heading
+var DOW_SHORT = ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'];
+var DOW_LONG = ['pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota', 'neděle'];
 var MON = ['ledna', 'února', 'března', 'dubna', 'května', 'června',
            'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
 var MON_NOM = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen',
                'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
 
-var month = null;        // 'YYYY-MM'; null = whatever the server calls current
+/* One pixel-per-minute scale for the lane, and the padding around the waking
+   day. 64px an hour is the smallest that still fits a title and a time on a
+   half-hour block without clipping. */
+var PPM = 64 / 60;
+var PAD = 45;
+
+var month = null;          // 'YYYY-MM'; null = whatever the server calls current
+var selected = null;       // 'YYYY-MM-DD'
+var payload = null;
 var loading = false;
+var pendingDelete = null;  // event_id awaiting its second tap
+
+/* ---- helpers ------------------------------------------------------------ */
 
 function shiftMonth(m, delta) {
   var p = m.split('-').map(Number);
@@ -46,438 +54,420 @@ function shiftMonth(m, delta) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
-function monthName(m) {
-  var p = m.split('-').map(Number);
-  return MON_NOM[p[1] - 1] + ' ' + p[0];
-}
-
-function hhmm(iso) {
-  if (!iso) return '';
+function clockOf(iso) {
   var d = new Date(iso);
   if (isNaN(d)) return '';
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
-/* Date and time together, for the hover detail on a spanning event. */
-function hhmmDate(iso) {
-  if (!iso) return '?';
+function minutesOf(iso) {
   var d = new Date(iso);
-  if (isNaN(d)) return '?';
-  return d.getDate() + '. ' + MON[d.getMonth()] + ' ' + hhmm(iso);
+  if (isNaN(d)) return 0;
+  return d.getHours() * 60 + d.getMinutes();
 }
 
-function dayLabel(date) {
-  var p = date.split('-');
-  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
-  return { dow: DOW[d.getDay()], text: Number(p[2]) + '. ' + MON[Number(p[1]) - 1] };
+/** Monday-first weekday index of a 'YYYY-MM-DD'. */
+function dowOf(date) {
+  var p = date.split('-').map(Number);
+  return (new Date(p[0], p[1] - 1, p[2]).getDay() + 6) % 7;
 }
 
-function tag(text, cls) {
-  var s = document.createElement('span');
-  s.className = 'cal__tag' + (cls ? ' cal__tag--' + cls : '');
-  s.textContent = text;
-  return s;
+/** The calendar source an event belongs to — what the sources filter switches. */
+function sourceOf(e) {
+  return String(e.source || e.origin || 'jiné');
 }
 
-/* What to put in the time column. A multi-day event covers several rows, so
-   repeating "12:00–12:00" on each of them says nothing — the arrow says which
-   end of the event this day is, and the middle days have no clock time at all. */
-function timeLabel(e) {
-  var from = hhmm(e.starts_at), to = hhmm(e.ends_at);
-  var span = e.span && e.span.count > 1;
+/* A stable colour per source. The first source takes the accent (it is the
+   personal one in every setup seen so far); the rest get fixed hues, so a
+   colour does not change meaning when a calendar is added. */
+var SOURCE_COLOURS = ['var(--acc)', '#78a9ff', '#08bdba', '#d2a106', '#ee5396', '#a56eff'];
+var sourceOrder = [];
 
-  // An all-day event has no clock time on any of its days, including the first.
-  if (e.all_day) return 'celý den';
-  if (!span) return to && to !== from ? from + '–' + to : from;
-  if (e.span.first) return from + ' →';
-  if (e.span.last) return '→ ' + to;
-  return '⋯';                                  // a whole day in the middle
+function colourFor(source) {
+  var i = sourceOrder.indexOf(source);
+  if (i === -1) { sourceOrder.push(source); i = sourceOrder.length - 1; }
+  return SOURCE_COLOURS[i % SOURCE_COLOURS.length];
 }
 
-/* A value out of source_meta, which is free-form JSON from whatever produced the
-   event. Objects and arrays are stringified rather than skipped: seeing the raw
-   shape is more useful than pretending the key is not there. */
-function metaValue(v) {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'object') { try { return JSON.stringify(v); } catch (err) { return '?'; } }
-  return String(v);
+function sourceEnabled(source) {
+  var on = store.data.settings.calOn || {};
+  return on[source] !== false;      // unknown sources default to visible
 }
 
-function renderEvent(e) {
-  var row = document.createElement('div');
-  row.className = 'cal__event';
-  if (e.span && e.span.count > 1) {
-    row.className += ' cal__event--span';
-    // Continuation days are context, not new commitments — dimmed so the day's
-    // own events still read first.
-    if (!e.span.first) row.className += ' cal__event--cont';
+function dayRecord(date) {
+  if (!payload) return null;
+  for (var i = 0; i < payload.days.length; i++) {
+    if (payload.days[i].date === date) return payload.days[i];
   }
-  if (e.all_day) row.className += ' cal__event--allday';
+  return null;
+}
 
-  var time = document.createElement('span');
-  time.className = 'cal__time';
-  time.textContent = timeLabel(e);
-  row.appendChild(time);
+function eventsOn(date) {
+  var rec = dayRecord(date);
+  if (!rec) return [];
+  return rec.events.filter(function (e) { return sourceEnabled(sourceOf(e)); });
+}
 
-  // Titles come from the model and from external calendars — textContent only.
-  var title = document.createElement('span');
-  title.className = 'cal__title';
-  title.textContent = e.title || '(bez názvu)';
-  row.appendChild(title);
+/* ---- loading ------------------------------------------------------------ */
 
-  var tags = document.createElement('span');
-  tags.className = 'cal__tags';
-  /* Which day of the run this is. Suppressed on a two-day TIMED event, where
-     the arrows in the time column already say it and "1/2" on all sixty-odd
-     overnight blocks would be pure noise. An all-day event has no arrows, so it
-     needs the counter as soon as it spans at all. */
-  if (e.span && (e.span.count > 2 || (e.span.count > 1 && e.all_day))) {
-    tags.appendChild(tag(e.span.index + '/' + e.span.count, 'span'));
-  }
-  // Which calendar it came from.
-  if (e.source) {
-    var src = tag(e.source, 'src');
-    src.setAttribute('data-src', e.source);
-    tags.appendChild(src);
-  }
-  if (e.sync_state === 'pending') tags.appendChild(tag('čeká', 'pending'));
-  if (e.sync_state === 'failed') tags.appendChild(tag('chyba', 'failed'));
-  if (e.origin === 'external') tags.appendChild(tag('externí', 'ext'));
-  if (e.sensitivity === 'local_only') tags.appendChild(tag('local', 'local'));
-  // Whatever the source attached to the event — location, url, anything.
-  if (e.source_meta) {
-    Object.keys(e.source_meta).forEach(function (k) {
-      var v = metaValue(e.source_meta[k]);
-      if (!v) return;
-      var chip = tag(k + ': ' + (v.length > 28 ? v.slice(0, 27) + '…' : v), 'meta');
-      chip.title = k + ': ' + v;
-      tags.appendChild(chip);
-    });
-  }
-  if (tags.children.length) row.appendChild(tags);
-
-  /* Hover detail: the things worth having but not worth a chip on every row. */
-  var detail = [];
-  if (e.span && e.span.count > 1) {
-    detail.push('trvá ' + e.span.count + ' dní: ' +
-      hhmmDate(e.starts_at) + ' – ' + hhmmDate(e.ends_at));
-  }
-  if (e.updated_at) detail.push('upraveno ' + hhmmDate(e.updated_at));
-  if (e.sync_error) detail.push('chyba synchronizace: ' + e.sync_error);
-  if (detail.length) row.title = detail.join('\n');
-
-  var acts = document.createElement('span');
-  acts.className = 'cal__tags';
-
-  var edit = document.createElement('button');
-  edit.type = 'button';
-  edit.className = 'cal__act';
-  edit.textContent = '✎';
-  edit.title = 'Upravit';
-  edit.setAttribute('aria-label', 'Upravit ' + (e.title || 'událost'));
-  edit.onclick = function () { openEditor(row, e); };
-  acts.appendChild(edit);
-
-  /* Delete is two-step on purpose. An event is real data, and a mis-click on a
-     12px icon should not be able to destroy it — the second click is the
-     consent, and it reverts on blur or after a few seconds. */
-  var del = document.createElement('button');
-  del.type = 'button';
-  del.className = 'cal__act cal__act--del';
-  del.textContent = '×';
-  del.title = 'Smazat';
-  del.setAttribute('aria-label', 'Smazat ' + (e.title || 'událost'));
-  var armed = false, disarm = 0;
-  function reset() {
-    armed = false;
-    clearTimeout(disarm);
-    del.textContent = '×';
-    del.className = 'cal__act cal__act--del';
-  }
-  del.onclick = function () {
-    if (!armed) {
-      armed = true;
-      del.textContent = 'smazat?';
-      del.className = 'cal__act cal__act--confirm';
-      disarm = setTimeout(reset, 5000);
-      return;
+export async function refreshCalendar() {
+  if (loading) return;
+  loading = true;
+  try {
+    var url = '/api/calendar' + (month ? '?month=' + encodeURIComponent(month) : '');
+    var res = await fetch(url);
+    var body = await res.json();
+    if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
+    payload = body;
+    month = body.month;
+    if (!selected || selected.slice(0, 7) !== month) {
+      selected = (body.today && body.today.slice(0, 7) === month) ? body.today : month + '-01';
     }
-    reset();
-    removeEvent(row, e);
-  };
-  del.onblur = reset;
-  acts.appendChild(del);
-
-  row.appendChild(acts);
-  return row;
+    // Learn the colour order from the data, most-used source first, so it is
+    // the same on every load rather than whichever event happened to be first.
+    var counts = {};
+    payload.days.forEach(function (d) {
+      d.events.forEach(function (e) { var s = sourceOf(e); counts[s] = (counts[s] || 0) + 1; });
+    });
+    sourceOrder = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+    render();
+  } catch (err) {
+    if ($('calMeta')) $('calMeta').textContent = 'Kalendář nelze načíst: ' + err.message;
+  } finally {
+    loading = false;
+  }
 }
 
-/* --- writes ------------------------------------------------------------
-   These go through /api/calendar/:id/{update,delete}, which runs
-   klaus_memory rather than touching SQLite — conflicts, updated_at and the
-   external write-through all belong to it. */
+/* ---- the month grid ----------------------------------------------------- */
 
-function localInput(iso) {
-  // <input type="datetime-local"> wants 'YYYY-MM-DDTHH:MM' in local time.
-  var d = new Date(iso);
-  if (isNaN(d)) return '';
-  var p = function (n) { return String(n).padStart(2, '0'); };
-  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
-    'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+function renderMonth() {
+  var host = $('calBody');
+  if (!host || !payload) return;
+
+  var nodes = DOW_SHORT.map(function (d) { return el('span.monthgrid__dow', d.toUpperCase()[0]); });
+
+  // Lead with blanks so the first day lands under the right weekday.
+  var lead = dowOf(payload.days[0].date);
+  for (var b = 0; b < lead; b++) nodes.push(el('span'));
+
+  payload.days.forEach(function (d) {
+    var n = Number(d.date.slice(8));
+    var has = d.events.some(function (e) { return sourceEnabled(sourceOf(e)); });
+    var cls = '.day';
+    if (has) cls += '.has-events';
+    if (d.date === payload.today) cls += '.is-today';
+    else if (d.date < payload.today) cls += '.is-past';
+    if (d.date === selected && d.date !== payload.today) cls += '.is-selected';
+    nodes.push(el('button' + cls, {
+      type: 'button', onclick: function () { selected = d.date; render(); }
+    }, String(n)));
+  });
+
+  fill(host, nodes);
+
+  $('calMonth').textContent = MON_NOM[Number(month.slice(5)) - 1] + ' ' + month.slice(0, 4);
+  $('calMeta').textContent = payload.monthEvents + ' událostí v měsíci · ' + payload.total + ' celkem';
+
+  /* Months that hold anything, so an empty stretch does not have to be clicked
+     through one month at a time. */
+  var jump = $('calJump');
+  var others = (payload.monthsWithEvents || []).filter(function (m) { return m.month !== month; }).slice(-8);
+  jump.hidden = others.length === 0;
+  fill(jump, others.map(function (m) {
+    return el('button.chip', {
+      type: 'button',
+      onclick: function () { month = m.month; refreshCalendar(); }
+    }, m.month + ' (' + m.count + ')');
+  }));
 }
 
-function offsetIso(localValue) {
-  // Back to ISO with this machine's offset, which is what klaus_memory stores.
-  if (!localValue) return null;
-  var d = new Date(localValue);
-  if (isNaN(d)) return null;
-  var off = -d.getTimezoneOffset();
-  var sign = off >= 0 ? '+' : '-';
-  var p = function (n) { return String(Math.abs(n)).padStart(2, '0'); };
-  return localValue + ':00' + sign + p(Math.floor(Math.abs(off) / 60)) + ':' + p(off % 60);
+function renderSources() {
+  var host = $('calSources');
+  if (!host || !payload) return;
+
+  var counts = {};
+  payload.days.forEach(function (d) {
+    d.events.forEach(function (e) { var s = sourceOf(e); counts[s] = (counts[s] || 0) + 1; });
+  });
+  var names = Object.keys(counts).sort();
+
+  fill(host, names.length ? names.map(function (s) {
+    var on = sourceEnabled(s);
+    return el('button.btn.btn--fn', {
+      type: 'button', 'aria-pressed': String(on),
+      onclick: function () {
+        var next = Object.assign({}, store.data.settings.calOn);
+        next[s] = !on;
+        store.patchSettings({ calOn: next });
+        render();
+      }
+    }, [
+      el('i.swatch', { style: 'background:' + (on ? colourFor(s) : 'transparent') + ';border:1px solid ' + colourFor(s) }),
+      s + ' · ' + counts[s]
+    ]);
+  }) : el('p.muted-3', 'Žádné zdroje v tomto měsíci.'));
 }
 
-function openEditor(row, e) {
-  if (row.nextSibling && row.nextSibling.classList &&
-      row.nextSibling.classList.contains('cal__edit')) {
-    row.parentNode.removeChild(row.nextSibling);       // toggle closed
+/* ---- the day lane ------------------------------------------------------- */
+
+function renderLane() {
+  var host = $('dayLane');
+  if (!host || !payload || !selected) return;
+
+  var routine = store.data.routine;
+  var wake = routine.wake, sleep = routine.sleep;
+  var events = eventsOn(selected);
+
+  /* The lane covers the waking day plus a margin — but never clips an event, so
+     a 06:00 run on a 07:00 wake still has somewhere to sit. */
+  var start = Math.max(0, wake - PAD), end = Math.min(1440, sleep + PAD);
+  var timed = events.filter(function (e) { return !e.all_day; });
+  var allDay = events.filter(function (e) { return e.all_day; });
+
+  timed.forEach(function (e) {
+    start = Math.min(start, Math.floor(minutesOf(e.starts_at) / 60) * 60);
+    if (e.ends_at) end = Math.max(end, Math.ceil(minutesOf(e.ends_at) / 60) * 60);
+  });
+  start = Math.max(0, start); end = Math.min(1440, Math.max(end, start + 120));
+
+  var top = function (m) { return Math.round((Math.max(m, start) - start) * PPM); };
+  var height = function (a, b) { return Math.round((Math.min(b, end) - Math.max(a, start)) * PPM); };
+
+  host.style.height = Math.round((end - start) * PPM) + 'px';
+
+  var nodes = [];
+
+  // sleep bands
+  if (wake > start) {
+    nodes.push(el('div.sleepband', { style: 'top:0;height:' + Math.round((wake - start) * PPM) + 'px;border-bottom:1px solid var(--line)' },
+      el('span', 'spánek do ' + fmtMin(wake))));
+  }
+  if (sleep < end) {
+    nodes.push(el('div.sleepband', { style: 'top:' + top(sleep) + 'px;height:' + Math.round((end - sleep) * PPM) + 'px;border-top:1px solid var(--line)' },
+      el('span', 'spánek od ' + fmtMin(sleep))));
+  }
+
+  // hour rules
+  for (var h = Math.ceil(start / 60); h < end / 60; h++) {
+    nodes.push(el('div.tick' + (h % 2 ? '.tick--odd' : ''), { style: 'top:' + top(h * 60) + 'px' },
+      el('span', ('0' + h).slice(-2) + ':00')));
+  }
+
+  // the week's routine, painted underneath
+  var wIdx = dowOf(selected);
+  var blocks = blocksFor(wIdx);
+  blocks.forEach(function (r) {
+    if (r.e <= start || r.s >= end) return;
+    var cat = CATS[r.cat];
+    if (!cat) return;
+    var tall = (r.e - r.s) >= 45;
+    nodes.push(el('div.rblock' + (tall ? '' : '.is-short'), {
+      style: 'top:' + top(r.s) + 'px;height:' + Math.max(height(r.s, r.e), 18) + 'px;' +
+             'background:' + cat.color + '1f;border-left:6px solid ' + cat.color
+    }, [
+      el('b', { style: 'color:' + cat.color }, r.note || cat.label),
+      el('em', fmtMin(r.s) + '–' + fmtMin(r.e) + (r.note ? ' · ' + cat.label : ''))
+    ]));
+  });
+
+  // the day's real events, on top
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  var isToday = selected === payload.today;
+
+  timed.forEach(function (e) {
+    var s = minutesOf(e.starts_at);
+    var en = e.ends_at ? minutesOf(e.ends_at) : s + 30;
+    if (en <= s) en = s + 30;
+    var h = Math.max(height(s, en), 38);
+    var tall = h >= 62;
+    var running = isToday && nowMin >= s && nowMin < en;
+    var past = isToday ? nowMin >= en : selected < payload.today;
+    var colour = colourFor(sourceOf(e));
+
+    nodes.push(el('button.eblock' + (tall ? '' : '.is-short') + (past ? '.is-past' : ''), {
+      type: 'button',
+      style: 'top:' + top(s) + 'px;height:' + h + 'px;border-left:4px solid ' + colour +
+             (running ? ';border-color:var(--line2)' : ''),
+      onclick: function () { openEvent(e); }
+    }, [
+      el('p', clockOf(e.starts_at) + '  ' + (e.title || '(bez názvu)')),
+      el('em', { style: running ? 'color:var(--acc)' : '' },
+        sourceOf(e) + ' · ' + clockOf(e.starts_at) + '–' + clockOf(e.ends_at))
+    ]));
+  });
+
+  if (isToday && nowMin >= start && nowMin <= end) {
+    nodes.push(el('span.nowline', { style: 'top:' + top(nowMin) + 'px' }));
+  }
+
+  fill(host, nodes);
+
+  fill($('dayAllDay'), allDay.map(function (e) {
+    return el('button.allday', {
+      type: 'button',
+      style: 'border-left:4px solid ' + colourFor(sourceOf(e)),
+      onclick: function () { openEvent(e); }
+    }, 'celý den · ' + (e.title || '(bez názvu)'));
+  }));
+
+  var p = selected.split('-').map(Number);
+  $('dayLabel').textContent = DOW_LONG[dowOf(selected)] + ' ' + p[2] + '. ' + MON[p[1] - 1];
+  $('dayMeta').textContent = events.length
+    ? events.length + ' událostí' + (isToday ? ' · teď ' + fmtMin(nowMin) : '')
+    : 'žádné události';
+
+  var covered = blocks.reduce(function (a, r) { return a + (r.e - r.s); }, 0);
+  $('routineHours').textContent = 'Rutina pokrývá ' + (Math.round(covered / 6) / 10) +
+    ' h z tohoto dne. Události kalendáře sedí nahoře.';
+
+  fill($('routineLegend'), Object.keys(CATS).map(function (k) {
+    return el('span', [el('i', { style: 'background:' + CATS[k].color }), CATS[k].label]);
+  }));
+}
+
+/* ---- editing one event --------------------------------------------------
+   Renaming and deleting only. Creating and moving stay in the conversation,
+   where Kacey can check the routine and the other calendars first — which is
+   the whole reason she has the tool. */
+
+function openEvent(e) {
+  var lane = $('dayLane');
+  var existing = lane.querySelector('.eventedit');
+  if (existing) existing.remove();
+
+  var input = el('input.input', { type: 'text', value: e.title || '' });
+
+  var box = el('div.card.card--pad.eventedit', {
+    style: 'position:absolute;left:118px;right:10px;top:0;z-index:5'
+  }, [
+    el('p.muted-3', clockOf(e.starts_at) + '–' + clockOf(e.ends_at) + ' · ' + sourceOf(e)),
+    input,
+    el('div.row', { style: 'margin-top:8px' }, [
+      el('button.btn.btn--accent.btn--sm', {
+        type: 'button',
+        onclick: async function () { await writeEvent(e.event_id, 'update', { title: input.value }); }
+      }, 'Uložit název'),
+      el('button.btn.btn--sm.btn--dangerghost', {
+        type: 'button',
+        onclick: function (ev) {
+          var btn = ev.currentTarget;
+          if (pendingDelete !== e.event_id) {
+            pendingDelete = e.event_id;
+            btn.textContent = 'Opravdu smazat?';
+            setTimeout(function () {
+              if (pendingDelete === e.event_id) { pendingDelete = null; btn.textContent = 'Smazat'; }
+            }, 4000);
+            return;
+          }
+          pendingDelete = null;
+          writeEvent(e.event_id, 'delete');
+        }
+      }, 'Smazat'),
+      el('button.btn.btn--sm', { type: 'button', onclick: function () { box.remove(); } }, 'Zavřít')
+    ])
+  ]);
+
+  lane.appendChild(box);
+  input.focus();
+}
+
+async function writeEvent(id, action, body) {
+  try {
+    var res = await fetch('/api/calendar/' + encodeURIComponent(id) + '/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    var out = await res.json();
+    if (!res.ok || out.ok === false) throw new Error(out.error || ('HTTP ' + res.status));
+    say(action === 'delete' ? 'Událost smazána.' : 'Název uložen.');
+    refreshCalendar();
+  } catch (err) {
+    say('Nepovedlo se: ' + err.message);
+  }
+}
+
+/* ---- the "Today" panel on the main view --------------------------------- */
+
+export function renderTodayAgenda() {
+  var host = $('todayAgenda');
+  if (!host) return;
+  if (!payload) { fill(host, el('p.empty', 'Načítám kalendář…')); return; }
+
+  var today = payload.today;
+  var events = eventsOn(today);
+  if (!events.length) {
+    fill(host, el('p.empty', today.slice(0, 7) === month
+      ? 'Dnes nic v kalendáři.'
+      : 'Dnešek je v jiném měsíci — klepni na „dnes“ v kalendáři.'));
     return;
   }
 
-  var form = document.createElement('div');
-  form.className = 'cal__edit';
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
 
-  function field(labelText, type, value) {
-    var l = document.createElement('label');
-    var s = document.createElement('span');
-    s.textContent = labelText;
-    var i = document.createElement('input');
-    i.type = type;
-    i.value = value || '';
-    l.appendChild(s); l.appendChild(i);
-    return { label: l, input: i };
-  }
+  fill(host, events.map(function (e) {
+    var s = minutesOf(e.starts_at), en = e.ends_at ? minutesOf(e.ends_at) : s + 30;
+    var running = !e.all_day && nowMin >= s && nowMin < en;
+    var past = !e.all_day && nowMin >= en;
+    return el('button.rowbtn' + (running ? '.is-now' : '') + (past ? '.is-past' : ''), {
+      type: 'button',
+      onclick: function () { selected = today; go('calendar'); }
+    }, [
+      el('span.rowbtn__time', e.all_day ? 'celý den' : clockOf(e.starts_at)),
+      el('span.rowbtn__title', e.title || '(bez názvu)'),
+      el('span.rowbtn__meta', running
+        ? (en - nowMin) + ' min zbývá · ' + sourceOf(e)
+        : sourceOf(e) + (e.all_day ? '' : ' · ' + clockOf(e.starts_at) + '–' + clockOf(e.ends_at)))
+    ]);
+  }));
+}
 
-  var title = field('název', 'text', e.title || '');
-  form.appendChild(title.label);
-
-  // Start AND end together: klaus_memory rejects an update that leaves the end
-  // before the start, so editing one in isolation fails confusingly.
-  var times = document.createElement('div');
-  times.className = 'cal__edit-row';
-  var from = field('od', 'datetime-local', localInput(e.starts_at));
-  var to = field('do', 'datetime-local', e.ends_at ? localInput(e.ends_at) : '');
-  times.appendChild(from.label); times.appendChild(to.label);
-  form.appendChild(times);
-
-  var err = document.createElement('p');
-  err.className = 'cal__edit-err';
-  err.hidden = true;
-
-  var actions = document.createElement('div');
-  actions.className = 'cal__edit-actions';
-  var save = document.createElement('button');
-  save.type = 'button';
-  save.className = 'cal__btn';
-  save.textContent = 'uložit';
-  var cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'cal__btn';
-  cancel.textContent = 'zpět';
-  cancel.onclick = function () { form.parentNode.removeChild(form); };
-  actions.appendChild(save); actions.appendChild(cancel);
-  form.appendChild(actions);
-  form.appendChild(err);
-
-  save.onclick = function () {
-    var payload = {};
-    if (title.input.value.trim() && title.input.value.trim() !== e.title) {
-      payload.title = title.input.value.trim();
-    }
-    var startIso = offsetIso(from.input.value);
-    if (startIso && startIso !== e.starts_at) payload.starts_at = startIso;
-    var endIso = to.input.value ? offsetIso(to.input.value) : null;
-    if (endIso !== (e.ends_at || null)) payload.ends_at = endIso;   // null clears it
-
-    if (!Object.keys(payload).length) { form.parentNode.removeChild(form); return; }
-
-    save.disabled = true;
-    err.hidden = true;
-    fetch('/api/calendar/' + encodeURIComponent(e.event_id) + '/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (!j.ok) throw new Error(j.error || 'zápis selhal');
-        load();                                    // redraw the month
-      })
-      .catch(function (ex) {
-        save.disabled = false;
-        err.textContent = ex.message;
-        err.hidden = false;
-      });
+/** The next thing in the day, for the main view's rail and the brief. */
+export function nextUp() {
+  if (!payload) return null;
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  var upcoming = eventsOn(payload.today)
+    .filter(function (e) { return !e.all_day && minutesOf(e.starts_at) >= nowMin; })
+    .sort(function (a, b) { return minutesOf(a.starts_at) - minutesOf(b.starts_at); });
+  var e = upcoming[0];
+  if (!e) return null;
+  return {
+    title: e.title || '(bez názvu)',
+    meta: clockOf(e.starts_at) + ' · ' + sourceOf(e),
+    event: e
   };
-
-  row.parentNode.insertBefore(form, row.nextSibling);
-  title.input.focus();
 }
 
-function removeEvent(row, e) {
-  row.classList.add('cal__event--busy');
-  fetch('/api/calendar/' + encodeURIComponent(e.event_id) + '/delete', { method: 'POST' })
-    .then(function (r) { return r.json(); })
-    .then(function (j) {
-      if (!j.ok) throw new Error(j.error || 'smazání selhalo');
-      load();
-    })
-    .catch(function (ex) {
-      row.classList.remove('cal__event--busy');
-      meta.textContent = 'Smazání selhalo: ' + ex.message;
-    });
+/** Counts the brief's tiles need. */
+export function todaySummary() {
+  if (!payload) return { count: 0, first: null };
+  var events = eventsOn(payload.today).filter(function (e) { return !e.all_day; })
+    .sort(function (a, b) { return minutesOf(a.starts_at) - minutesOf(b.starts_at); });
+  return { count: eventsOn(payload.today).length, first: events[0] ? clockOf(events[0].starts_at) : null };
 }
 
-/* Chips for every month that actually holds something, so a sparse calendar
-   does not have to be walked one empty month at a time. */
-function renderJump(data) {
-  jumpEl.innerHTML = '';
-  var months = data.monthsWithEvents || [];
-  if (!months.length) { jumpEl.hidden = true; return; }
-
-  var label = document.createElement('span');
-  label.className = 'cal__jump-label';
-  label.textContent = 'kde něco je';
-  jumpEl.appendChild(label);
-
-  months.forEach(function (m) {
-    var chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'cal__chip';
-    if (m.month === data.month) chip.setAttribute('aria-current', 'true');
-    var b = document.createElement('b');
-    b.textContent = monthName(m.month);
-    chip.appendChild(b);
-    chip.appendChild(document.createTextNode(' ' + m.count));
-    chip.onclick = function () { month = m.month; load(); };
-    jumpEl.appendChild(chip);
-  });
-  jumpEl.hidden = false;
+function render() {
+  renderMonth();
+  renderSources();
+  renderLane();
+  renderTodayAgenda();
 }
 
-function render(data) {
-  month = data.month;
-  monthEl.textContent = monthName(data.month);
-  renderJump(data);
-
-  body.innerHTML = '';
-  var withEvents = 0;
-
-  data.days.forEach(function (day) {
-    var isToday = day.date === data.today;
-    var isPast = day.date < data.today;
-
-    var wrap = document.createElement('div');
-    wrap.className = 'cal__day' +
-      (day.events.length ? '' : ' cal__day--empty') +
-      (isToday ? ' cal__day--today' : '') +
-      (isPast ? ' cal__day--past' : '');
-
-    var head = document.createElement('div');
-    head.className = 'cal__date';
-    var l = dayLabel(day.date);
-    var dow = document.createElement('span');
-    dow.className = 'cal__dow';
-    dow.textContent = l.dow;
-    head.appendChild(dow);
-    var b = document.createElement('b');
-    b.textContent = l.text;
-    head.appendChild(b);
-    if (isToday) {
-      var now = document.createElement('span');
-      now.textContent = '· dnes';
-      head.appendChild(now);
-    }
-    wrap.appendChild(head);
-
-    if (day.events.length) {
-      withEvents++;
-      day.events.forEach(function (e) { wrap.appendChild(renderEvent(e)); });
-    } else {
-      var none = document.createElement('p');
-      none.className = 'cal__none';
-      none.textContent = '—';
-      wrap.appendChild(none);
-    }
-    body.appendChild(wrap);
-  });
-
-  meta.textContent = data.monthEvents === 0
-    ? 'v tomto měsíci nic · ' + data.total + ' událostí celkem'
-    : data.monthEvents + ' událostí v měsíci · ' + withEvents + ' dnů s programem' +
-      ' · ' + data.total + ' celkem';
-
-  // A month is ~30 rows. Land on today in the current month; otherwise start at
-  // the first day that actually has something, so a jump lands on content.
-  var anchor = body.querySelector('.cal__day--today');
-  if (!anchor) {
-    var firstWith = body.querySelector('.cal__day:not(.cal__day--empty)');
-    anchor = firstWith || null;
-  }
-  body.scrollTop = anchor ? Math.max(0, anchor.offsetTop - body.offsetTop - 4) : 0;
-}
-
-function load() {
-  if (loading) return;
-  loading = true;
-  meta.textContent = 'načítám…';
-  fetch('/api/calendar' + (month ? '?month=' + encodeURIComponent(month) : ''))
-    .then(function (r) {
-      return r.json().then(function (j) {
-        if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-        return j;
-      });
-    })
-    .then(render)
-    .catch(function (err) {
-      body.innerHTML = '';
-      var p = document.createElement('p');
-      p.className = 'cal__err';
-      p.textContent = 'Kalendář se nepodařilo načíst: ' + err.message;
-      body.appendChild(p);
-      meta.textContent = '—';
-    })
-    .then(function () { loading = false; });
-}
-
-function open(yes) {
-  sheet.hidden = !yes;
-  btn.setAttribute('aria-expanded', String(yes));
-  if (yes) load();
-}
-
-
-/* Called by protocol.js after any calendar tool — a no-op unless the viewer is
-   actually on screen. */
-export function refreshCalendar() {
-  if (present && !sheet.hidden) load();
-}
+/* ---- wiring ------------------------------------------------------------- */
 
 export function initCalendar() {
-  if (!present) return;
-
-  btn.addEventListener('click', function () { open(sheet.hidden); });
-  closeBtn.addEventListener('click', function () { open(false); });
-  reloadBtn.addEventListener('click', load);
-  prevBtn.addEventListener('click', function () { if (month) { month = shiftMonth(month, -1); load(); } });
-  nextBtn.addEventListener('click', function () { if (month) { month = shiftMonth(month, 1); load(); } });
-  todayBtn.addEventListener('click', function () { month = null; load(); });
-  sheet.addEventListener('click', function (ev) { if (ev.target === sheet) open(false); });
-  document.addEventListener('keydown', function (ev) {
-    if (sheet.hidden) return;
-    // Arrows page through months while the viewer has focus.
-    if (ev.key === 'Escape') { ev.preventDefault(); open(false); }
-    else if (ev.key === 'ArrowLeft' && month) { ev.preventDefault(); month = shiftMonth(month, -1); load(); }
-    else if (ev.key === 'ArrowRight' && month) { ev.preventDefault(); month = shiftMonth(month, 1); load(); }
+  $('calPrev').addEventListener('click', function () { month = shiftMonth(month, -1); refreshCalendar(); });
+  $('calNext').addEventListener('click', function () { month = shiftMonth(month, 1); refreshCalendar(); });
+  $('calToday').addEventListener('click', function () {
+    month = null; selected = null; refreshCalendar();
   });
+  $('calReload').addEventListener('click', refreshCalendar);
+  $('calSync').addEventListener('click', function () { refreshCalendar(); say('Kalendář načten znovu.'); });
+
+  onEnter('calendar', function () { if (!payload) refreshCalendar(); else render(); });
+  store.onChange(function () { if (payload) render(); });
+
+  refreshCalendar();
+  // The "now" line and the "x min left" labels go stale on their own.
+  setInterval(function () { if (payload) { renderLane(); renderTodayAgenda(); } }, 60000);
 }

@@ -18,13 +18,25 @@
        bus.js         where the orb's followers subscribe
 
      ui/     the DOM — what is on screen and how it is labelled
+       router.js      which of the ten views is showing
+       toast.js       the one-line confirmations
        orb.js         the state machine every other module reports into
        log.js         the transcript, the status line, the alert strip
        telemetry.js   the HUD rails
        labels.js      re-labelling the chrome when language or mute changes
        theme.js       one hue drives the whole interface
        voice-picker.js the voice select, and its fallback when XTTS is down
-       calendar.js    the calendar viewer
+       calendar.js    the month grid, the day lane, and the Today panel
+
+     views/  one module per screen, all of them reading the same store
+       main.js        the rail beside the chat
+       tasks.js       the list, focus mode and the checklist runner
+       journal.js     dictation, autosave, the side chat
+       library.js     every entry, filtered and searchable
+       brief.js       the spoken daily brief
+       timers.js      timers and their presets
+       controller.js  sources, memory sections, tool permissions
+       routine.js     the painted week the calendar lane draws underneath
 
      voice/  the microphone and the speakers, and who may hold them
        sentences.js   sentence boundaries — pure, no DOM, no state
@@ -50,6 +62,7 @@
    ========================================================================= */
 
 import { state, MOCK, LANGS, LS_LANG, LS_MUTED, LS_VOICE } from './js/core/state.js';
+import * as store from './js/core/store.js';
 import { t } from './js/core/i18n.js';
 import * as dom from './js/core/dom.js';
 import * as bus from './js/core/bus.js';
@@ -67,9 +80,18 @@ import { initVoiceWake, openVoicePanel } from './js/voice/wake-panel.js';
 import { initTheme } from './js/ui/theme.js';
 import { initVoicePicker } from './js/ui/voice-picker.js';
 import {
-  submit, interrupt, startTransport, stopTransport, resumeTransport
+  submit, interrupt, startTransport, stopTransport, resumeTransport, askAside
 } from './js/net/protocol.js';
 import { initCalendar } from './js/ui/calendar.js';
+import { initRouter } from './js/ui/router.js';
+import { initMain } from './js/views/main.js';
+import { initTasks } from './js/views/tasks.js';
+import { initJournal } from './js/views/journal.js';
+import { initLibrary } from './js/views/library.js';
+import { initBrief } from './js/views/brief.js';
+import { initTimers } from './js/views/timers.js';
+import { initController } from './js/views/controller.js';
+import { initRoutine } from './js/views/routine.js';
 import { installDebugSurface } from './js/debug.js';
 
 /* =======================================================================
@@ -110,8 +132,35 @@ restoreWakePref();     // the wake word owns its own key
 
 initVoicePicker();
 initVoiceWake();
-initTheme();           // restores the hue, wires the dial, paints once
+initTheme();           // restores the hue, wires the presets, paints once
+
+/* The views. initRouter() goes last: routing to the opening view runs that
+   view's enter hook, which renders — and it must find every listener already
+   attached.
+
+   Everything below draws from js/core/store.js, which is still empty at this
+   point — store.load() lands later and re-renders through its subscribers, so
+   nothing here has to wait for the network. */
+initRoutine();
 initCalendar();
+initTasks();
+initJournal(askAside);
+initLibrary();
+initBrief();
+initTimers();
+initController(restartSession);
+initMain();
+initRouter();
+
+store.load();
+
+/* Restarting the session: drop the socket and open a new one. The server binds
+   one Claude session per connection, so this is the whole of it. */
+function restartSession() {
+  stopTransport();
+  state.sessionId = null;
+  setTimeout(function () { startTransport(); }, 150);
+}
 
 dom.form.addEventListener('submit', function (ev) {
   ev.preventDefault();

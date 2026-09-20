@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
-<meta name="theme-color" content="#03070d" />
+<meta name="theme-color" content="#161616" />
 <meta name="description" content="Kacey — voice-first assistant with long-term memory." />
 <title>Kacey</title>
 <link rel="stylesheet" href="styles.css" />
@@ -12,281 +12,584 @@
 <body>
 
 <!-- ============================================================
-     BACKGROUND: reactor orb + HUD chrome. Decorative only.
-     States are driven by data-state on #orb (see js/orb.js).
+     THE SHELL
+
+     One header, one view at a time, two modals and a toast. Every
+     view is present in the document and hidden until routed to:
+     the chat log, the composer and the microphone have to survive
+     a trip to the calendar and back, so nothing here is built by
+     replacing whole subtrees. The view modules fill lists; the
+     furniture stays put.
+
+     #orb carries the app's single derived state (see js/ui/orb.js)
+     and drives the dot in the header. It is not decorative — half
+     the interface reads data-state off it.
      ============================================================ -->
-<div class="stage" aria-hidden="true">
-  <div class="grid"></div>
 
-  <div class="orb" id="orb" data-state="boot">
-    <div class="orb__amp" id="orbAmp">
-      <span class="orb__halo"></span>
+<header class="top">
+  <span class="top__brand">
+    <span class="top__mark" aria-hidden="true"></span>
+    <b>Kacey</b>
+  </span>
 
-      <!-- concentric instrument rings -->
-      <span class="ring ring--outer"></span>
-      <span class="ring ring--ticks"></span>
-      <span class="ring ring--dashed"></span>
-      <span class="ring ring--inner"></span>
-      <span class="ring ring--sweep"></span>
+  <span class="conn" id="conn" data-state="connecting">
+    <span class="orb" id="orb" data-state="boot">
+      <span class="orb__amp" id="orbAmp"><span class="conn__dot" aria-hidden="true"></span></span>
+    </span>
+    <span class="conn__label" id="connLabel">Connecting…</span>
+  </span>
 
-      <!-- reactor core -->
-      <span class="orb__blob orb__blob--a"></span>
-      <span class="orb__blob orb__blob--b"></span>
-      <span class="orb__blob orb__blob--c"></span>
-      <span class="core">
-        <span class="core__tri"></span>
-        <span class="core__tri core__tri--flip"></span>
-        <span class="orb__core"></span>
-      </span>
-      <span class="orb__ring"></span>
-      <span class="orb__specular"></span>
+  <span class="top__stats">
+    <span>model <b id="topModel">—</b></span>
+    <span>mcp <b id="topMcp" class="is-ok">—</b></span>
+    <span>turns <b id="topTurns">0</b></span>
+    <span class="top__badge" id="mockBadge" hidden>mock</span>
+  </span>
+
+  <span class="top__end">
+    <span class="top__view" id="viewLabel">main</span>
+    <button type="button" class="btn" id="controllerBtn">Controller</button>
+  </span>
+</header>
+
+<main class="views" id="views">
+
+<!-- ================= MAIN ================= -->
+<section class="view view--triple" data-view="main">
+
+  <div class="col col--stack">
+    <section class="card">
+      <div class="card__head">
+        <h2 class="card__title">Dnes</h2>
+        <button type="button" class="link" data-go="calendar">Celý kalendář</button>
+      </div>
+      <div class="card__body card__body--scroll" id="todayAgenda"></div>
+    </section>
+
+    <section class="card">
+      <div class="card__head">
+        <h2 class="card__title">Dnešní úkoly</h2>
+        <button type="button" class="link" data-go="tasks">Všechny úkoly</button>
+      </div>
+      <div class="card__body card__body--scroll" id="todayTasks"></div>
+      <form class="card__foot row" id="todayTaskForm">
+        <input class="input" id="todayTaskInput" type="text" placeholder="Přidat úkol…" autocomplete="off" />
+        <button type="submit" class="btn">Přidat</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="col col--chat">
+    <div class="card card--flush chatbox">
+      <div class="logwrap" id="logwrap">
+        <ol class="log" id="log" role="log" aria-live="polite" aria-atomic="false" aria-relevant="additions" aria-label="Conversation"></ol>
+      </div>
+      <p class="status__hint" id="hint" aria-live="polite"></p>
+      <p class="status__alert" id="alert" role="alert" hidden></p>
+      <p class="listening" id="listeningStrip" hidden>Poslouchám… řekni, co potřebuješ, nebo klepni na Stop.</p>
+    </div>
+
+    <div class="dock">
+      <form class="composer" id="composer" autocomplete="off">
+        <label class="sr-only" for="input" id="inputLabel">Message</label>
+        <input class="composer__input" id="input" type="text" placeholder="Napiš zprávu…"
+               autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" />
+        <button type="submit" class="btn btn--accent" id="send">Odeslat</button>
+        <button type="button" class="btn" id="stop" hidden>Stop</button>
+      </form>
+
+      <div class="miczone">
+        <button type="button" class="btn btn--talk" id="mic" aria-pressed="false" aria-label="Start talking">
+          <span class="dot" aria-hidden="true"></span><span id="micLabel">Mluvit</span>
+        </button>
+        <p class="miczone__note sr-only" id="micNote"></p>
+      </div>
     </div>
   </div>
 
-  <!-- frame brackets -->
-  <span class="bracket bracket--tl"></span>
-  <span class="bracket bracket--tr"></span>
-  <span class="bracket bracket--bl"></span>
-  <span class="bracket bracket--br"></span>
-
-  <div class="scanlines"></div>
-  <div class="grain"></div>
-</div>
-
-<!-- ============================================================
-     FOREGROUND
-     ============================================================ -->
-<div class="app">
-
-  <header class="topbar">
-    <div class="topbar__side">
-      <div class="conn" id="conn" data-state="connecting">
-        <span class="conn__dot" aria-hidden="true"></span>
-        <span class="conn__label" id="connLabel">Connecting…</span>
-      </div>
-    </div>
-
-    <p class="brand" id="brand">
-      <span class="brand__mark" aria-hidden="true"></span>
-      K A C E Y
-      <span class="brand__badge" id="mockBadge" hidden>mock</span>
-    </p>
-
-    <div class="topbar__side topbar__side--end">
-      <div class="select">
-        <label class="sr-only" for="voice" id="voiceLabel">Hlas</label>
-        <select class="select__el" id="voice"></select>
-        <span class="select__caret" aria-hidden="true"></span>
-      </div>
-
-      <div class="select">
-        <label class="sr-only" for="lang" id="langLabel">Language</label>
-        <select class="select__el" id="lang">
-          <option value="cs-CZ">Čeština</option>
-          <option value="en-US">English</option>
-        </select>
-        <span class="select__caret" aria-hidden="true"></span>
-      </div>
-
-      <button type="button" class="iconbtn iconbtn--wake" id="wake" aria-pressed="true" aria-label="Slovo KC zapne diktování" title="Slovo KC zapne diktování">
-        <svg class="i i--on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 4.5v15M8 7.5v9M16 7.5v9M4.5 10.5v3M19.5 10.5v3" />
-        </svg>
-        <svg class="i i--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 8.5v7M8 10.5v3M16 10.5v3" />
-          <path d="M4 20L20 4" />
-        </svg>
-      </button>
-
-      <button type="button" class="iconbtn" id="calBtn" aria-expanded="false" aria-controls="calPanel" aria-label="Kalendář" title="Kalendář">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <rect x="3.5" y="5" width="17" height="15" rx="2" />
-          <path d="M3.5 10h17M8 3.5v3M16 3.5v3" />
-        </svg>
-      </button>
-
-      <button type="button" class="iconbtn" id="settings" aria-expanded="false" aria-controls="settingsPanel" aria-label="Nastavení vzhledu" title="Nastavení vzhledu">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="3.1" />
-          <path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5" />
-        </svg>
-      </button>
-
-      <button type="button" class="iconbtn" id="mute" aria-pressed="false" aria-label="Mute spoken replies" title="Mute spoken replies">
-        <svg class="i i--on" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z" />
-          <path class="wave wave--1" d="M15.4 9.2a4 4 0 0 1 0 5.6" />
-          <path class="wave wave--2" d="M17.9 6.7a7.6 7.6 0 0 1 0 10.6" />
-        </svg>
-        <svg class="i i--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z" />
-          <path class="wave" d="M16 9.6l5 4.8M21 9.6l-5 4.8" />
-        </svg>
-      </button>
-    </div>
-  </header>
-
-  <!-- ---------- telemetry rails: every value is real, none simulated ---------- -->
-  <aside class="rail rail--left" aria-hidden="true">
-    <section class="panel">
-      <h2 class="panel__title">LINK</h2>
-      <dl class="readout">
-        <div class="readout__row"><dt>STATE</dt><dd id="tmState">—</dd></div>
-        <div class="readout__row"><dt>MODEL</dt><dd id="tmModel">—</dd></div>
-        <div class="readout__row"><dt>MCP</dt><dd id="tmMcp">—</dd></div>
-        <div class="readout__row"><dt>SESSION</dt><dd id="tmSession">—</dd></div>
-        <div class="readout__row"><dt>TURNS</dt><dd id="tmTurns">0</dd></div>
-      </dl>
+  <div class="col col--rail">
+    <section class="card card--pad">
+      <p class="big" id="stateBig">Idle</p>
+      <p class="muted" id="stateSub">—</p>
+      <p class="rule muted-3">Další na řadě</p>
+      <p class="strong" id="nextTitle">—</p>
+      <p class="muted" id="nextMeta">—</p>
+      <button type="button" class="btn btn--block" id="askNext">Zeptat se na to</button>
     </section>
 
-    <section class="panel">
-      <h2 class="panel__title">MEMORY</h2>
-      <dl class="readout">
-        <div class="readout__row"><dt>LAST TOOL</dt><dd id="tmTool">—</dd></div>
-        <div class="readout__row"><dt>CALLS</dt><dd id="tmToolCount">0</dd></div>
-      </dl>
-    </section>
-  </aside>
-
-  <aside class="rail rail--right" aria-hidden="true">
-    <section class="panel">
-      <h2 class="panel__title">VOICE</h2>
-      <dl class="readout">
-        <div class="readout__row"><dt>SPEAKER</dt><dd id="tmVoice">—</dd></div>
-        <div class="readout__row"><dt>LANG</dt><dd id="tmLang">—</dd></div>
-        <div class="readout__row"><dt>QUEUE</dt><dd id="tmTts">0</dd></div>
-        <div class="readout__row"><dt>SYNTH</dt><dd id="tmSynth">—</dd></div>
-      </dl>
-    </section>
-
-    <section class="panel">
-      <h2 class="panel__title">ACTIVITY</h2>
-      <div class="meter" id="meter">
-        <span class="meter__bar"></span><span class="meter__bar"></span>
-        <span class="meter__bar"></span><span class="meter__bar"></span>
-        <span class="meter__bar"></span><span class="meter__bar"></span>
-        <span class="meter__bar"></span><span class="meter__bar"></span>
-        <span class="meter__bar"></span><span class="meter__bar"></span>
-        <span class="meter__bar"></span><span class="meter__bar"></span>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Funkce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" data-go="brief">Ranní brief</button>
+        <button type="button" class="btn btn--fn" data-go="journal">Deník</button>
+        <button type="button" class="btn btn--fn" data-go="library">Knihovna deníku</button>
+        <button type="button" class="btn btn--fn" data-go="calendar">Kalendář</button>
+        <button type="button" class="btn btn--fn" data-go="tasks">Úkoly</button>
+        <button type="button" class="btn btn--fn" data-go="timer">Časovače</button>
       </div>
     </section>
-  </aside>
-
-  <main class="logwrap" id="logwrap">
-    <ol class="log" id="log" role="log" aria-live="polite" aria-atomic="false" aria-relevant="additions" aria-label="Conversation"></ol>
-  </main>
-
-  <!-- transient status: tool activity, listening hints, errors -->
-  <div class="status">
-    <p class="status__hint" id="hint" aria-live="polite"></p>
-    <p class="status__alert" id="alert" role="alert" hidden></p>
   </div>
+</section>
 
-  <footer class="dock">
-    <form class="composer" id="composer" autocomplete="off">
-      <span class="composer__prompt" aria-hidden="true">&gt;</span>
-      <label class="sr-only" for="input" id="inputLabel">Message</label>
-      <input class="composer__input" id="input" type="text" placeholder="Type a message…"
-             autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" />
-      <button type="submit" class="composer__btn" id="send" aria-label="Send message" title="Send message">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h12M12 6l6 6-6 6" /></svg>
-      </button>
-      <button type="button" class="composer__btn composer__btn--stop" id="stop" hidden aria-label="Stop the response" title="Stop the response">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="8" height="8" rx="1.5" /></svg>
-      </button>
+<!-- ================= TASKS ================= -->
+<section class="view view--wide" data-view="tasks" hidden>
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg">Úkoly</h2>
+      <span class="muted" id="taskCounts">—</span>
+      <button type="button" class="btn btn--sm push" id="toggleDone">Skrýt hotové</button>
+    </div>
+    <div class="card__body card__body--scroll groups" id="taskGroups"></div>
+    <form class="card__foot row" id="taskForm">
+      <input class="input" id="taskInput" type="text" placeholder="Přidat úkol — nebo řekni „KC, přidej …“" autocomplete="off" />
+      <button type="submit" class="btn btn--accent">Přidat</button>
     </form>
+  </section>
 
-    <div class="miczone">
-      <button type="button" class="mic" id="mic" aria-pressed="false" aria-label="Start talking">
-        <span class="mic__pulse" aria-hidden="true"></span>
-        <span class="mic__pulse mic__pulse--2" aria-hidden="true"></span>
-        <svg class="mic__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 3.6a2.9 2.9 0 0 1 2.9 2.9v4.4a2.9 2.9 0 0 1-5.8 0V6.5A2.9 2.9 0 0 1 12 3.6z" />
-          <path d="M6.4 10.9a5.6 5.6 0 0 0 11.2 0M12 16.5V20M9 20h6" />
-        </svg>
-      </button>
-      <p class="miczone__note" id="micNote"></p>
-    </div>
-  </footer>
-</div>
-
-<!-- ============================================================
-     SETTINGS — the whole interface is one hue plus neutrals,
-     so this dial is the only colour control that exists.
-     ============================================================ -->
-<!-- ============================================================
-     CALENDAR — read-only view of klaus_memory's calendar_event.
-     Editing happens in conversation; direct controls come later.
-     ============================================================ -->
-<div class="sheet" id="calPanel" hidden>
-  <div class="sheet__box sheet__box--wide" role="dialog" aria-modal="false" aria-labelledby="calTitle">
-    <div class="sheet__head">
-      <h2 class="sheet__title" id="calTitle">KALENDÁŘ</h2>
-      <div class="cal__tools">
-        <button type="button" class="cal__btn" id="calPrev" aria-label="Předchozí měsíc">‹</button>
-        <button type="button" class="cal__btn" id="calToday">dnes</button>
-        <button type="button" class="cal__btn" id="calNext" aria-label="Další měsíc">›</button>
-        <button type="button" class="cal__btn" id="calReload" aria-label="Obnovit">↻</button>
+  <div class="col col--rail">
+    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
+    <section class="card card--pad">
+      <h2 class="card__title">Hotovo dnes</h2>
+      <p class="big" id="doneRatio">0 / 0</p>
+      <span class="bar"><span class="bar__fill" id="taskBar"></span></span>
+    </section>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Funkce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" data-go="calendar">Kalendář</button>
+        <button type="button" class="btn btn--fn" data-go="brief">Ranní brief</button>
+        <button type="button" class="btn btn--fn" id="clearDone">Smazat hotové</button>
       </div>
-      <button type="button" class="sheet__close" id="calClose" aria-label="Zavřít">×</button>
-    </div>
-    <p class="cal__month" id="calMonth" aria-live="polite">—</p>
-    <p class="cal__meta" id="calMeta">—</p>
-    <div class="cal__jump" id="calJump" hidden></div>
-    <div class="cal__body" id="calBody"></div>
-    <p class="sheet__note">
-      ✎ upraví, × smaže (na dvě klepnutí). Nové události zakládej v konverzaci —
-      řekni Kacey, co má poznamenat.
-    </p>
+    </section>
   </div>
-</div>
+</section>
 
-<div class="sheet" id="settingsPanel" hidden>
-  <div class="sheet__box" role="dialog" aria-modal="false" aria-labelledby="sheetTitle">
-    <div class="sheet__head">
-      <h2 class="sheet__title" id="sheetTitle">VZHLED</h2>
-      <button type="button" class="sheet__close" id="settingsClose" aria-label="Zavřít">×</button>
+<!-- ================= JOURNAL ================= -->
+<section class="view view--triple" data-view="journal" hidden>
+  <div class="col col--stack col--stack-auto">
+    <section class="card card--pad">
+      <h2 class="card__title">Diktování</h2>
+      <p class="clock" id="jClock">00:00</p>
+      <p class="muted" id="jRecState">Připraveno · řekni „konec“ pro ukončení</p>
+    </section>
+
+    <section class="card">
+      <h2 class="card__title card__title--bar">KC chat</h2>
+      <div class="card__body card__body--scroll bubbles" id="jChat"></div>
+      <form class="card__foot row" id="jChatForm">
+        <input class="input" id="jChatInput" type="text" placeholder="Zeptej se KC…" autocomplete="off" />
+        <button type="submit" class="btn">Zeptat</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg" id="jTitle">Deník</h2>
+      <span class="muted push" id="jSaved">neuloženo</span>
+      <button type="button" class="btn btn--accent btn--sm" id="jFinish">Dokončit</button>
     </div>
+    <div class="card__body card__body--scroll prose" id="jBody">
+      <textarea class="prose__area" id="jText" spellcheck="false" placeholder="Mluv, nebo piš. Ukládá se samo."></textarea>
+    </div>
+    <div class="card__foot row">
+      <p class="muted" id="jStats">0 slov</p>
+      <button type="button" class="btn push" id="jDictate"><span class="dot" aria-hidden="true"></span><span id="jDictateLabel">Diktovat</span></button>
+    </div>
+  </section>
 
-    <div class="dial">
-      <div class="dial__ring" id="hueRing" role="slider" tabindex="0"
-           aria-label="Hlavní barva rozhraní" aria-valuemin="0" aria-valuemax="359"
-           aria-valuenow="193" aria-valuetext="odstín 193">
-        <span class="dial__track" aria-hidden="true"></span>
-        <span class="dial__knob" id="hueKnob" aria-hidden="true"></span>
-        <span class="dial__hub" aria-hidden="true">
-          <span class="dial__value" id="hueValue">193</span>
-          <span class="dial__unit">HUE</span>
+  <div class="col col--rail">
+    <section class="card">
+      <button type="button" class="btn btn--back btn--block" data-go="main">← Zpět na hlavní</button>
+      <h2 class="card__title card__title--bar">Nedokončené</h2>
+      <div class="fnlist" id="jUnfinished"></div>
+    </section>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Funkce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" data-go="library">Knihovna deníku</button>
+        <button type="button" class="btn btn--fn" id="jNew">Nová relace</button>
+        <button type="button" class="btn btn--fn" id="jTag">Otagovat zápis</button>
+        <button type="button" class="btn btn--fn" data-go="calendar">Kalendář</button>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= JOURNAL LIBRARY ================= -->
+<section class="view view--wide" data-view="library" hidden>
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg">Knihovna deníku</h2>
+      <span class="muted" id="libCount">—</span>
+      <span class="chips push" id="libFilters"></span>
+    </div>
+    <div class="card__sub">
+      <input class="input" id="libQuery" type="text" placeholder="Hledat v zápisech…" autocomplete="off" />
+    </div>
+    <div class="card__body card__body--scroll cards" id="libEntries"></div>
+  </section>
+
+  <div class="col col--rail">
+    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Funkce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" id="libNew">Nová relace deníku</button>
+        <button type="button" class="btn btn--fn" id="libReport">Měsíční přehled vzorců</button>
+        <button type="button" class="btn btn--fn" id="libExport">Export</button>
+      </div>
+      <div class="card__foot card__foot--block">
+        <p class="muted-3">Tento měsíc</p>
+        <p class="muted" id="libMonthNote">—</p>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= CALENDAR ================= -->
+<section class="view view--triple" data-view="calendar" hidden>
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg" id="calMonth">—</h2>
+      <span class="row push">
+        <button type="button" class="btn btn--sm" id="calPrev" aria-label="Předchozí měsíc">‹</button>
+        <button type="button" class="btn btn--sm btn--ghostaccent" id="calToday">dnes</button>
+        <button type="button" class="btn btn--sm" id="calNext" aria-label="Další měsíc">›</button>
+        <button type="button" class="btn btn--sm" id="calReload" aria-label="Obnovit">↻</button>
+      </span>
+    </div>
+    <div class="monthgrid" id="calBody"></div>
+    <p class="cal__meta muted" id="calMeta">—</p>
+    <div class="card__foot card__foot--block">
+      <p class="muted-3">Zdroje</p>
+      <div class="fnlist fnlist--tight" id="calSources"></div>
+      <div class="cal__jump" id="calJump" hidden></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg" id="dayLabel">—</h2>
+      <span class="muted" id="dayMeta">—</span>
+      <button type="button" class="btn btn--sm push" id="openRoutine">Upravit rutinu</button>
+    </div>
+    <div class="legend" id="routineLegend"></div>
+    <div class="card__body card__body--scroll lanewrap">
+      <div class="alldaystrip" id="dayAllDay"></div>
+      <div class="lane" id="dayLane"></div>
+      <p class="muted-3" id="routineHours"></p>
+    </div>
+  </section>
+
+  <div class="col col--rail">
+    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Funkce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" data-go="brief">Ranní brief</button>
+        <button type="button" class="btn btn--fn" data-go="tasks">Úkoly</button>
+        <button type="button" class="btn btn--fn" data-go="journal">Deník</button>
+        <button type="button" class="btn btn--fn" id="calSync">Načíst znovu</button>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= DAILY BRIEF ================= -->
+<section class="view view--triple" data-view="brief" hidden>
+  <div class="col col--stack col--stack-auto">
+    <section class="card card--pad">
+      <h2 class="card__title">Noční režim</h2>
+      <p class="big" id="briefReady">Brief připraven</p>
+      <p class="muted" id="briefMade">—</p>
+    </section>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Ranní cyklus</h2>
+      <div class="card__body card__body--scroll" id="briefCycle"></div>
+      <div class="card__foot card__foot--block">
+        <p class="muted-3">Čas buzení</p>
+        <span class="row">
+          <b class="num" id="wakeLabel">06:45</b>
+          <button type="button" class="btn btn--sm" id="wakeDown">−15</button>
+          <button type="button" class="btn btn--sm" id="wakeUp">+15</button>
         </span>
       </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg" id="briefTitle">Denní brief</h2>
+      <span class="muted">mluví Kacey · <span id="briefClockHead">00:00</span></span>
+    </div>
+    <div class="tiles" id="briefTiles"></div>
+    <div class="card__body card__body--scroll brieflines" id="briefLines"></div>
+    <div class="card__foot row">
+      <button type="button" class="btn btn--accent" id="briefPlay">Přečíst nahlas</button>
+      <span class="bar bar--grow"><span class="bar__fill" id="briefProgress"></span></span>
+      <span class="num muted" id="briefClock">00:00</span>
+      <button type="button" class="btn" id="briefRestart">Od začátku</button>
+    </div>
+  </section>
+
+  <div class="col col--rail">
+    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Vkládaná data</h2>
+      <div class="fnlist fnlist--tight" id="briefInjected"></div>
+    </section>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Prompt</h2>
+      <textarea class="prompt" id="briefPrompt" spellcheck="false"></textarea>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" id="briefRegen">Vygenerovat znovu</button>
+        <button type="button" class="btn btn--fn" data-go="tasks">Otevřít úkoly</button>
+        <button type="button" class="btn btn--fn" data-go="calendar">Otevřít kalendář</button>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= TIMERS ================= -->
+<section class="view view--split" data-view="timer" hidden>
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg">Časovače</h2>
+      <span class="muted" id="timerCount">—</span>
+      <span class="muted-3 push">Řekni „KC, deset minut“ pro totéž</span>
+    </div>
+    <div class="card__body card__body--scroll">
+      <p class="label">RYCHLE</p>
+      <div class="presetgrid" id="timerPresets"></div>
+
+      <p class="label">VLASTNÍ</p>
+      <form class="customtimer" id="customTimer">
+        <span class="row">
+          <button type="button" class="btn btn--step" id="minDown" aria-label="Méně minut">−</button>
+          <span class="clock clock--sm" id="customLabel">25:00</span>
+          <button type="button" class="btn btn--step" id="minUp" aria-label="Více minut">+</button>
+        </span>
+        <span class="row">
+          <span class="muted-3">sekundy</span>
+          <button type="button" class="btn btn--sm" id="secDown">−15</button>
+          <button type="button" class="btn btn--sm" id="secUp">+15</button>
+        </span>
+        <input class="input" id="timerLabel" type="text" placeholder="Pojmenuj to — „těstoviny“, „protažení“…" autocomplete="off" />
+        <button type="submit" class="btn btn--accent">Spustit</button>
+      </form>
+
+      <p class="label">ULOŽENÉ</p>
+      <div class="savedgrid" id="namedPresets"></div>
+    </div>
+  </section>
+
+  <div class="col col--rail">
+    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
+    <div class="col col--scroll" id="activeTimers"></div>
+  </div>
+</section>
+
+<!-- ================= CONTROLLER ================= -->
+<section class="view view--wide" data-view="controller" hidden>
+  <section class="card">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg">Controller</h2>
+      <span class="muted">Co je připojené a co smí Kacey použít</span>
+    </div>
+    <div class="card__body card__body--scroll groups groups--wide">
+
+      <div>
+        <h3 class="subhead">Zdroje dat</h3>
+        <div id="ctrlSources"></div>
+      </div>
+
+      <div>
+        <h3 class="subhead">Sekce paměti</h3>
+        <div id="ctrlMemory"></div>
+      </div>
+
+      <div>
+        <h3 class="subhead">Link</h3>
+        <dl class="readout">
+          <div class="readout__row"><dt>STATE</dt><dd id="tmState">—</dd></div>
+          <div class="readout__row"><dt>MODEL</dt><dd id="tmModel">—</dd></div>
+          <div class="readout__row"><dt>MCP</dt><dd id="tmMcp">—</dd></div>
+          <div class="readout__row"><dt>SESSION</dt><dd id="tmSession">—</dd></div>
+          <div class="readout__row"><dt>TURNS</dt><dd id="tmTurns">0</dd></div>
+          <div class="readout__row"><dt>LAST TOOL</dt><dd id="tmTool">—</dd></div>
+          <div class="readout__row"><dt>CALLS</dt><dd id="tmToolCount">0</dd></div>
+        </dl>
+      </div>
+
+      <div>
+        <h3 class="subhead">Hlas</h3>
+        <dl class="readout">
+          <div class="readout__row"><dt>SPEAKER</dt><dd id="tmVoice">—</dd></div>
+          <div class="readout__row"><dt>LANG</dt><dd id="tmLang">—</dd></div>
+          <div class="readout__row"><dt>QUEUE</dt><dd id="tmTts">0</dd></div>
+          <div class="readout__row"><dt>SYNTH</dt><dd id="tmSynth">—</dd></div>
+          <div class="readout__row"><dt>WAKE WORD</dt><dd id="vwState" class="is-acc">nenastaveno</dd></div>
+        </dl>
+
+        <div class="ctrlrow">
+          <label class="sr-only" for="voice" id="voiceLabel">Hlas</label>
+          <select class="select" id="voice"></select>
+          <label class="sr-only" for="lang" id="langLabel">Language</label>
+          <select class="select" id="lang">
+            <option value="cs-CZ">Čeština</option>
+            <option value="en-US">English</option>
+          </select>
+        </div>
+        <div class="ctrlrow">
+          <button type="button" class="btn" id="mute" aria-pressed="false">Ztlumit odpovědi</button>
+          <button type="button" class="btn" id="wake" aria-pressed="true">Budicí slovo</button>
+        </div>
+        <button type="button" class="btn btn--outlineaccent btn--block" id="vwOpen" aria-expanded="false" aria-controls="vwPanel">Nahrát vzorky budicího slova</button>
+
+        <div class="meter" id="meter" aria-hidden="true">
+          <span class="meter__bar"></span><span class="meter__bar"></span>
+          <span class="meter__bar"></span><span class="meter__bar"></span>
+          <span class="meter__bar"></span><span class="meter__bar"></span>
+          <span class="meter__bar"></span><span class="meter__bar"></span>
+          <span class="meter__bar"></span><span class="meter__bar"></span>
+          <span class="meter__bar"></span><span class="meter__bar"></span>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="subhead">Oprávnění nástrojů</h3>
+        <p class="muted narrow">Kacey nemá shell, přístup k souborům ani na web. Klepnutím nástroj povolíš nebo zakážeš. Změna platí od příští relace.</p>
+        <div class="chips" id="ctrlTools"></div>
+        <div class="denied narrow" id="ctrlDenied"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="col col--rail">
+    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Barva akcentu</h2>
+      <div class="presets" id="huePresets">
+        <button type="button" class="preset" data-h="1"   style="--p:1">RED</button>
+        <button type="button" class="preset" data-h="33"  style="--p:33">AMBER</button>
+        <button type="button" class="preset" data-h="150" style="--p:150">JADE</button>
+        <button type="button" class="preset" data-h="193" style="--p:193">CYAN</button>
+        <button type="button" class="preset" data-h="225" style="--p:225">BLUE</button>
+        <button type="button" class="preset" data-h="285" style="--p:285">VIOLET</button>
+      </div>
+      <p class="muted card__foot card__foot--block">Povrchy zůstávají neutrálně šedé — mění se jen akcent.</p>
+    </section>
+    <section class="card">
+      <h2 class="card__title card__title--bar">Funkce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--fn" id="testVoice">Test reproduktoru</button>
+        <button type="button" class="btn btn--fn btn--danger" id="restartSession">Restartovat relaci</button>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= TASK RUN (checklist) ================= -->
+<section class="view view--full" data-view="task" hidden>
+  <div class="runner">
+    <div class="runner__head">
+      <h2 class="card__title card__title--lg is-acc">Úkol probíhá</h2>
+      <span class="muted" id="runCount">—</span>
+      <button type="button" class="btn push" data-go="tasks">Pauza</button>
+    </div>
+    <h1 class="runner__title" id="runTitle">—</h1>
+    <p class="muted" id="runMeta">—</p>
+    <p class="muted narrow">Jen to nutné. Klepni na položku nebo ji řekni nahlas — „boty hotovo“.</p>
+    <div class="runner__list" id="runList"></div>
+    <form class="runner__add row" id="runAddForm">
+      <input class="input" id="runAddInput" type="text" placeholder="Přidat položku — „boty“, „ručník“…" autocomplete="off" />
+      <button type="submit" class="btn">Přidat položku</button>
+    </form>
+    <div class="runner__foot">
+      <span class="bar bar--grow"><span class="bar__fill" id="runBar"></span></span>
+      <button type="button" class="btn" id="runReset">Reset</button>
+      <button type="button" class="btn btn--accent" id="runFinish">Hotovo, zavřít</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FOCUS ================= -->
+<section class="view view--full" data-view="focus" hidden>
+  <div class="focus">
+    <p class="label">Jen jedna věc</p>
+    <h1 class="focus__title" id="focusTitle">—</h1>
+    <p class="muted" id="focusMeta">—</p>
+    <p class="focus__clock" id="focusClock">00:00</p>
+    <p class="muted narrow center">Zavolej „KC“, když se ztratíš.</p>
+    <div class="row center">
+      <button type="button" class="btn btn--accent btn--lg" id="focusDone">Hotovo</button>
+      <button type="button" class="btn btn--lg" id="focusLeave">Opustit focus</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================================================
+     ROUTINE PLANNER — days run down, hours run across.
+     ============================================================ -->
+<div class="sheet" id="routinePanel" hidden>
+  <div class="sheet__box sheet__box--xwide" role="dialog" aria-modal="true" aria-labelledby="routineTitle">
+    <div class="sheet__head">
+      <h2 class="sheet__title" id="routineTitle">Plánovač rutiny</h2>
+      <span class="muted">dny dolů, hodiny doprava</span>
+      <button type="button" class="sheet__close push" id="routineClose" aria-label="Zavřít">×</button>
     </div>
 
-    <div class="swatches" aria-hidden="true">
-      <span class="swatch swatch--primary"><i></i>PRIMARY</span>
-      <span class="swatch swatch--accent"><i></i>ACCENT</span>
-      <span class="swatch swatch--danger"><i></i>ALERT</span>
-      <span class="swatch swatch--ink"><i></i>INK</span>
+    <div class="sheet__bar">
+      <span class="label">ŠTĚTEC</span>
+      <span class="chips" id="brushes"></span>
+      <button type="button" class="btn btn--sm btn--dangerghost push" id="askClearGrid">Vymazat vše</button>
     </div>
 
-    <div class="presets" id="huePresets">
-      <button type="button" class="preset" data-h="193" style="--p:193">CYAN</button>
-      <button type="button" class="preset" data-h="150" style="--p:150">JADE</button>
-      <button type="button" class="preset" data-h="88"  style="--p:88">LIME</button>
-      <button type="button" class="preset" data-h="33"  style="--p:33">AMBER</button>
-      <button type="button" class="preset" data-h="285" style="--p:285">VIOLET</button>
-      <button type="button" class="preset" data-h="330" style="--p:330">MAGENTA</button>
-    </div>
-
-    <p class="sheet__note">Ostatní barvy se odvozují — kontrast a čitelnost zůstávají.</p>
-
-    <div class="sheet__row">
-      <span class="sheet__rowLabel">
-        Budicí slovo „KC“
-        <em class="sheet__rowSub" id="vwState">nenastaveno</em>
+    <div class="confirm" id="confirmClear" hidden>
+      <span>
+        <b>Vymazat celou rutinu?</b>
+        <em>Každý natřený blok i jeho poznámka zmizí. Kalendářních událostí se to netýká. Nelze vrátit.</em>
       </span>
-      <button type="button" class="cal__btn" id="vwOpen" aria-expanded="false" aria-controls="vwPanel">
-        nastavit
-      </button>
+      <button type="button" class="btn push" id="cancelClearGrid">Nechat být</button>
+      <button type="button" class="btn btn--dangerfill" id="clearGrid">Vymazat vše</button>
+    </div>
+
+    <div class="sheet__bar">
+      <span class="row"><span class="muted-3">Vstávání</span>
+        <button type="button" class="btn btn--step" id="wakeDownR">−</button>
+        <b class="num" id="wakeLabelR">07:00</b>
+        <button type="button" class="btn btn--step" id="wakeUpR">+</button>
+      </span>
+      <span class="row"><span class="muted-3">Spánek</span>
+        <button type="button" class="btn btn--step" id="sleepDownR">−</button>
+        <b class="num" id="sleepLabelR">22:30</b>
+        <button type="button" class="btn btn--step" id="sleepUpR">+</button>
+      </span>
+      <span class="muted-3">šrafované hodiny jsou spánek — nejdou natřít</span>
+    </div>
+
+    <div class="sheet__bar" id="noteBar" hidden>
+      <span class="is-acc" id="noteTarget"></span>
+      <input class="input" id="noteValue" type="text" placeholder="Poznámka k bloku — „Laborka“, „OPT úkol“…" autocomplete="off" />
+      <button type="button" class="btn btn--sm" id="noteClose">Hotovo</button>
+    </div>
+
+    <p class="muted-3 sheet__lede">Tažením do strany v rámci dne natřeš 15minutový úsek. Vyber <b>Poznámka</b> a klepni na blok, abys ho pojmenoval. Tohle je tvar běžného týdne — konkrétní události sedí nahoře.</p>
+
+    <div class="sheet__body">
+      <div class="grid" id="routineGrid"></div>
+      <div class="weektotals">
+        <p class="label">TÝDEN V KOSTCE</p>
+        <div id="weekTotals"></div>
+      </div>
+    </div>
+
+    <div class="sheet__foot">
+      <p class="muted-3">Kacey plánuje nové věci kolem rutiny a upozorní tě, když událost padne na chráněný blok.</p>
+      <button type="button" class="btn btn--accent push" id="routineDone">Hotovo</button>
     </div>
   </div>
 </div>
@@ -299,8 +602,8 @@
 <div class="sheet" id="vwPanel" hidden>
   <div class="sheet__box sheet__box--wide" role="dialog" aria-modal="false" aria-labelledby="vwTitle">
     <div class="sheet__head">
-      <h2 class="sheet__title" id="vwTitle">HLASOVÝ PODPIS</h2>
-      <button type="button" class="sheet__close" id="vwClose" aria-label="Zavřít">×</button>
+      <h2 class="sheet__title" id="vwTitle">Hlasový podpis</h2>
+      <button type="button" class="sheet__close push" id="vwClose" aria-label="Zavřít">×</button>
     </div>
 
     <p class="vw__lede">
@@ -315,7 +618,7 @@
     </div>
 
     <div class="vw__rec">
-      <button type="button" class="vw__recBtn" id="vwRec">nahrát vzorek</button>
+      <button type="button" class="btn btn--accent" id="vwRec">nahrát vzorek</button>
       <span class="vw__recNote" id="vwRecNote" aria-live="polite"></span>
       <span class="vw__level" id="vwLevel" aria-hidden="true"></span>
     </div>
@@ -337,36 +640,32 @@
     </label>
 
     <div class="vw__foot">
-      <button type="button" class="vw__clear" id="vwClear">smazat vše</button>
+      <button type="button" class="btn btn--dangerghost" id="vwClear">smazat vše</button>
     </div>
 
     <p class="sheet__note">
       ▶ přehraje vzorek — takhle přesně ho Kacey slyší. Prostřední číslo je
       vzdálenost od tvého posledního pokusu (zeleně = tenhle vzorek by stačil),
       pravé číslo vzdálenost od ostatních vzorků (červeně = řekl jsi to jinak).
-      Doleva od půlky pruhu je shoda. Přehnaná citlivost spouští Kacey uprostřed
-      hovoru.
     </p>
   </div>
 </div>
 
-<!-- polite announcer for completed assistant turns (keeps the log from spamming SRs per chunk) -->
+<div class="toast" id="toast" role="status" hidden>
+  <span id="toastText"></span>
+  <button type="button" class="toast__x" id="toastClose" aria-label="Zavřít">×</button>
+</div>
+
+<!-- polite announcer for completed assistant turns -->
 <p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>
 
-<!-- These two are classic scripts, not modules: the Node tests in test/ load
-     them by evaluating the source, and wake-worklet.js is fetched by relative
-     URL at runtime. Classic scripts run before deferred module scripts, so both
-     globals exist by the time app.js boots.
-
-     wake-voice.js defines window.KaceyWakeVoice — the local voice-template wake
-     word. Inert without enrolled samples. -->
+<!-- Classic scripts, not modules: the Node tests in test/ load them by
+     evaluating the source, and wake-worklet.js is fetched by relative URL at
+     runtime. Classic scripts run before deferred module scripts, so both
+     globals exist by the time app.js boots. -->
 <script src="wake-voice.js"></script>
-<!-- closing.js defines window.KaceyClosing — recognises "to je vše, díky" and
-     friends, so the hands-free loop can be ended by saying so. -->
 <script src="closing.js"></script>
 
-<!-- The frontend proper: a native ES module that pulls in public/js/*. No build
-     step — the browser resolves the imports. -->
 <script type="module" src="app.js"></script>
 </body>
 </html>
