@@ -14,10 +14,11 @@ import { el, fill } from '../core/el.js';
 import * as store from '../core/store.js';
 import { go, onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
-import { openEntry, newEntry, wordCount } from './journal.js';
+import { openEntry, newEntry, wordCount, forgetEntry } from './journal.js';
 
 var filter = 'all';
 var query = '';
+var pendingDelete = null;   // entry id awaiting its second tap
 
 function entries() { return store.data.journal.entries || []; }
 
@@ -71,6 +72,33 @@ function renderFilters() {
   }));
 }
 
+/* Two taps, not a dialog. A journal entry is worth confirming — it is the one
+   thing here nobody can write again — but a modal for every tidy-up is worse
+   than the risk. The armed state reverts on its own after a few seconds. */
+function deleteButton(entry) {
+  var armed = pendingDelete === entry.id;
+  return el('button.btn.btn--sm' + (armed ? '.btn--dangerfill' : '.btn--dangerghost'), {
+    type: 'button',
+    'aria-label': armed ? 'Opravdu smazat zápis' : 'Smazat zápis',
+    onclick: function () {
+      if (!armed) {
+        pendingDelete = entry.id;
+        render();
+        setTimeout(function () {
+          if (pendingDelete === entry.id) { pendingDelete = null; render(); }
+        }, 4000);
+        return;
+      }
+      pendingDelete = null;
+      forgetEntry(entry.id);
+      store.patch('journal', Object.assign({}, store.data.journal, {
+        entries: entries().filter(function (x) { return x.id !== entry.id; })
+      }));
+      say('Zápis smazán · ' + (entry.title || 'bez názvu'));
+    }
+  }, armed ? 'Opravdu?' : '×');
+}
+
 function render() {
   if (!$('libEntries')) return;
   renderFilters();
@@ -95,7 +123,8 @@ function render() {
         el('button.btn.btn--sm.push', {
           type: 'button',
           onclick: function () { openEntry(e.id); go('journal'); }
-        }, 'Otevřít')
+        }, 'Otevřít'),
+        deleteButton(e)
       ])
     ]);
   }) : el('div.entry', { style: 'grid-column:1/-1;padding:28px' }, [

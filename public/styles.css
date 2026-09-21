@@ -12,7 +12,6 @@
 
 :root {
   --h: 193;
-  --h-danger: 352;
 
   --bg: #161616;
   --l1: #242424;
@@ -31,7 +30,12 @@
 
   --ok: #42be65;
   --warn: #f1c21b;
-  --err: hsl(var(--h-danger) 92% 64%);
+  /* Fixed, and deliberately NOT derived from --h. The old theme rotated the
+     alert colour away from the accent so a red accent would not make errors
+     look like ordinary readings — but that turned every destructive control
+     green when the accent was red, which is worse than the clash it avoided.
+     Danger is red here whatever the accent is. */
+  --err: #fa4d56;
 
   --mono: "Consolas", "SFMono-Regular", "Menlo", ui-monospace, monospace;
 

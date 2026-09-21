@@ -36,6 +36,7 @@ var supervisor = 0;
 var saveTimer = 0;
 var interimText = '';
 var chat = [];
+var draft = null;          // a started session with nothing written in it yet
 
 /* ---- entries ------------------------------------------------------------ */
 
@@ -54,8 +55,17 @@ function wordCount(text) {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
+/**
+ * Begin a session.
+ *
+ * Nothing is written yet. An entry only reaches the store once it has words in
+ * it (see commit() below) — opening the journal, looking at it and leaving must
+ * not leave an empty "rozepsané" card behind in the library, which is exactly
+ * what it used to do on every visit.
+ */
 export function newEntry() {
-  var entry = {
+  currentId = null;
+  draft = {
     id: 'j' + Date.now(),
     created: new Date().toISOString(),
     updated: new Date().toISOString(),
@@ -64,14 +74,30 @@ export function newEntry() {
     tags: [],
     unfinished: true
   };
-  writeEntries(entries().concat([entry]));
-  currentId = entry.id;
   chat = [{ who: 'Kacey', text: 'Nahrávám. Řekni „konec“, až budeš hotov.' }];
   renderAll();
+  return draft;
+}
+
+/** Write the pending draft into the store. First words only. */
+function commit(text) {
+  if (!draft) return null;
+  var entry = Object.assign({}, draft, {
+    text: text, title: derivedTitle(text), updated: new Date().toISOString()
+  });
+  draft = null;
+  currentId = entry.id;
+  writeEntries(entries().concat([entry]));
   return entry;
 }
 
+/** The entry being written, whether or not it has reached the store. */
+function activeEntry() {
+  return draft || entryById(currentId);
+}
+
 function openEntry(id) {
+  draft = null;              // an unwritten session is discarded, not filed
   currentId = id;
   stopDictation();
   renderAll();
@@ -86,14 +112,24 @@ function derivedTitle(text) {
 }
 
 function saveText(text) {
-  if (!currentId) return;
+  var hasWords = String(text || '').trim().length > 0;
+
+  // Nothing written yet, and nothing stored yet: there is nothing to save.
+  if (!currentId && !hasWords) { $('jSaved').textContent = 'nová relace'; return; }
+
   clearTimeout(saveTimer);
   saveTimer = setTimeout(function () {
-    writeEntries(entries().map(function (e) {
-      return e.id === currentId
-        ? Object.assign({}, e, { text: text, title: derivedTitle(text), updated: new Date().toISOString() })
-        : e;
-    }));
+    if (!currentId) {
+      if (!hasWords) return;
+      commit(text);
+      renderUnfinished();
+    } else {
+      writeEntries(entries().map(function (e) {
+        return e.id === currentId
+          ? Object.assign({}, e, { text: text, title: derivedTitle(text), updated: new Date().toISOString() })
+          : e;
+      }));
+    }
     $('jSaved').textContent = 'uloženo právě teď';
   }, 600);
   $('jSaved').textContent = 'ukládám…';
@@ -112,7 +148,7 @@ function appendDictated(text) {
 
 export function startDictation() {
   if (!recognitionAvailable()) { say('Mikrofon není k dispozici.'); return; }
-  if (!currentId) newEntry();
+  if (!currentId && !draft) newEntry();
   dictating = true;
   started = Date.now();
 
@@ -158,8 +194,17 @@ function toggleDictation() { dictating ? stopDictation() : startDictation(); }
 
 function finish() {
   stopDictation();
-  if (!currentId) return;
   var text = $('jText').value;
+
+  if (!String(text).trim()) {
+    // Nothing was said. End the session rather than filing a blank entry.
+    draft = null; currentId = null;
+    renderAll();
+    say('Prázdná relace — nic k uložení.');
+    return;
+  }
+  clearTimeout(saveTimer);
+  if (!currentId) commit(text);
   writeEntries(entries().map(function (e) {
     return e.id === currentId
       ? Object.assign({}, e, {
@@ -209,7 +254,7 @@ function paintRecState() {
 }
 
 function paintStats() {
-  var entry = entryById(currentId);
+  var entry = activeEntry();
   var text = $('jText').value;
   $('jStats').textContent = wordCount(text) + ' slov' + (entry && !entry.unfinished ? ' · dokončeno' : '');
   $('jTitle').textContent = 'Deník' + (entry ? ' · ' + timeLabel(entry.created) : '');
@@ -242,10 +287,10 @@ function renderUnfinished() {
 
 function renderAll() {
   if (!$('jText')) return;
-  var entry = entryById(currentId);
+  var entry = activeEntry();
   if (entry && document.activeElement !== $('jText')) $('jText').value = entry.text || '';
   if (!entry) $('jText').value = '';
-  $('jSaved').textContent = entry ? 'uloženo' : 'nová relace';
+  $('jSaved').textContent = currentId ? 'uloženo' : 'nová relace';
   paintStats(); paintClock(); paintRecState(); renderUnfinished(); renderChat();
 }
 
@@ -263,7 +308,7 @@ export function initJournal(askKacey) {
   $('jFinish').addEventListener('click', finish);
   $('jNew').addEventListener('click', function () { newEntry(); say('Nová relace deníku.'); });
   $('jTag').addEventListener('click', function () {
-    if (!currentId) return;
+    if (!currentId) { say('Nejdřív něco napiš — tagovat jde až uložený zápis.'); return; }
     var tag = prompt('Tag pro tenhle zápis:');
     if (!tag) return;
     writeEntries(entries().map(function (e) {
@@ -302,6 +347,11 @@ export function initJournal(askKacey) {
     .forEach(function (v) { onEnter(v, stopDictation); });
 
   store.onChange(function () { if (currentView() === 'journal') renderAll(); });
+}
+
+/** Called by the library when it removes the entry currently open here. */
+export function forgetEntry(id) {
+  if (currentId === id) { currentId = null; draft = null; renderAll(); }
 }
 
 export { openEntry, entries, wordCount };

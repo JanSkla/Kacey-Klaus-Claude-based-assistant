@@ -15,23 +15,16 @@ var hue = DEFAULT_HUE;
 var hueRing = $('hueRing'), hueKnob = $('hueKnob'), hueValue = $('hueValue');
 var sheet = $('settingsPanel'), settingsBtn = $('settings'), settingsClose = $('settingsClose');
 
-/* The alert hue sits opposite the chosen one. If the user picks a hue close
-   to the default red-family alert, that would make errors look like ordinary
-   readings — so it is pushed to the far side instead. */
-function dangerHueFor(h) {
-  var preferred = 352;                       // red reads as "alert" everywhere
-  var d = Math.abs(h - preferred);
-  d = Math.min(d, 360 - d);                  // shortest way round the wheel
-  // Keep red unless the chosen hue is itself red-adjacent, in which case an
-  // alert would be indistinguishable from every other reading.
-  return d < 45 ? (h + 165) % 360 : preferred;
-}
+/* The alert colour used to rotate away from the accent so a red accent would
+   not make errors look like ordinary readings. It is a fixed red now (see
+   --err in styles.css): rotating it turned destructive buttons green whenever
+   the accent was red, and a green "delete for good" is a worse failure than
+   the clash the rotation avoided. */
 
 function applyHue(h, persist) {
   hue = ((Math.round(h) % 360) + 360) % 360;
   var root = document.documentElement;
   root.style.setProperty('--h', String(hue));
-  root.style.setProperty('--h-danger', String(dangerHueFor(hue)));
 
   if (hueKnob) hueKnob.style.transform = 'rotate(' + hue + 'deg) translateY(-75px)';
   if (hueValue) hueValue.textContent = String(hue);
