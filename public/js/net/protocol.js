@@ -27,6 +27,8 @@ import {
 } from '../voice/recognition.js';
 import { pauseReply, stopAndEnd, endListening } from '../voice/commands.js';
 import { refreshCalendar } from '../ui/calendar.js';
+import { attachments, hasAttachments, clearAttachments } from '../ui/attachments.js';
+import { applyRemoteChange } from '../core/store.js';
 import { makeSocketTransport } from './transport-socket.js';
 import { makeMockTransport } from './transport-mock.js';
 
@@ -158,6 +160,14 @@ export function onServer(msg) {
       state.resumeVoiceLoop = false;
       break;
 
+    case 'app_changed':
+      /* Kacey edited the app through her own tools. Reload the section she
+         touched and offer to put it back — a routine imported from a
+         screenshot is the case this exists for, and a wrong one is expensive
+         to repaint by hand. */
+      applyRemoteChange(typeof msg.section === 'string' ? msg.section : null, msg.undo);
+      break;
+
     default:
       break; // unknown frame types are ignored, not fatal
   }
@@ -200,14 +210,16 @@ export function onConn(next, retryMs) {
 
 export function submit(text) {
   var msg = String(text == null ? '' : text).trim();
-  if (!msg) return;
+  // An image on its own is a turn: "here, look at this".
+  if (!msg && !hasAttachments()) return;
 
   primeTTS();
 
   /* Commands are intercepted here — before the transport, before the log,
      before telemetry — so nothing about them reaches Kacey or the transcript.
      Checked on the typed path too, so the composer accepts them as well. */
-  var cmd = window.KaceyClosing ? window.KaceyClosing.classify(msg) : null;
+  var cmd = (!hasAttachments() && window.KaceyClosing)
+    ? window.KaceyClosing.classify(msg) : null;
   if (cmd) {
     // The command IS the composer's contents here, so clear it outright.
     dom.input.value = '';
@@ -233,12 +245,18 @@ export function submit(text) {
 
   noteTurn();
 
-  addMessage('user', msg);
+  var images = attachments();
+  /* The transcript records that images went with the turn. The bytes are not
+     shown again here — the attachment strip already showed them, and a chat
+     log full of full-size screenshots is unreadable. */
+  var label = images.length === 1 ? ' [1 obrázek]' : ' [' + images.length + ' obrázky]';
+  addMessage('user', msg + (images.length ? (msg ? '' : 'Příloha') + label : ''));
   dom.input.value = '';
   dom.input.classList.remove('is-interim');
-  var ok = transport.send({ type: 'user_message', text: msg });
+
+  var ok = transport.send({ type: 'user_message', text: msg, images: images });
   if (!ok) showAlert(t().errOfflineSend);
-  else syncOrb();
+  else { clearAttachments(); syncOrb(); }
 }
 
 export function interrupt() {

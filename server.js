@@ -18,6 +18,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import * as appstate from './appstate.js';
+import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 
 import {
   HERE, PORT, MODEL, PERSONA_PATH, PUBLIC_DIR,
@@ -141,8 +142,15 @@ class KaceySession {
     if (this.ws.readyState === 1) this.ws.send(JSON.stringify(frame));
   }
 
-  /** Queue a user turn for the live SDK session. */
-  pushUserMessage(text) {
+  /**
+   * Queue a user turn for the live SDK session.
+   *
+   * `images` are base64 blocks from the composer's attachments. A turn with
+   * images sends an array of content blocks instead of a plain string — the
+   * text still carries the nudge below, because it has to be the LAST thing
+   * the model reads and blocks are read in order.
+   */
+  pushUserMessage(text, images) {
     // Two rules keep slipping despite being in the persona, because the system
     // prompt sits far back in context while the model's tool-use reflex fires
     // right here: it opens with an English "I'll check your calendar." and it
@@ -154,9 +162,20 @@ class KaceySession {
       'použitím nástroje. O sobě mluv v ženském rodě (ráda, podívala jsem se). ' +
       'Anglicky jen tehdy, když uživatel píše anglicky.]';
 
+    const list = Array.isArray(images) ? images : [];
+    const content = list.length
+      ? [
+          ...list.map((img) => ({
+            type: 'image',
+            source: { type: 'base64', media_type: img.media_type, data: img.data },
+          })),
+          { type: 'text', text: text + nudge },
+        ]
+      : text + nudge;
+
     this.pending.push({
       type: 'user',
-      message: { role: 'user', content: text + nudge },
+      message: { role: 'user', content },
       parent_tool_use_id: null,
       session_id: this.sessionId ?? undefined,
     });
@@ -193,7 +212,10 @@ class KaceySession {
         // behaviour comes from persona/kacey.md alone.
         settingSources: [],
 
-        mcpServers: MCP_SERVERS,
+        /* klaus-memory (a subprocess) plus Kacey's own app tools, which run in
+           THIS process — see app-tools.js. One server object per session so a
+           restart cannot leave a stale instance behind. */
+        mcpServers: { ...MCP_SERVERS, [APP_SERVER_NAME]: makeAppServer() },
 
         // Use ONLY the server above. Without this, the SDK also auto-fetches the
         // account's claude.ai cloud connectors — Gmail, Google Calendar, Slack,
@@ -206,7 +228,7 @@ class KaceySession {
         tools: [],
         // Filtered through the controller's switches, so denying a tool there
         // actually removes it from the session rather than only dimming a chip.
-        allowedTools: ALLOWED_TOOLS.filter((t) => appstate.toolAllowed(t)),
+        allowedTools: [...ALLOWED_TOOLS, ...APP_TOOL_NAMES].filter((t) => appstate.toolAllowed(t)),
         disallowedTools: DISALLOWED_TOOLS,
 
         // Never prompt for permission (there is no terminal and no human to ask);
@@ -367,11 +389,11 @@ class KaceySession {
     }
   }
 
-  onUserMessage(text) {
+  onUserMessage(text, images) {
     this.turnActive = true;
     this.interrupted = false;
     this.send({ type: 'thinking' });
-    this.pushUserMessage(text);
+    this.pushUserMessage(text, images);
   }
 
   async onInterrupt() {
@@ -796,7 +818,59 @@ app.use(express.static(PUBLIC_DIR));
 app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 const server = createServer(app);
+/* ---------------------------------------------------------------------------
+ * Attachments.
+ *
+ * Images only, and only the formats the model actually accepts. Everything is
+ * re-validated here rather than trusted from the browser: the frame arrives
+ * over a socket that anything on the loopback interface can open.
+ * ------------------------------------------------------------------------- */
+
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;     // per image, decoded
+const MAX_IMAGES = 4;                        // per turn
+
+/* Returns the accepted images. On rejection the array carries an `.error`
+   string — checked by the caller BEFORE length, because a rejection on the
+   first image returns an empty array that still has to be reported. */
+function sanitiseImages(raw) {
+  const out = [];
+  if (!Array.isArray(raw) || !raw.length) return out;
+
+  for (const item of raw.slice(0, MAX_IMAGES)) {
+    if (!item || typeof item !== 'object') continue;
+    const type = String(item.media_type || '');
+    const data = String(item.data || '');
+    if (!IMAGE_TYPES.includes(type)) {
+      out.error = `Nepodporovaný typ přílohy: ${type || 'neznámý'}.`;
+      return out;
+    }
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+      out.error = 'Příloha není platný base64.';
+      return out;
+    }
+    // base64 inflates by 4/3; check the decoded size, which is what counts.
+    if (data.length * 3 / 4 > MAX_IMAGE_BYTES) {
+      out.error = `Obrázek je moc velký (limit ${MAX_IMAGE_BYTES / 1024 / 1024} MB).`;
+      return out;
+    }
+    out.push({ media_type: type, data });
+  }
+  return out;
+}
+
 const wss = new WebSocketServer({ server, path: '/ws' });
+
+/* Kacey's app tools write straight into appstate, so an open page would sit on
+   a stale routine unless it is told. Every write is broadcast to every client,
+   carrying the previous value so the browser can offer an undo. */
+setWriteListener((section, undo) => {
+  const frame = JSON.stringify({ type: 'app_changed', section, undo });
+  for (const client of wss.clients) {
+    if (client.readyState === 1) client.send(frame);
+  }
+  log(`app tool wrote ${section}`);
+});
 
 wss.on('connection', (ws) => {
   log('client connected');
@@ -823,11 +897,21 @@ wss.on('connection', (ws) => {
 
     if (frame?.type === 'user_message') {
       const text = typeof frame.text === 'string' ? frame.text.trim() : '';
-      if (!text) {
+      const images = sanitiseImages(frame.images);
+
+      // An attachment on its own is a legitimate turn — "here, look at this".
+      if (!text && !images.length) {
         session.send({ type: 'error', message: 'Empty user_message.' });
         return;
       }
-      session.onUserMessage(text);
+      // Not `images.length && images.error` — a first image that fails
+      // validation leaves an EMPTY array carrying the error, and that guard
+      // would drop the attachment silently instead of saying why.
+      if (images.error) {
+        session.send({ type: 'error', message: images.error });
+        return;
+      }
+      session.onUserMessage(text || 'Podívej se na tohle.', images);
     } else if (frame?.type === 'interrupt') {
       await session.onInterrupt();
     } else {

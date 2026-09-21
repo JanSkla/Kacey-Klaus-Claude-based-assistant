@@ -26,6 +26,7 @@
        labels.js      re-labelling the chrome when language or mute changes
        theme.js       one hue drives the whole interface
        voice-picker.js the voice select, and its fallback when XTTS is down
+       attachments.js images on the way to Kacey: paste, paperclip, drop
        calendar.js    the month grid, the day lane, and the Today panel
 
      views/  one module per screen, all of them reading the same store
@@ -84,6 +85,7 @@ import {
 } from './js/net/protocol.js';
 import { initCalendar } from './js/ui/calendar.js';
 import { initRouter } from './js/ui/router.js';
+import { initAttachments } from './js/ui/attachments.js';
 import { initMain } from './js/views/main.js';
 import { initTasks } from './js/views/tasks.js';
 import { initJournal } from './js/views/journal.js';
@@ -131,6 +133,7 @@ restoreWakePref();     // the wake word owns its own key
    ======================================================================= */
 
 initVoicePicker();
+initAttachments();
 initVoiceWake();
 initTheme();           // restores the hue, wires the presets, paints once
 

@@ -13,6 +13,8 @@
    /api/calendar by js/ui/calendar.js.
    ========================================================================= */
 
+import { say } from '../ui/toast.js';
+
 var listeners = [];
 var pending = {};          // section -> timer
 var ready = false;
@@ -83,6 +85,37 @@ export function flip(group, key) {
   next[key] = !next[key];
   var p = {}; p[group] = next;
   patchSettings(p);
+}
+
+/**
+ * A section was changed by Kacey's own tools, server side.
+ *
+ * Reload the whole document rather than trusting a value off the wire: the
+ * server is the one that just wrote it, and a partial patch here is how the
+ * two copies drift apart. `undo` is the previous value of that section, so the
+ * user gets one click to put it back — a routine imported from a screenshot is
+ * the case this exists for.
+ */
+export async function applyRemoteChange(section, undo) {
+  await load();
+
+  var names = {
+    routine: 'Rutina', tasks: 'Úkoly', journal: 'Deník',
+    settings: 'Nastavení', timers: 'Časovače', checklists: 'Seznamy'
+  };
+  var label = names[section] || 'Aplikace';
+
+  var act = (section && undo !== undefined && undo !== null)
+    ? {
+        label: 'Vrátit zpět',
+        run: function () {
+          patch(section, undo);
+          say(label + ' vrácena zpět.');
+        }
+      }
+    : null;
+
+  say(label + ' — změnila Kacey.', act);
 }
 
 export async function load() {

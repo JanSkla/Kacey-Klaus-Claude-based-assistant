@@ -334,6 +334,34 @@ select:focus-visible, textarea:focus-visible {
 .status__alert { margin: 0; padding: 10px 24px; font-size: 14px; color: var(--err); border-top: 1px solid var(--err); background: var(--l2); }
 .listening { margin: 0; padding: 10px 24px; font-size: 14px; color: var(--acc); border-top: 1px solid var(--line); background: var(--acc-dim); }
 
+/* attachments ------------------------------------------------------------ */
+.attachstrip {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px; background: var(--l1); border: 1px solid var(--line);
+}
+.attachstrip[hidden] { display: none; }
+.attach {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px 4px 4px; background: var(--l2); border: 1px solid var(--line2);
+  font-size: 13px; max-width: 220px;
+}
+.attach__thumb { width: 34px; height: 34px; object-fit: cover; display: block; background: var(--bg); }
+.attach__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
+.attach__x {
+  flex: 0 0 auto; background: none; border: 0; color: var(--ink3);
+  font-size: 15px; cursor: pointer; padding: 0 2px;
+}
+.attach__x:hover { color: var(--err); }
+
+.composer__clip {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 36px; height: 36px; padding: 0;
+  background: none; border: 1px solid transparent; color: var(--ink3); cursor: pointer;
+}
+.composer__clip:hover { color: var(--acc); border-color: var(--line2); }
+.composer.is-dropping { border-color: var(--acc); background: var(--acc-dim); }
+
 .dock { display: grid; grid-template-columns: minmax(200px, 1fr) auto; gap: var(--gap); }
 .composer { display: flex; align-items: center; gap: 10px; background: var(--l1); border: 1px solid var(--line2); padding: 0 6px 0 14px; height: 56px; }
 .composer__input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--ink); font: inherit; font-size: 16px; padding: 12px 0; }
@@ -664,6 +692,9 @@ select:focus-visible, textarea:focus-visible {
   padding: 12px 14px; font-size: 14px; box-shadow: 0 2px 6px rgb(0 0 0 / .4);
 }
 .toast[hidden] { display: none; }
+.toast__action { flex: 0 0 auto; margin-left: auto; }
+.toast__action[hidden] { display: none; }
+.toast__action + .toast__x { margin-left: 0; }
 .toast__x { margin-left: auto; background: none; border: 0; color: var(--ink2); font-size: 16px; cursor: pointer; padding: 0 4px; }
 .toast__x:hover { color: var(--ink); }
 
