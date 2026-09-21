@@ -17,3 +17,6 @@ Thumbs.db
 # the XTTS python environment (~5 GB) and its audition WAVs — see README
 .venv-xtts/
 voicelab/samples/
+
+# the app document: tasks, journal entries, the routine — personal, and local
+data/

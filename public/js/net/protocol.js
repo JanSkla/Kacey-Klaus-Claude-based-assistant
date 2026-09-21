@@ -32,6 +32,37 @@ import { makeMockTransport } from './transport-mock.js';
 
 var transport = null;
 var toolDepth = 0;
+
+/* ---- asides -------------------------------------------------------------
+   A question asked from somewhere other than the composer: the journal's side
+   chat, and the daily brief. It goes to Kacey over the same socket and through
+   the same session — she should remember it — but the answer belongs to the
+   caller, not to the main transcript, and it must not be spoken.
+
+   The session is strictly serial (one turn in flight at a time), so capturing
+   "the next turn" is unambiguous: there is no other turn it could be. */
+var aside = null;          // { buffer, done } while a turn is being captured
+
+export function askAside(text, onReply) {
+  var msg = String(text == null ? '' : text).trim();
+  if (!msg) return false;
+  if (aside) { onReply('Moment — ještě dokončuju předchozí odpověď.'); return false; }
+  if (!transport || !transport.isOpen()) { onReply(t().errOfflineSend); return false; }
+
+  aside = { buffer: '', done: onReply };
+  noteTurn();
+  var ok = transport.send({ type: 'user_message', text: msg });
+  if (!ok) { aside = null; onReply(t().errOfflineSend); return false; }
+  return true;
+}
+
+function endAside(message) {
+  if (!aside) return;
+  var reply = aside.buffer.trim() || message || '—';
+  var done = aside.done;
+  aside = null;
+  try { done(reply); } catch (e) { console.error('[kacey] aside callback failed', e); }
+}
 var preambleDone = false;   // has this turn already split off its opening line?
 
 /* The one line describing what we are connected to, built when `ready` arrives.
@@ -62,6 +93,7 @@ export function onServer(msg) {
       break;
 
     case 'thinking':
+      if (aside) { state.streaming = true; syncOrb(); break; }
       state.streaming = true;
       preambleDone = false;          // a fresh turn may open with its own line
       dom.stopBtn.hidden = false;
@@ -71,12 +103,18 @@ export function onServer(msg) {
       break;
 
     case 'delta':
+      if (aside) { aside.buffer += (typeof msg.text === 'string' ? msg.text : ''); break; }
       if (!state.streaming) { state.streaming = true; dom.stopBtn.hidden = false; dom.sendBtn.hidden = true; }
       appendDelta(typeof msg.text === 'string' ? msg.text : '');
       syncOrb();
       break;
 
     case 'tool':
+      if (aside) {
+        if (msg.phase === 'start') noteTool(msg.name);
+        else if (/calendar/i.test(String(msg.name || ''))) refreshCalendar();
+        break;
+      }
       if (msg.phase === 'start') {
         // Only the FIRST tool of a turn splits the bubble. toolDepth returns
         // to 0 after every tool, so it cannot be used for this — a second
@@ -96,6 +134,7 @@ export function onServer(msg) {
       break;
 
     case 'done':
+      if (aside) { state.streaming = false; endAside(); syncOrb(); break; }
       toolDepth = 0;
       unlockHint();
       flushTTS();
@@ -105,6 +144,12 @@ export function onServer(msg) {
       break;
 
     case 'error':
+      if (aside) {
+        state.streaming = false;
+        endAside(typeof msg.message === 'string' && msg.message ? msg.message : t().errRec);
+        syncOrb();
+        break;
+      }
       toolDepth = 0;
       unlockHint();
       cancelSpeech();

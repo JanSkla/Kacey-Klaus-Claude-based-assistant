@@ -17,6 +17,8 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
+import * as appstate from './appstate.js';
+
 import {
   HERE, PORT, MODEL, PERSONA_PATH, PUBLIC_DIR,
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
@@ -202,7 +204,9 @@ class KaceySession {
 
         // No built-in tools whatsoever; only the allow-listed MCP tools.
         tools: [],
-        allowedTools: ALLOWED_TOOLS,
+        // Filtered through the controller's switches, so denying a tool there
+        // actually removes it from the session rather than only dimming a chip.
+        allowedTools: ALLOWED_TOOLS.filter((t) => appstate.toolAllowed(t)),
         disallowedTools: DISALLOWED_TOOLS,
 
         // Never prompt for permission (there is no terminal and no human to ask);
@@ -421,6 +425,40 @@ app.get('/api/voices', async (_req, res) => {
     available = false;                       // XTTS not running — browser voice only
   }
   res.json({ voices: VOICES, defaultVoice: DEFAULT_VOICE, xtts: available });
+});
+
+/* ---------------------------------------------------------------------------
+ * The application document — tasks, journal, routine, timers, settings.
+ *
+ * Everything the interface owns that klaus_memory does not. One document, read
+ * whole and written section at a time; see appstate.js for why a JSON file is
+ * enough here.
+ * ------------------------------------------------------------------------- */
+
+app.get('/api/app', (_req, res) => {
+  // Seeding here rather than at boot: the controller should list the tools this
+  // build actually exposes, including any added since the document was written.
+  appstate.seedTools(ALLOWED_TOOLS);
+  // deniedTools is read-only context, not part of the stored document: these
+  // are refused by configuration and no switch in the UI can change that.
+  res.json({ ...appstate.get(), deniedTools: DISALLOWED_TOOLS });
+});
+
+app.put('/api/app/:section', express.json({ limit: '1mb' }), (req, res) => {
+  const name = String(req.params.section || '');
+  if (!appstate.SECTIONS.includes(name)) {
+    return res.status(404).json({ error: `unknown section "${name}"` });
+  }
+  const value = req.body && Object.prototype.hasOwnProperty.call(req.body, 'value')
+    ? req.body.value
+    : req.body;
+  if (value === undefined) return res.status(400).json({ error: 'nothing to store' });
+
+  try {
+    res.json({ ok: true, section: name, value: appstate.setSection(name, value) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 /* ---------------------------------------------------------------------------
@@ -832,6 +870,7 @@ server.listen(PORT, () => {
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log(`${sig} — shutting down`);
+    appstate.flushNow();            // never lose the last few hundred ms of edits
     for (const ws of wss.clients) ws.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2000);

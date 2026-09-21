@@ -20,6 +20,11 @@ var tm = {
   voice: $('tmVoice'), lang: $('tmLang'), tts: $('tmTts'), synth: $('tmSynth'),
 };
 
+/* The header shows three of these values as well. Mirrored from here rather
+   than recomputed anywhere else: two places deriving "is MCP connected" is two
+   places that can disagree. */
+var head = { model: $('topModel'), mcp: $('topMcp'), turns: $('topTurns') };
+
 var telemetry = { turns: 0, toolCalls: 0, lastTool: '—', lastSynthMs: null, mcp: '—' };
 
 function setTm(el, value, flag) {
@@ -45,13 +50,22 @@ export function updateTelemetry() {
   setTm(tm.lang, state.lang);
   setTm(tm.tts, String(state.ttsPending), state.ttsPending > 0 ? 'warn' : null);
   setTm(tm.synth, telemetry.lastSynthMs === null ? '—' : telemetry.lastSynthMs + ' ms');
+
+  if (head.mcp) {
+    head.mcp.textContent = telemetry.mcp;
+    head.mcp.className = telemetry.mcp === 'connected' ? 'is-ok' : 'is-bad';
+  }
+  if (head.turns) head.turns.textContent = String(telemetry.turns);
 }
 
 /* ---- reporters -------------------------------------------------------- */
 
 /* The model name is the one rail that is not derived from state — it arrives
    once in the `ready` frame and then never changes. */
-export function setModel(name) { setTm(tm.model, name); }
+export function setModel(name) {
+  setTm(tm.model, name);
+  if (head.model) head.model.textContent = name;
+}
 
 export function setMcp(list) {
   telemetry.mcp = (Array.isArray(list) && list.length) ? 'connected' : 'none';

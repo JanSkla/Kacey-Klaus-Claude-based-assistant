@@ -34,6 +34,17 @@ export function micBlocked() { return recBlocked; }
    it when it clears the box, or it gets prepended to the next request. */
 export function clearBaseText() { baseText = ''; }
 
+/* ---- where dictated text goes ------------------------------------------
+   By default a finished utterance is submitted to Kacey. The journal takes the
+   microphone for a different purpose — the words are the journal entry, not a
+   request — so it registers a sink and gets the text instead. One sink at a
+   time, and clearing it puts the composer back in charge. */
+
+var sink = null;
+
+export function setDictationSink(fn) { sink = typeof fn === 'function' ? fn : null; }
+export function dictationSink() { return sink; }
+
 function buildRecognition() {
   if (!SR) return null;
   var r = new SR();
@@ -60,6 +71,16 @@ function buildRecognition() {
       if (!alt) continue;
       if (ev.results[i].isFinal) finalText += alt.transcript;
       else interim += alt.transcript;
+    }
+    if (sink) {
+      // The journal wants continuous dictation, so it keeps the mic: no
+      // submit, no hands-free loop, and the composer is left alone.
+      if (interim) sink(interim, false);
+      if (finalText.trim()) {
+        sink(finalText.trim(), true);
+        state.resumeVoiceLoop = false;
+      }
+      return;
     }
     if (interim) {
       dom.input.value = (baseText ? baseText + ' ' : '') + interim;
