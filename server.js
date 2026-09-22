@@ -453,8 +453,8 @@ app.get('/api/voices', async (_req, res) => {
  * The application document — tasks, journal, routine, timers, settings.
  *
  * Everything the interface owns that klaus_memory does not. One document, read
- * whole and written section at a time; see appstate.js for why a JSON file is
- * enough here.
+ * whole and written section at a time. Stored in klaus_memory's SQLite file in
+ * `kacey_`-prefixed tables — see db.js for why sharing the file is safe.
  * ------------------------------------------------------------------------- */
 
 app.get('/api/app', (_req, res) => {
@@ -954,7 +954,7 @@ server.listen(PORT, HOST, () => {
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log(`${sig} — shutting down`);
-    appstate.flushNow();            // never lose the last few hundred ms of edits
+    appstate.flushNow();            // close the database cleanly
     for (const ws of wss.clients) ws.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2000);

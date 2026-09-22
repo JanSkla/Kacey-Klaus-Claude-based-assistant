@@ -1,167 +1,293 @@
 /**
  * Kacey — the application document.
  *
- * Everything the redesigned interface owns but klaus_memory does not: tasks,
- * journal entries, the weekly routine, timer presets, and the controller's
- * switches. The calendar is NOT here — that belongs to klaus_memory and is read
- * through /api/calendar.
+ * Everything the interface owns but klaus_memory does not: tasks, journal
+ * entries, the weekly routine, timer presets, and the controller's switches.
+ * The calendar is NOT here — that is klaus_memory's, read through /api/calendar.
  *
- * One JSON file, read once at boot and written back debounced. A document this
- * small does not need a database, and a file can be read, diffed and repaired
- * by hand — which matters more here than write throughput.
+ * Stored in SQLite, in klaus_memory's database file, in tables prefixed
+ * `kacey_` (see db.js for why that is safe). It used to be a JSON file; the
+ * import below moves an existing one across on first boot and then leaves it
+ * alone.
  *
- * Writes are section-at-a-time and last-write-wins. Two browsers editing the
- * same section at the same second will lose one of the edits; with a single
- * owner, that is the right trade for keeping the whole thing legible.
+ * The shape this module hands out has not changed with the storage. Callers —
+ * the HTTP layer, Kacey's own tools, the browser — still see one document with
+ * named sections, because that is the shape the interface thinks in. The
+ * translation between that and rows lives here and nowhere else.
+ *
+ * Writes are immediate rather than debounced. A JSON document had to be written
+ * whole, so batching was worth it; a row update is cheap enough that the
+ * debounce only bought a window in which a crash lost the last edit.
  */
 
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, renameSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { HERE } from './config.js';
+import { open, transact, kvGet, kvSet, now, close } from './db.js';
 
-export const STATE_PATH = process.env.KACEY_STATE_PATH || path.join(HERE, 'data', 'app-state.json');
-
-/** The shape every section must have, and what a fresh install starts from. */
-function defaults() {
-  const now = Date.now();
-  return {
-    version: 1,
-    tasks: [
-      { id: 't' + now, label: 'Otevři Kacey a přidej první úkol', meta: 'osobní', group: 'today', done: false, today: true },
-    ],
-    journal: {
-      entries: [],
-    },
-    routine: {
-      // '<dayIndex>-<quarterHourIndex>': category key
-      grid: {},
-      notes: {},
-      wake: 420,     // 07:00, minutes from midnight
-      sleep: 1350,   // 22:30
-    },
-    timers: {
-      // Named presets the user keeps; running timers live in the browser only.
-      presets: [
-        { label: 'Pomodoro', secs: 1500 },
-        { label: 'Krátká pauza', secs: 300 },
-        { label: 'Steak, každá strana', secs: 240 },
-        { label: 'Pračka', secs: 3300 },
-        { label: 'Šlofík', secs: 1200 },
-      ],
-    },
-    checklists: {
-      // taskId -> [{ id, label, note, done }]
-    },
-    settings: {
-      hue: 193,
-      wakeMin: 405,                 // when the morning brief is read out
-      briefPrompt: 'Shrň mi den. Mluv, drž se pod třemi minutami, začni tím, co se pohnulo nebo je po termínu.',
-      injected: { cal: true, tasks: true, weather: true, mail: false },
-      sources: { cal_osobni: true, cal_prace: true, cal_rodina: true, mail: false, health: true, lights: true },
-      memory: { people: true, work: true, health: true, journal: true, dreams: false },
-      calOn: { 'osobní': true, 'práce': true, 'rodina': true },
-      tools: {},                    // toolName -> allowed; filled from the server's real tool list
-    },
-  };
-}
+/** The JSON document this replaced. Imported once, then renamed aside. */
+export const LEGACY_STATE_PATH =
+  process.env.KACEY_STATE_PATH || path.join(HERE, 'data', 'app-state.json');
 
 /** Sections a client may replace. Anything else is refused. */
 export const SECTIONS = ['tasks', 'journal', 'routine', 'timers', 'checklists', 'settings'];
 
-let doc = null;
-let writeTimer = null;
+const DEFAULT_SETTINGS = {
+  hue: 193,
+  wakeMin: 405,
+  briefPrompt: 'Shrň mi den. Mluv, drž se pod třemi minutami, začni tím, co se pohnulo nebo je po termínu.',
+  injected: { cal: true, tasks: true, weather: true, mail: false },
+  sources: { cal_osobni: true, cal_prace: true, cal_rodina: true, mail: false, health: true, lights: true },
+  memory: { people: true, work: true, health: true, journal: true, dreams: false },
+  calOn: {},
+  tools: {},
+};
 
-/* Merge rather than replace: a document written by an older build is missing
-   whatever this build added, and a missing section must not crash a view. */
-function withDefaults(loaded) {
-  const base = defaults();
-  if (!loaded || typeof loaded !== 'object') return base;
-  const out = { ...base, ...loaded };
-  for (const key of ['routine', 'timers', 'settings', 'journal']) {
-    out[key] = { ...base[key], ...(loaded[key] && typeof loaded[key] === 'object' ? loaded[key] : {}) };
+const DEFAULT_PRESETS = [
+  { label: 'Pomodoro', secs: 1500 },
+  { label: 'Krátká pauza', secs: 300 },
+  { label: 'Steak, každá strana', secs: 240 },
+  { label: 'Pračka', secs: 3300 },
+  { label: 'Šlofík', secs: 1200 },
+];
+
+/* ---- reading ------------------------------------------------------------- */
+
+function readTasks() {
+  return open().prepare(
+    'SELECT * FROM kacey_task ORDER BY sort_order, created_at',
+  ).all().map((r) => ({
+    id: r.task_id,
+    label: r.label,
+    meta: r.meta,
+    group: r.task_group,
+    done: !!r.done,
+    /* Derived, not stored. It used to be a column of its own and drifted from
+       `group` depending on which code path wrote the row. */
+    today: r.task_group !== 'week',
+    ...(r.due_at ? { due_at: r.due_at } : {}),
+  }));
+}
+
+function readJournal() {
+  const entries = open().prepare(
+    'SELECT * FROM kacey_journal_entry ORDER BY created_at',
+  ).all().map((r) => {
+    let tags = [];
+    try { tags = JSON.parse(r.tags); } catch { tags = []; }
+    return {
+      id: r.entry_id,
+      created: r.created_at,
+      updated: r.updated_at,
+      title: r.title,
+      text: r.body,
+      tags,
+      unfinished: !!r.unfinished,
+    };
+  });
+  return { entries };
+}
+
+function readRoutine() {
+  const grid = {}, notes = {};
+  for (const r of open().prepare('SELECT * FROM kacey_routine_block').all()) {
+    const key = r.day + '-' + r.slot;
+    grid[key] = r.category;
+    if (r.note) notes[key] = r.note;
   }
-  if (!Array.isArray(out.tasks)) out.tasks = base.tasks;
-  if (!Array.isArray(out.journal.entries)) out.journal.entries = [];
-  if (!out.checklists || typeof out.checklists !== 'object') out.checklists = {};
-  return out;
+  const hours = kvGet('routine.hours', { wake: 420, sleep: 1350 });
+  return { grid, notes, wake: hours.wake, sleep: hours.sleep };
 }
 
-export function load() {
-  if (doc) return doc;
-  try {
-    doc = withDefaults(JSON.parse(readFileSync(STATE_PATH, 'utf8')));
-  } catch {
-    doc = defaults();               // missing or corrupt: start clean, keep running
-  }
-  return doc;
+/* ---- writing ------------------------------------------------------------- */
+
+function writeTasks(list) {
+  const stamp = now();
+  transact((h) => {
+    h.prepare('DELETE FROM kacey_task').run();
+    const insert = h.prepare(
+      `INSERT INTO kacey_task
+         (task_id, label, meta, task_group, done, due_at, sensitivity, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    (Array.isArray(list) ? list : []).forEach((t, i) => {
+      const group = ['overdue', 'today', 'week'].includes(t.group) ? t.group : 'today';
+      insert.run(
+        String(t.id || ('t' + Date.now() + i)),
+        String(t.label || ''),
+        String(t.meta || ''),
+        group,
+        t.done ? 1 : 0,
+        t.due_at ? String(t.due_at) : null,
+        t.sensitivity === 'local_only' ? 'local_only' : 'cloud_safe',
+        i,
+        String(t.created || stamp),
+        stamp,
+      );
+    });
+  });
 }
 
-/* Write through a temporary file: a crash mid-write leaves the previous
-   document intact rather than a half-written one that will not parse. */
-function flush() {
-  writeTimer = null;
-  try {
-    mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-    const tmp = STATE_PATH + '.tmp';
-    writeFileSync(tmp, JSON.stringify(doc, null, 2), 'utf8');
-    renameSync(tmp, STATE_PATH);
-  } catch (err) {
-    console.warn(`[kacey] could not save app state: ${err.message}`);
-  }
+function writeJournal(value) {
+  const stamp = now();
+  const entries = (value && Array.isArray(value.entries)) ? value.entries : [];
+  transact((h) => {
+    h.prepare('DELETE FROM kacey_journal_entry').run();
+    const insert = h.prepare(
+      `INSERT INTO kacey_journal_entry
+         (entry_id, title, body, tags, unfinished, sensitivity, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const e of entries) {
+      insert.run(
+        String(e.id || ('j' + Date.now())),
+        String(e.title || ''),
+        String(e.text || ''),
+        JSON.stringify(Array.isArray(e.tags) ? e.tags : []),
+        e.unfinished ? 1 : 0,
+        e.sensitivity === 'cloud_safe' ? 'cloud_safe' : 'local_only',
+        String(e.created || stamp),
+        String(e.updated || stamp),
+      );
+    }
+  });
 }
 
-function save() {
-  clearTimeout(writeTimer);
-  writeTimer = setTimeout(flush, 400);
+function writeRoutine(value) {
+  const grid = (value && value.grid) || {};
+  const notes = (value && value.notes) || {};
+  transact((h) => {
+    h.prepare('DELETE FROM kacey_routine_block').run();
+    const insert = h.prepare(
+      'INSERT INTO kacey_routine_block (day, slot, category, note) VALUES (?, ?, ?, ?)',
+    );
+    for (const key of Object.keys(grid)) {
+      const parts = key.split('-');
+      const day = Number(parts[0]), slot = Number(parts[1]);
+      // Skip anything malformed rather than letting a CHECK abort the whole write.
+      if (!Number.isInteger(day) || !Number.isInteger(slot)) continue;
+      if (day < 0 || day > 6 || slot < 0 || slot > 95) continue;
+      insert.run(day, slot, String(grid[key]), notes[key] ? String(notes[key]) : null);
+    }
+  });
+  kvSet('routine.hours', {
+    wake: Number(value && value.wake) || 420,
+    sleep: Number(value && value.sleep) || 1350,
+  });
 }
 
-/** Write the whole document out now — used on shutdown. */
-export function flushNow() {
-  if (writeTimer) { clearTimeout(writeTimer); flush(); }
-}
+/* ---- the document -------------------------------------------------------- */
 
-export function get() { return load(); }
+export function get() {
+  importLegacyOnce();
+  return {
+    version: 2,
+    tasks: readTasks(),
+    journal: readJournal(),
+    routine: readRoutine(),
+    timers: { presets: kvGet('timers.presets', DEFAULT_PRESETS) },
+    checklists: kvGet('checklists', {}),
+    settings: { ...DEFAULT_SETTINGS, ...kvGet('settings', {}) },
+  };
+}
 
 export function setSection(name, value) {
   if (!SECTIONS.includes(name)) throw new Error(`unknown section "${name}"`);
-  load();
-  doc[name] = value;
-  save();
-  return doc[name];
+  importLegacyOnce();
+
+  switch (name) {
+    case 'tasks': writeTasks(value); break;
+    case 'journal': writeJournal(value); break;
+    case 'routine': writeRoutine(value); break;
+    case 'timers': kvSet('timers.presets', (value && value.presets) || []); break;
+    case 'checklists': kvSet('checklists', value || {}); break;
+    case 'settings': kvSet('settings', value || {}); break;
+    default: break;
+  }
+  return get()[name];
 }
+
+/* ---- the one-time import ------------------------------------------------- */
+
+let importChecked = false;
+
+/**
+ * Move an existing JSON document into the tables, once.
+ *
+ * Marked in the database rather than by the file's absence, so a restored
+ * backup of app-state.json cannot silently overwrite newer rows. The file is
+ * renamed aside afterwards rather than deleted — it is the only copy of
+ * somebody's journal until they are sure this worked.
+ */
+function importLegacyOnce() {
+  if (importChecked) return;
+  importChecked = true;
+
+  open();
+  if (kvGet('migrated.from_json', false)) return;
+  if (!existsSync(LEGACY_STATE_PATH)) { kvSet('migrated.from_json', true); return; }
+
+  let doc;
+  try {
+    doc = JSON.parse(readFileSync(LEGACY_STATE_PATH, 'utf8'));
+  } catch (err) {
+    console.warn(`[kacey] could not read ${LEGACY_STATE_PATH} (${err.message}); starting empty`);
+    kvSet('migrated.from_json', true);
+    return;
+  }
+
+  try {
+    if (Array.isArray(doc.tasks)) writeTasks(doc.tasks);
+    if (doc.journal) writeJournal(doc.journal);
+    if (doc.routine) writeRoutine(doc.routine);
+    if (doc.timers && Array.isArray(doc.timers.presets)) kvSet('timers.presets', doc.timers.presets);
+    if (doc.checklists) kvSet('checklists', doc.checklists);
+    if (doc.settings) kvSet('settings', doc.settings);
+    kvSet('migrated.from_json', true);
+
+    const aside = LEGACY_STATE_PATH + '.migrated';
+    renameSync(LEGACY_STATE_PATH, aside);
+    console.log(
+      `[kacey] imported ${LEGACY_STATE_PATH} into SQLite ` +
+      `(${(doc.tasks || []).length} tasks, ${((doc.journal || {}).entries || []).length} journal entries); ` +
+      `the file is kept at ${aside}`,
+    );
+  } catch (err) {
+    console.warn(`[kacey] import of ${LEGACY_STATE_PATH} failed: ${err.message}`);
+  }
+}
+
+/* ---- tools --------------------------------------------------------------- */
 
 /**
  * Seed the tool list from the server's allow-list, so the controller shows the
- * tools that actually exist instead of a hard-coded guess. Existing choices
- * win — this only adds tools the document has never seen.
+ * tools this build actually exposes. Existing choices win.
  *
- * Only the allow-list. The disallowed built-ins (shell, file access, the web)
- * are policy, not preference: they are refused in server.js whatever this
- * document says, so offering a switch for them would be a switch that lies.
+ * Only the allow-list. The disallowed built-ins are policy, not preference:
+ * they are refused in server.js whatever this document says, so offering a
+ * switch for them would be a switch that lies.
  */
 export function seedTools(allowed = []) {
-  load();
-  const tools = { ...doc.settings.tools };
+  const settings = { ...DEFAULT_SETTINGS, ...kvGet('settings', {}) };
+  const tools = { ...settings.tools };
   let changed = false;
+
   for (const name of allowed) if (!(name in tools)) { tools[name] = true; changed = true; }
-  // Drop anything the server no longer offers, including built-ins seeded by
-  // an earlier build — a dead switch is worse than a missing one.
+  // Drop anything the server no longer offers — a dead switch is worse than a
+  // missing one.
   for (const name of Object.keys(tools)) {
     if (!allowed.includes(name)) { delete tools[name]; changed = true; }
   }
-  if (changed) { doc.settings = { ...doc.settings, tools }; save(); }
+  if (changed) kvSet('settings', { ...settings, tools });
   return tools;
 }
 
 /** Is a tool allowed right now? Consulted before the agent is given the list. */
 export function toolAllowed(name) {
-  load();
-  return doc.settings.tools[name] !== false;
+  const settings = { ...DEFAULT_SETTINGS, ...kvGet('settings', {}) };
+  return settings.tools[name] !== false;
 }
 
-export { defaults };
-
-if (!existsSync(path.dirname(STATE_PATH))) {
-  try { mkdirSync(path.dirname(STATE_PATH), { recursive: true }); } catch { /* created on first write */ }
-}
+/** Nothing is buffered any more, but shutdown still calls this. */
+export function flushNow() { close(); }

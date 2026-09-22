@@ -18,5 +18,7 @@ Thumbs.db
 .venv-xtts/
 voicelab/samples/
 
-# the app document: tasks, journal entries, the routine — personal, and local
+# Kacey's own records now live in klaus_memory's SQLite file (see db.js).
+# data/ remains ignored: it holds the pre-SQLite app-state.json on machines
+# that have not started the new build yet, plus its .migrated copy afterwards.
 data/
