@@ -45,10 +45,30 @@ export function go(view) {
     try { history.replaceState(null, '', '#' + view); } catch (e) { /* file:// */ }
   }
 
+  paintTabs(view);
+
   var hooks = enterHooks[view] || [];
   for (var h = 0; h < hooks.length; h++) {
     try { hooks[h](); } catch (e) { console.error('[kacey] view hook failed', e); }
   }
+}
+
+/* The tab bar mirrors the router rather than holding its own state. Views
+   reachable only from "Víc" light no tab, which is honest — none of the five
+   is where you are. */
+function paintTabs(view) {
+  var tabs = document.querySelectorAll('.tab[data-tab]');
+  for (var i = 0; i < tabs.length; i++) {
+    if (tabs[i].getAttribute('data-tab') === view) tabs[i].setAttribute('aria-current', 'true');
+    else tabs[i].removeAttribute('aria-current');
+  }
+}
+
+function openMore(open) {
+  var sheet = $('moreSheet'), button = $('tabMore');
+  if (!sheet) return;
+  sheet.hidden = !open;
+  if (button) button.setAttribute('aria-expanded', String(open));
 }
 
 export function initRouter() {
@@ -60,6 +80,19 @@ export function initRouter() {
     ev.preventDefault();
     go(btn.getAttribute('data-go'));
   });
+
+  var more = $('tabMore');
+  if (more) more.addEventListener('click', function () { openMore($('moreSheet').hidden); });
+  var moreClose = $('moreClose');
+  if (moreClose) moreClose.addEventListener('click', function () { openMore(false); });
+  var moreSheet = $('moreSheet');
+  if (moreSheet) {
+    moreSheet.addEventListener('click', function (ev) { if (ev.target === moreSheet) openMore(false); });
+    // Any destination inside it closes it on the way out.
+    moreSheet.addEventListener('click', function (ev) {
+      if (ev.target.closest && ev.target.closest('[data-go]')) openMore(false);
+    });
+  }
 
   var ctrl = $('controllerBtn');
   if (ctrl) ctrl.addEventListener('click', function () {

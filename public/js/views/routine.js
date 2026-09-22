@@ -113,6 +113,83 @@ function paint(day, slot) {
   if (changed) store.patch('routine', Object.assign({}, routine, { grid: grid }));
 }
 
+/* ---- painting with a finger ---------------------------------------------
+   A touch drag fires touchmove and nothing else: mouseenter never happens, so
+   the mouse path above paints exactly one cell on a phone and the rest of the
+   stroke is lost. A tap still works through synthesised mouse events; this is
+   what makes dragging work.
+
+   The gesture is ambiguous at the first move — sideways means "paint this
+   range", up and down means "scroll the sheet", and the grid also scrolls
+   sideways because it is wider than the screen. So the direction is decided
+   once, on the first movement past a small threshold, and then held:
+
+     mostly horizontal -> paint, and preventDefault so the grid stops scrolling
+     mostly vertical   -> leave it alone and let the browser scroll
+
+   Deciding once is what stops a stroke turning into a scroll halfway across
+   the row. */
+
+function cellAt(x, y) {
+  var node = document.elementFromPoint(x, y);
+  if (!node || !node.classList || !node.classList.contains('cell')) return null;
+  var key = node.getAttribute('data-cell');
+  if (!key) return null;
+  var parts = key.split('-');
+  return { day: Number(parts[0]), slot: Number(parts[1]) };
+}
+
+function initTouchPainting(host) {
+  var startX = 0, startY = 0;
+  var decided = null;          // null | 'paint' | 'scroll'
+  var strokeDay = -1;          // a stroke belongs to the row it started in
+
+  host.addEventListener('touchstart', function (ev) {
+    if (ev.touches.length !== 1) { decided = 'scroll'; return; }
+    startX = ev.touches[0].clientX;
+    startY = ev.touches[0].clientY;
+    decided = null;
+    painting = false;
+    lastSlot = -1;
+    strokeDay = -1;
+  }, { passive: true });
+
+  host.addEventListener('touchmove', function (ev) {
+    if (decided === 'scroll' || ev.touches.length !== 1) return;
+    var touch = ev.touches[0];
+
+    if (decided === null) {
+      var dx = Math.abs(touch.clientX - startX);
+      var dy = Math.abs(touch.clientY - startY);
+      if (dx < 8 && dy < 8) return;            // too small to read yet
+      decided = dx > dy ? 'paint' : 'scroll';
+      if (decided === 'scroll') return;
+
+      // Start from where the finger went down, so the first few pixels of the
+      // drag are not dropped.
+      var origin = cellAt(startX, startY);
+      if (!origin) { decided = 'scroll'; return; }
+      strokeDay = origin.day;
+      paint(origin.day, origin.slot);
+      painting = true;
+      lastSlot = origin.slot;
+    }
+
+    ev.preventDefault();                       // this gesture is ours now
+    var cell = cellAt(touch.clientX, touch.clientY);
+    // A finger that strays into the row above must not repaint that day.
+    if (cell && cell.day === strokeDay) paint(cell.day, cell.slot);
+  }, { passive: false });
+
+  function end() {
+    if (painting) { painting = false; lastSlot = -1; render(); }
+    decided = null;
+    strokeDay = -1;
+  }
+  host.addEventListener('touchend', end);
+  host.addEventListener('touchcancel', end);
+}
+
 /* ---- rendering ---------------------------------------------------------- */
 
 function renderBrushes() {
@@ -283,6 +360,8 @@ export function initRoutine() {
       ev.preventDefault();
     }
   }, true);
+
+  initTouchPainting($('routineGrid'));
 
   // A drag that ends outside the grid still has to stop painting.
   window.addEventListener('mouseup', function () {
