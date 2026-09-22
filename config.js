@@ -25,7 +25,22 @@ export const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Server and model
 // ---------------------------------------------------------------------------
 
-export const PORT = Number(process.env.PORT || 8787);
+export const PORT = Number(process.env.PORT || 8082);
+
+/* Which interface to listen on.
+ *
+ * Loopback by default, deliberately: this server hands a logged-in Claude
+ * session to anything that can reach it, so it must not appear on a network
+ * by accident. Set HOST to expose it on purpose — a Tailscale address to
+ * reach it as `kaceybody:8082` from the tailnet, or 0.0.0.0 for every
+ * interface, which on a laptop means the coffee-shop wifi too.
+ *
+ * Note that a browser only grants the microphone on a secure origin: https,
+ * or localhost. Reached over plain http at a hostname, speech recognition is
+ * refused by the browser and Kacey says so — so an exposed HOST wants a TLS
+ * front (tailscale serve) if voice is meant to work there.
+ */
+export const HOST = process.env.HOST || '127.0.0.1';
 export const MODEL = process.env.KACEY_MODEL || 'claude-opus-5';
 export const PERSONA_PATH = process.env.KACEY_PERSONA_PATH || path.join(HERE, 'persona', 'kacey.md');
 export const PUBLIC_DIR = path.join(HERE, 'public');

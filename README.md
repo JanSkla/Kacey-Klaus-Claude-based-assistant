@@ -17,7 +17,7 @@ claude mcp add klaus-memory -- python -m klaus_memory --db D:/code/hobby/lukas/K
 npm start
 ```
 
-Then open <http://localhost:8787>.
+Then open <http://localhost:8082>.
 
 Authentication comes from the Claude CLI — run `claude` once in a terminal and log
 in. No `ANTHROPIC_API_KEY` is needed if you are logged in. If Claude is not
@@ -33,7 +33,7 @@ npm run test:wake
 Check it is alive:
 
 ```sh
-curl http://localhost:8787/api/health
+curl http://localhost:8082/api/health
 # {"ok":true,"model":"claude-opus-5","mcpServers":["klaus-memory"]}
 ```
 
@@ -149,7 +149,18 @@ All environment variables, all with working defaults — see `.env.example`.
 
 | Variable                  | Default                                | Notes                                     |
 | ------------------------- | -------------------------------------- | ----------------------------------------- |
-| `PORT`                    | `8787`                                 |                                           |
+| `PORT`                    | `8082`                                 |                                           |
+| `HOST`                    | `127.0.0.1`                            | Interface to bind; see the note below     |
+
+> **`HOST` and the microphone.** Kacey listens on loopback by default: the
+> server hands out a logged-in Claude session, so it must not turn up on a
+> network by accident. Point `HOST` at a Tailscale address to reach it as
+> `kaceybody:8082` from the tailnet, or `0.0.0.0` for every interface.
+>
+> A browser only grants the microphone on a *secure* origin — https, or
+> localhost. Over plain http at a hostname the browser refuses speech
+> recognition and Kacey says so. To use voice from a phone, put TLS in front:
+> `tailscale serve --bg 8082` gives a real certificate on the tailnet.
 | `KACEY_MODEL`             | `claude-opus-5`                        |                                           |
 | `KACEY_PERSONA_PATH`      | `./persona/kacey.md`                   | Missing file → built-in default + warning |
 | `PYTHON_BIN`              | `python`                               | Launches the MCP server                   |

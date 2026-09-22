@@ -21,7 +21,7 @@ import * as appstate from './appstate.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 
 import {
-  HERE, PORT, MODEL, PERSONA_PATH, PUBLIC_DIR,
+  HERE, PORT, HOST, MODEL, PERSONA_PATH, PUBLIC_DIR,
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
@@ -927,8 +927,8 @@ wss.on('connection', (ws) => {
   ws.on('error', (err) => log('websocket error:', err?.message || err));
 });
 
-server.listen(PORT, () => {
-  log(`listening on http://localhost:${PORT}  (ws://localhost:${PORT}/ws)`);
+server.listen(PORT, HOST, () => {
+  log(`listening on http://${HOST}:${PORT}  (ws://${HOST}:${PORT}/ws)`);
   log(`model=${MODEL}`);
   log(`memory db=${KLAUS_DB}`);
   // A missing database is not an error to SQLite — it creates an empty one and
