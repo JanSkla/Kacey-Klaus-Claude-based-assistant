@@ -22,6 +22,7 @@ import { state } from '../core/state.js';
 import * as store from '../core/store.js';
 import { go, onEnter, currentView } from '../ui/router.js';
 import { say } from '../ui/toast.js';
+import { openSheet } from '../ui/psheet.js';
 import {
   setDictationSink, startRecognition, stopRecognition, recognitionAvailable
 } from '../voice/recognition.js';
@@ -248,9 +249,12 @@ function paintRecState() {
   else if (interimText) { note.textContent = '… ' + interimText; }
   else { note.textContent = 'Nahrávám · řekni „konec“ pro ukončení'; }
 
-  var btn = $('jDictate');
-  btn.setAttribute('aria-pressed', String(dictating));
-  $('jDictateLabel').textContent = dictating ? 'Pauza diktování' : 'Diktovat';
+  // Two of these: the editor's footer on desktop, the clock card on a phone.
+  var btns = document.querySelectorAll('[data-dictate]');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].setAttribute('aria-pressed', String(dictating));
+    btns[i].querySelector('[data-dictate-label]').textContent = dictating ? 'Pauza diktování' : 'Diktovat';
+  }
 }
 
 function paintStats() {
@@ -285,13 +289,65 @@ function renderUnfinished() {
   }) : el('p.muted-3', { style: 'padding:0 12px 10px' }, 'Nic rozepsaného.'));
 }
 
+/* ---- tags ---------------------------------------------------------------
+   The entry's tags sit above the text as chips; the library filters on the
+   same list. Adding one opens a field in the strip rather than a browser
+   prompt, which would steal focus from dictation and look like an error. */
+
+var tagging = false;
+
+function setTags(tags) {
+  writeEntries(entries().map(function (e) {
+    return e.id === currentId ? Object.assign({}, e, { tags: tags }) : e;
+  }));
+}
+
+function renderTags() {
+  var host = $('jTags');
+  var entry = activeEntry();
+  var tags = (entry && entry.tags) || [];
+  host.hidden = !tags.length && !tagging;
+
+  var nodes = tags.map(function (t) {
+    return el('span.tag', [
+      t,
+      el('button.tag__x', {
+        type: 'button', 'aria-label': 'Odebrat tag ' + t,
+        onclick: function () { setTags(tags.filter(function (x) { return x !== t; })); }
+      }, '×')
+    ]);
+  });
+
+  if (tagging) {
+    var input = el('input.input.tag__input', {
+      type: 'text', placeholder: 'nový tag…', 'aria-label': 'Nový tag', autocomplete: 'off',
+      onkeydown: function (ev) {
+        if (ev.key === 'Escape') { ev.stopPropagation(); tagging = false; renderTags(); }
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        var tag = input.value.trim().toLowerCase();
+        tagging = false;
+        if (tag && tags.indexOf(tag) === -1) { setTags(tags.concat([tag])); say('Tag přidán · ' + tag); }
+        else renderTags();
+      },
+      // isConnected: a re-render removing the field must not read as the user leaving it.
+      onblur: function () { if (tagging && input.isConnected) { tagging = false; renderTags(); } }
+    });
+    nodes.push(input);
+    fill(host, nodes);
+    input.focus();
+    return;
+  }
+  fill(host, nodes);
+}
+
 function renderAll() {
   if (!$('jText')) return;
   var entry = activeEntry();
   if (entry && document.activeElement !== $('jText')) $('jText').value = entry.text || '';
   if (!entry) $('jText').value = '';
   $('jSaved').textContent = currentId ? 'uloženo' : 'nová relace';
-  paintStats(); paintClock(); paintRecState(); renderUnfinished(); renderChat();
+  paintStats(); paintClock(); paintRecState(); renderUnfinished(); renderChat(); renderTags();
 }
 
 /* ---- wiring ------------------------------------------------------------- */
@@ -304,19 +360,20 @@ export function initJournal(askKacey) {
     paintStats();
   });
 
-  $('jDictate').addEventListener('click', toggleDictation);
+  var dictateBtns = document.querySelectorAll('[data-dictate]');
+  for (var i = 0; i < dictateBtns.length; i++) dictateBtns[i].addEventListener('click', toggleDictation);
+  // The side chat is a card beside the editor on desktop, a sheet on a phone.
+  $('jChatOpen').addEventListener('click', function () {
+    openSheet($('jChatCard'));
+    renderChat();
+    $('jChatInput').focus();
+  });
   $('jFinish').addEventListener('click', finish);
   $('jNew').addEventListener('click', function () { newEntry(); say('Nová relace deníku.'); });
   $('jTag').addEventListener('click', function () {
     if (!currentId) { say('Nejdřív něco napiš — tagovat jde až uložený zápis.'); return; }
-    var tag = prompt('Tag pro tenhle zápis:');
-    if (!tag) return;
-    writeEntries(entries().map(function (e) {
-      return e.id === currentId
-        ? Object.assign({}, e, { tags: (e.tags || []).concat([String(tag).trim().toLowerCase()]) })
-        : e;
-    }));
-    say('Tag přidán · ' + tag);
+    tagging = true;
+    renderTags();
   });
 
   $('jChatForm').addEventListener('submit', function (ev) {
@@ -343,7 +400,7 @@ export function initJournal(askKacey) {
   });
 
   // Leaving the view must let go of the microphone.
-  ['main', 'tasks', 'calendar', 'brief', 'timer', 'controller', 'library', 'focus', 'task']
+  ['main', 'tasks', 'calendar', 'brief', 'timer', 'lights', 'controller', 'library', 'focus', 'task']
     .forEach(function (v) { onEnter(v, stopDictation); });
 
   store.onChange(function () { if (currentView() === 'journal') renderAll(); });

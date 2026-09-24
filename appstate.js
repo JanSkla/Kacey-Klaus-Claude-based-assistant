@@ -23,8 +23,9 @@
 import { readFileSync, renameSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { HERE } from './config.js';
+import { HERE, LOGICAL_DAY_START_HOUR } from './config.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
+import { dueFromGroup, normalizeDue, parseDue } from './public/js/core/due.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
 export const LEGACY_STATE_PATH =
@@ -61,12 +62,13 @@ function readTasks() {
     id: r.task_id,
     label: r.label,
     meta: r.meta,
-    group: r.task_group,
     done: !!r.done,
-    /* Derived, not stored. It used to be a column of its own and drifted from
-       `group` depending on which code path wrote the row. */
-    today: r.task_group !== 'week',
-    ...(r.due_at ? { due_at: r.due_at } : {}),
+    /* Which group it shows in (overdue, today, …) is not here: the browser
+       works it out from due_at and the clock (public/js/core/due.js). */
+    due_at: r.due_at || null,
+    ...(r.duration_min ? { duration: r.duration_min } : {}),
+    sensitivity: r.sensitivity,
+    created: r.created_at,
   }));
 }
 
@@ -102,24 +104,35 @@ function readRoutine() {
 
 /* ---- writing ------------------------------------------------------------- */
 
+/* A task's due date as stored. A task from before due dates (an old JSON
+   import, a page loaded before the upgrade) has only a `group`; it gets the
+   date that group meant today. Anything unreadable is "whenever" rather than
+   an error that would lose the rest of the list. */
+function taskDue(t) {
+  if (!('due_at' in t) && t.group) return dueFromGroup(t.group, new Date(), LOGICAL_DAY_START_HOUR);
+  try { return normalizeDue(t.due_at); } catch { return null; }
+}
+
 function writeTasks(list) {
   const stamp = now();
   transact((h) => {
     h.prepare('DELETE FROM kacey_task').run();
     const insert = h.prepare(
       `INSERT INTO kacey_task
-         (task_id, label, meta, task_group, done, due_at, sensitivity, sort_order, created_at, updated_at)
+         (task_id, label, meta, done, due_at, duration_min, sensitivity, sort_order, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     (Array.isArray(list) ? list : []).forEach((t, i) => {
-      const group = ['overdue', 'today', 'week'].includes(t.group) ? t.group : 'today';
+      const due = taskDue(t);
+      const timed = !!(parseDue(due) || {}).time;
+      const minutes = Math.round(Number(t.duration));
       insert.run(
         String(t.id || ('t' + Date.now() + i)),
         String(t.label || ''),
         String(t.meta || ''),
-        group,
         t.done ? 1 : 0,
-        t.due_at ? String(t.due_at) : null,
+        due,
+        timed && minutes >= 5 ? Math.min(minutes, 1440) : null,
         t.sensitivity === 'local_only' ? 'local_only' : 'cloud_safe',
         i,
         String(t.created || stamp),

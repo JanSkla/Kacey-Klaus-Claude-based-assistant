@@ -24,32 +24,39 @@
 
 import { DatabaseSync } from 'node:sqlite';
 
-import { KLAUS_DB } from './config.js';
+import { KLAUS_DB, LOGICAL_DAY_START_HOUR } from './config.js';
+import { dueFromGroup, normalizeDue } from './public/js/core/due.js';
 
 let db = null;
 
-/* Kacey's tables. `IF NOT EXISTS` throughout: this runs on every boot and must
-   be a no-op once the tables are there. Anything that ever needs to CHANGE a
-   table goes in migrate() below, where it can be versioned. */
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS kacey_task (
+/* The task table, by name, so the migration below can build its replacement
+   from the same definition the schema uses. */
+const taskTable = (name) => `
+CREATE TABLE IF NOT EXISTS ${name} (
   task_id      TEXT PRIMARY KEY,
   label        TEXT NOT NULL,
   meta         TEXT NOT NULL DEFAULT '',
-  -- "group" is a SQL keyword, hence the prefix.
-  task_group   TEXT NOT NULL CHECK (task_group IN ('overdue','today','week')),
   done         INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0,1)),
-  -- Optional time anchor. A task with one is a calendar-shaped item and can be
-  -- shown in a day view; a task without one is just a list entry.
+  -- When it is due, local time: 'YYYY-MM-DD' (some time that day) or
+  -- 'YYYY-MM-DDTHH:MM' (at that time, and shown in the calendar). NULL is
+  -- "whenever". Overdue / today / this week are worked out from this when the
+  -- list is shown (public/js/core/due.js), never stored.
   due_at       TEXT,
+  -- Only for a timed task: how long it takes, so the calendar can draw it.
+  duration_min INTEGER CHECK (duration_min IS NULL OR duration_min BETWEEN 5 AND 1440),
   sensitivity  TEXT NOT NULL DEFAULT 'cloud_safe'
                CHECK (sensitivity IN ('cloud_safe','local_only')),
   sort_order   INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS kacey_task_group_idx ON kacey_task (task_group, done);
-CREATE INDEX IF NOT EXISTS kacey_task_due_idx   ON kacey_task (due_at);
+);`;
+
+/* Kacey's tables. `IF NOT EXISTS` throughout: this runs on every boot and must
+   be a no-op once the tables are there. Anything that ever needs to CHANGE a
+   table goes in migrate() below. */
+const SCHEMA = `
+${taskTable('kacey_task')}
+CREATE INDEX IF NOT EXISTS kacey_task_due_idx ON kacey_task (due_at);
 
 CREATE TABLE IF NOT EXISTS kacey_journal_entry (
   entry_id     TEXT PRIMARY KEY,
@@ -104,7 +111,54 @@ export function open() {
   db.exec('PRAGMA foreign_keys = ON');
 
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/* ---- migrations -----------------------------------------------------------
+   Each one looks at the table itself to decide whether it is needed, rather
+   than at a version number: PRAGMA user_version belongs to the whole file, and
+   the file is klaus_memory's. */
+
+function migrate(h) {
+  const taskCols = h.prepare('PRAGMA table_info(kacey_task)').all().map((c) => c.name);
+  if (taskCols.includes('task_group')) dropTaskGroups(h);
+}
+
+/* Tasks used to sit in a fixed group — overdue, today, this week — written
+   when the task was made and never moved again, so a "today" task was still
+   "today" a week later. The group becomes the date it meant on the day this
+   runs (today; yesterday for overdue; Sunday for this week), and the column
+   goes. SQLite cannot drop a column with a CHECK on it, so the table is
+   rebuilt: new table, copy, swap — inside one transaction. */
+function dropTaskGroups(h) {
+  h.exec('BEGIN IMMEDIATE');
+  try {
+    const rows = h.prepare('SELECT * FROM kacey_task').all();
+    h.exec(taskTable('kacey_task_next'));
+    const insert = h.prepare(
+      `INSERT INTO kacey_task_next
+         (task_id, label, meta, done, due_at, duration_min, sensitivity, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+    );
+    for (const r of rows) {
+      let due = null;
+      try { due = normalizeDue(r.due_at); } catch { /* unreadable: fall back to the group */ }
+      insert.run(
+        r.task_id, r.label, r.meta, r.done,
+        due || dueFromGroup(r.task_group, new Date(), LOGICAL_DAY_START_HOUR),
+        r.sensitivity, r.sort_order, r.created_at, r.updated_at,
+      );
+    }
+    h.exec('DROP TABLE kacey_task');
+    h.exec('ALTER TABLE kacey_task_next RENAME TO kacey_task');
+    h.exec('CREATE INDEX IF NOT EXISTS kacey_task_due_idx ON kacey_task (due_at)');
+    h.exec('COMMIT');
+    console.log(`[db] tasks: fixed groups became due dates (${rows.length} rows)`);
+  } catch (err) {
+    try { h.exec('ROLLBACK'); } catch { /* the BEGIN never took */ }
+    throw err;
+  }
 }
 
 export function close() {

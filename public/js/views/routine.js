@@ -21,6 +21,7 @@ import { $ } from '../core/dom.js';
 import { el, fill, hhmm } from '../core/el.js';
 import * as store from '../core/store.js';
 import { say } from '../ui/toast.js';
+import { isPhone } from '../ui/psheet.js';
 
 export var CATS = {
   routine: { label: 'Rutina', color: '#d2a106' },
@@ -35,9 +36,15 @@ var DAYS = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
 
 var brush = 'work';
 var noteSel = null;
+var noteDraft = null;      // the note being typed, kept across re-renders
 var painting = false;
 var lastSlot = -1;         // where the current drag was last seen
 var sheet = null;
+/* The routine as it was when the planner opened. Every stroke is saved as it
+   is painted, so "undo" cannot mean "don't save" — it means "put back what
+   was there when I opened this", for as long as the planner stays open. */
+var snapshot = null;
+var phoneDay = (new Date().getDay() + 6) % 7;   // the one day a phone paints at a time
 
 /** Monday-first weekday index of a 'YYYY-MM-DD'. Exported for the calendar. */
 export function dayIndexOfDate(date) {
@@ -84,7 +91,9 @@ function paint(day, slot) {
     var minute = slot * 15;
     if (minute < routine.wake || minute >= routine.sleep) return;
     var hit = blocksFor(day).filter(function (b) { return minute >= b.s && minute < b.e; })[0];
+    saveNote();
     noteSel = hit ? hit.key : null;
+    noteDraft = null;
     render();
     return;
   }
@@ -256,8 +265,26 @@ function renderGrid() {
       })(gStart / 15 + n);
     }
 
+    /* Each block names itself on the row, so the week reads without hovering.
+       pointer-events:none in the CSS — the label must not eat the drag. */
+    var span = gEnd - gStart;
+    var labels = blocks.map(function (b) {
+      var len = b.e - b.s;
+      return el('span.grid__label', {
+        style: 'left:calc(' + ((b.s - gStart) / span * 100) + '% + 1px);' +
+               'width:calc(' + (len / span * 100) + '% - 2px);border-left-color:' + CATS[b.cat].color
+      }, [
+        el('b', b.note || CATS[b.cat].label),
+        el('em', len >= 60 ? hhmm(b.s) + '–' + hhmm(b.e) : hhmm(b.s))
+      ]);
+    });
+
+    var row = [el('div.grid__cells', { style: 'grid-template-columns:repeat(' + slots + ',1fr)' }, cells)].concat(labels);
+    var noteBlock = noteSel && blocks.filter(function (b) { return b.key === noteSel; })[0];
+    if (noteBlock && !isPhone()) row.push(noteEditor(day, noteBlock, (noteBlock.s - gStart) / span * 100));
+
     nodes.push(el('span.grid__day' + (day === todayIdx ? '.is-today' : ''), name));
-    nodes.push(el('div.grid__cells', { style: 'grid-template-columns:repeat(' + slots + ',1fr)' }, cells));
+    nodes.push(el('div.grid__row', row));
     nodes.push(el('span.grid__hours', hours + ' h'));
   });
 
@@ -266,13 +293,159 @@ function renderGrid() {
   $('sleepLabelR').textContent = hhmm(sleep);
 }
 
+/* ---- naming a block -----------------------------------------------------
+   Opens under the block it names. The note is saved on Hotovo, on Enter, or
+   when another block is picked — not per keystroke: every store write
+   rebuilds the grid, and the field would be rebuilt under the cursor. */
+
+function noteEditor(day, block, leftPct, inline) {
+  var saved = (store.data.routine.notes || {})[block.key] || '';
+  var input = el('input.input#noteValue', {
+    type: 'text', autocomplete: 'off', value: noteDraft != null ? noteDraft : saved,
+    placeholder: 'Poznámka — „Laborka“…', 'aria-label': 'Poznámka k bloku',
+    oninput: function () { noteDraft = input.value; }
+  });
+  return el('form.noteedit' + (inline ? '.noteedit--inline' : ''), {
+    style: (inline ? '' : 'left:clamp(0px, calc(' + leftPct + '% - 0px), calc(100% - 300px));') +
+           'border-left-color:' + CATS[block.cat].color,
+    onsubmit: function (ev) { ev.preventDefault(); closeNote(); }
+  }, [
+    el('span.is-acc', DAYS[day] + ' ' + hhmm(block.s) + '–' + hhmm(block.e) + ' · ' + CATS[block.cat].label),
+    el('span.row', [input, el('button.btn.btn--accent.btn--sm', { type: 'submit' }, 'Hotovo')])
+  ]);
+}
+
+function saveNote() {
+  if (!noteSel || noteDraft == null) return;
+  var notes = Object.assign({}, store.data.routine.notes);
+  var value = noteDraft.trim();
+  noteDraft = null;
+  if ((notes[noteSel] || '') === value) return;
+  if (value) notes[noteSel] = value; else delete notes[noteSel];
+  store.patch('routine', Object.assign({}, store.data.routine, { notes: notes }));
+}
+
+function closeNote() {
+  saveNote();
+  noteSel = null;
+  render();
+}
+
+/* ---- undo to the state at open ------------------------------------------ */
+
+function shape(r) {
+  return JSON.stringify({ grid: r.grid || {}, notes: r.notes || {}, wake: r.wake, sleep: r.sleep });
+}
+
+function isDirty() {
+  return !!snapshot && shape(store.data.routine) !== shape(snapshot);
+}
+
+function renderDirty() {
+  var dirty = isDirty();
+  $('routineDirty').hidden = !dirty;
+  var btn = $('revertRoutine');
+  btn.disabled = !dirty;
+  btn.textContent = dirty ? '↶ Vrátit změny' : 'Beze změn';
+  btn.classList.toggle('btn--outlineaccent', dirty);
+}
+
+function revert() {
+  if (!isDirty()) return;
+  noteSel = null; noteDraft = null;
+  $('confirmClear').hidden = true;
+  store.patch('routine', Object.assign({}, store.data.routine, JSON.parse(shape(snapshot))));
+  say('Rutina vrácena do stavu při otevření.');
+}
+
+/* ---- the phone: one day, top to bottom -----------------------------------
+   A week of hours does not fit across 375px, and scrolling a grid sideways
+   while painting it is two gestures fighting. So a phone picks a day and
+   paints it as one column: the hours run down, the finger drags down. */
+
+function renderDayPainter() {
+  var routine = store.data.routine;
+  var wake = routine.wake, sleep = routine.sleep;
+  var gStart = Math.max(0, Math.floor((wake - 60) / 60) * 60);
+  var gEnd = Math.min(1440, Math.ceil((sleep + 60) / 60) * 60);
+  var day = phoneDay;
+  var blocks = blocksFor(day);
+
+  fill($('routineDays'), DAYS.map(function (name, d) {
+    var mins = blocksFor(d).reduce(function (a, b) { return a + (b.e - b.s); }, 0);
+    return el('button.daypick__day', {
+      type: 'button', 'aria-pressed': String(d === day),
+      onclick: function () { saveNote(); noteSel = null; phoneDay = d; render(); }
+    }, [el('span', name), el('em', (Math.round(mins / 6) / 10) + ' h')]);
+  }));
+
+  var nodes = [];
+  for (var slot = gStart / 15; slot < gEnd / 15; slot++) {
+    (function (slot) {
+      var minute = slot * 15;
+      var asleep = minute < wake || minute >= sleep;
+      var cat = routine.grid[day + '-' + slot];
+      var start = blocks.filter(function (b) { return b.s === minute; })[0];
+      var selected = noteSel && blocks.some(function (b) {
+        return b.key === noteSel && minute >= b.s && minute < b.e;
+      });
+      nodes.push(el('button.cell.cell--v' +
+        (minute % 60 === 0 ? '.is-hour' : '') + (asleep ? '.is-asleep' : '') + (selected ? '.is-sel' : ''), {
+        type: 'button', 'aria-label': 'Natřít ' + DAYS[day] + ' ' + hhmm(minute),
+        'data-cell': day + '-' + slot,
+        style: asleep ? '' : 'background:' + (cat ? CATS[cat].color + '66' : 'var(--l2)'),
+        onmousedown: function (ev) {
+          ev.preventDefault();
+          painting = false; lastSlot = -1;
+          paint(day, slot);
+          painting = true; lastSlot = slot;
+        },
+        onmouseenter: function () { if (painting) paint(day, slot); }
+      }, [
+        minute % 60 === 0 ? el('span.cell__time', hhmm(minute)) : null,
+        start ? el('span.cell__name', (start.note || CATS[start.cat].label) +
+          (start.e - start.s >= 60 ? '  ' + hhmm(start.s) + '–' + hhmm(start.e) : '')) : null
+      ]));
+      if (start && start.key === noteSel && isPhone()) nodes.push(noteEditor(day, start, 0, true));
+    })(slot);
+  }
+  fill($('routineCol'), nodes);
+}
+
+/* Touch on the column: every move paints. The cells carry touch-action:none,
+   so the browser does not scroll under the finger; the time gutter beside
+   them and the rest of the sheet still scroll normally. */
+function initColumnTouch(host) {
+  var strokeDay = -1;
+  host.addEventListener('touchstart', function (ev) {
+    var cell = ev.touches.length === 1 && cellAt(ev.touches[0].clientX, ev.touches[0].clientY);
+    if (!cell) return;
+    ev.preventDefault();
+    painting = false; lastSlot = -1;
+    paint(cell.day, cell.slot);
+    painting = true; lastSlot = cell.slot; strokeDay = cell.day;
+  }, { passive: false });
+  host.addEventListener('touchmove', function (ev) {
+    if (!painting || ev.touches.length !== 1) return;
+    ev.preventDefault();
+    var cell = cellAt(ev.touches[0].clientX, ev.touches[0].clientY);
+    if (cell && cell.day === strokeDay) paint(cell.day, cell.slot);
+  }, { passive: false });
+  function end() {
+    if (painting) { painting = false; lastSlot = -1; render(); }
+    strokeDay = -1;
+  }
+  host.addEventListener('touchend', end);
+  host.addEventListener('touchcancel', end);
+}
+
 /* Repaint the cells without rebuilding them.
    A full render mid-drag replaces the very elements the drag is travelling
    over, and the new ones never receive the mouseenter that was already on its
    way — so the stroke dies after one cell. */
 function repaintCells() {
   var routine = store.data.routine;
-  var cells = $('routineGrid').querySelectorAll('.cell');
+  var cells = sheet.querySelectorAll('.cell');
   for (var i = 0; i < cells.length; i++) {
     var node = cells[i];
     if (node.classList.contains('is-asleep')) continue;
@@ -310,34 +483,27 @@ function renderTotals() {
   fill($('weekTotals'), rows);
 }
 
-function renderNote() {
-  var bar = $('noteBar');
-  bar.hidden = !noteSel;
-  if (!noteSel) return;
-
-  var parts = noteSel.split('-');
-  var block = blocksFor(Number(parts[0])).filter(function (b) { return b.key === noteSel; })[0];
-  $('noteTarget').textContent = block
-    ? DAYS[Number(parts[0])] + ' ' + hhmm(block.s) + '–' + hhmm(block.e) + ' · ' + CATS[block.cat].label
-    : '';
-  $('noteValue').value = (store.data.routine.notes || {})[noteSel] || '';
-}
-
 function render() {
   if (!sheet || sheet.hidden) return;
-  if (painting) { repaintCells(); renderTotals(); return; }
+  if (painting) { repaintCells(); renderTotals(); renderDirty(); return; }
+  var hadFocus = document.activeElement && document.activeElement.id === 'noteValue';
   renderBrushes();
   renderGrid();
+  renderDayPainter();
   renderTotals();
-  renderNote();
+  renderDirty();
+  if (hadFocus && $('noteValue')) $('noteValue').focus();
 }
 
 /* ---- open / close ------------------------------------------------------- */
 
 export function openRoutine(open) {
+  if (!open) saveNote();
   sheet.hidden = !open;
+  snapshot = open ? JSON.parse(shape(store.data.routine)) : null;
+  noteSel = null; noteDraft = null;
+  $('confirmClear').hidden = true;
   if (open) render();
-  else noteSel = null;
 }
 
 /* ---- wiring ------------------------------------------------------------- */
@@ -362,6 +528,7 @@ export function initRoutine() {
   }, true);
 
   initTouchPainting($('routineGrid'));
+  initColumnTouch($('routineCol'));
 
   // A drag that ends outside the grid still has to stop painting.
   window.addEventListener('mouseup', function () {
@@ -383,22 +550,16 @@ export function initRoutine() {
   $('sleepDownR').addEventListener('click', function () { shiftTime('sleep', -15); });
   $('sleepUpR').addEventListener('click', function () { shiftTime('sleep', 15); });
 
-  $('noteValue').addEventListener('input', function () {
-    if (!noteSel) return;
-    var value = $('noteValue').value;
-    var notes = Object.assign({}, store.data.routine.notes);
-    if (value) notes[noteSel] = value; else delete notes[noteSel];
-    store.patch('routine', Object.assign({}, store.data.routine, { notes: notes }));
-  });
-  $('noteClose').addEventListener('click', function () { noteSel = null; render(); });
+  $('revertRoutine').addEventListener('click', revert);
+  $('revertRoutineStrip').addEventListener('click', revert);
 
   $('askClearGrid').addEventListener('click', function () { $('confirmClear').hidden = false; });
   $('cancelClearGrid').addEventListener('click', function () { $('confirmClear').hidden = true; });
   $('clearGrid').addEventListener('click', function () {
-    noteSel = null;
+    noteSel = null; noteDraft = null;
     $('confirmClear').hidden = true;
     store.patch('routine', Object.assign({}, store.data.routine, { grid: {}, notes: {} }));
-    say('Rutina vymazána. Natři nový týden.');
+    say('Rutina vymazána. Do zavření plánovače jde vrátit.');
   });
 
   store.onChange(render);

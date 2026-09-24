@@ -2,25 +2,37 @@
    Tasks — the list, the full view, focus mode, and the checklist runner.
 
    All four read the same array in the store, so ticking something off in focus
-   mode is immediately true in the main view's "today" panel. Grouping is
-   derived from the task's own `group` field rather than recomputed from dates:
-   Kacey writes the group when she adds one by voice, and a task the user calls
-   "this week" should stay there even when the week turns over.
+   mode is immediately true in the main view's "today" panel.
+
+   A task carries a due date, a due time, or neither (`due_at`, see
+   core/due.js). The groups — po termínu, dnes, tento týden — are worked out
+   from that and the clock every time the list is drawn, never stored, so a
+   task due today is overdue tomorrow without anybody moving it. A task with a
+   time is also drawn in the calendar's lane (ui/calendar.js).
    ========================================================================= */
 
 import { $ } from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import * as store from '../core/store.js';
+import { bucketOf, dueLabel, logicalToday, parseDue } from '../core/due.js';
 import { go, onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 
+/* `optional` groups only appear when something is in them. */
 var GROUPS = [
   { key: 'overdue', name: 'Po termínu', emptyText: 'Nic po termínu. Dobře.' },
   { key: 'today', name: 'Dnes', emptyText: 'Na dnešek už nic.' },
-  { key: 'week', name: 'Tento týden', emptyText: 'Tento týden už nic dalšího.' }
+  { key: 'week', name: 'Tento týden', emptyText: 'Tento týden už nic dalšího.' },
+  { key: 'later', name: 'Později', optional: true },
+  { key: 'none', name: 'Bez termínu', optional: true },
+  { key: 'past', name: 'Hotové dřív', optional: true }
 ];
 
+var DURATIONS = [15, 30, 45, 60, 90, 120, 180];
+
 var showDone = true;
+var editingId = null;      // the task whose due date is open for editing
+var lastBuckets = '';      // so the minute tick only redraws when a task changed group
 var focusId = null, focusSecs = 0, focusTimer = 0;
 var runId = null;
 
@@ -37,24 +49,67 @@ export function addTask(label, extra) {
   if (!text) return null;
   var task = Object.assign({
     id: 't' + Date.now(), label: text, meta: 'přidáno teď · osobní',
-    group: 'today', done: false, today: true
+    done: false, due_at: null
   }, extra || {});
   store.patch('tasks', function (list) { return list.concat([task]); });
-  say('Úkol přidán · ' + text);
+  say('Úkol přidán · ' + text + (task.due_at ? ' · ' + dueLabel(task.due_at) : ''));
   return task;
+}
+
+function setDue(id, due, duration) {
+  store.patch('tasks', function (list) {
+    return list.map(function (t) {
+      if (t.id !== id) return t;
+      var next = Object.assign({}, t, { due_at: due });
+      if (duration && (parseDue(due) || {}).time) next.duration = duration; else delete next.duration;
+      return next;
+    });
+  });
+}
+
+/** A date input and a time input as a due_at. A time alone means today. */
+function dueFrom(date, time) {
+  if (!date && !time) return null;
+  return (date || logicalToday()) + (time ? 'T' + time : '');
+}
+
+/** "dnes 15:00 · 30 min" — the due part of a row's second line. */
+export function whenText(t) {
+  if (!t.due_at) return '';
+  return dueLabel(t.due_at) + (t.duration && parseDue(t.due_at).time ? ' · ' + t.duration + ' min' : '');
+}
+
+/** Tasks in the order they come due; undated ones keep the list's order. */
+function byDue(a, b) {
+  if (a.due_at === b.due_at) return 0;
+  if (!a.due_at) return 1;
+  if (!b.due_at) return -1;
+  // A whole-day task sorts before the timed ones that day.
+  return a.due_at < b.due_at ? -1 : 1;
 }
 
 /* ---- one row ----------------------------------------------------------- */
 
 function taskRow(t, big) {
+  var bucket = bucketOf(t);
   var box = el('button.check' + (big ? '.check--lg' : ''), {
     type: 'button', 'aria-pressed': String(!!t.done), 'aria-label': 'Přepnout úkol',
     onclick: function () { toggleTask(t.id); }
   }, t.done ? '✓' : '');
 
+  /* The due date leads the second line. In the full view it is a button that
+     opens the date editor; in the main view's panel it is just words. */
+  var when = whenText(t);
+  var dueNode = big
+    ? el('button.task__due' + (when ? '' : '.is-empty'), {
+        type: 'button', 'aria-expanded': String(editingId === t.id),
+        onclick: function () { editingId = editingId === t.id ? null : t.id; renderTasks(); }
+      }, when || '+ termín')
+    : (when ? el('span.task__due', when) : null);
+
   var kids = [box, el('span.task__text', [
     el('span.task__label', t.label),
-    t.meta ? el('span.task__meta', t.meta) : null
+    (dueNode || t.meta) ? el('span.task__meta', [dueNode, dueNode && t.meta ? ' · ' : '', t.meta || '']) : null
   ])];
 
   if (big && !t.done) {
@@ -70,15 +125,60 @@ function taskRow(t, big) {
     }, 'Focus'));
   }
 
-  return el('div.task' + (t.done ? '.is-done' : '') + (t.group === 'overdue' ? '.task--overdue' : ''), kids);
+  if (big && editingId === t.id) kids.push(dueEditor(t));
+
+  return el('div.task' + (t.done ? '.is-done' : '') + (bucket === 'overdue' ? '.task--overdue' : ''), kids);
+}
+
+/* Under the row it belongs to: a date, an optional time, and — once there is
+   a time — how long it takes, which is how tall it is in the calendar. */
+function dueEditor(t) {
+  var p = parseDue(t.due_at) || {};
+  var date = el('input.input.input--when', { type: 'date', value: p.date || '', 'aria-label': 'Datum' });
+  var time = el('input.input.input--when', { type: 'time', value: p.time || '', step: 300, 'aria-label': 'Čas' });
+  var dur = el('select.select.input--when', { 'aria-label': 'Délka' }, DURATIONS.map(function (m) {
+    return el('option', { value: String(m), selected: (t.duration || 30) === m ? '' : null }, m + ' min');
+  }));
+  function syncDur() { dur.hidden = !time.value; }
+  time.addEventListener('input', syncDur);
+  syncDur();
+
+  function close() { editingId = null; renderTasks(); }
+  var form = el('form.taskwhen', {
+    onsubmit: function (ev) {
+      ev.preventDefault();
+      editingId = null;          // before the write: it redraws the list
+      setDue(t.id, dueFrom(date.value, time.value), Number(dur.value));
+    }
+  }, [
+    date, time, dur,
+    el('div.taskwhen__acts', [
+      el('button.btn.btn--sm.btn--accent', { type: 'submit' }, 'Uložit'),
+      t.due_at ? el('button.btn.btn--sm', {
+        type: 'button', onclick: function () { editingId = null; setDue(t.id, null); }
+      }, 'Bez termínu') : null,
+      el('button.btn.btn--sm', { type: 'button', onclick: close }, 'Zrušit')
+    ]),
+    el('p.muted-3.taskwhen__note', 'Úkol s časem se ukáže i v kalendáři.')
+  ]);
+  form.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
+  });
+  return form;
 }
 
 /* ---- the compact list on the main view --------------------------------- */
 
+/** What the main view's panel and the "done today" ratio count as today's. */
+function isToday(t) {
+  var b = bucketOf(t);
+  return b === 'today' || b === 'overdue';
+}
+
 export function renderToday() {
   var host = $('todayTasks');
   if (!host) return;
-  var list = tasks().filter(function (t) { return t.today && (showDone || !t.done); });
+  var list = tasks().filter(function (t) { return isToday(t) && (showDone || !t.done); }).sort(byDue);
   fill(host, list.length ? list.map(function (t) { return taskRow(t, false); })
                          : el('p.empty', 'Na dnešek nic. Přidej úkol níž, nebo řekni „KC, přidej …“.'));
 }
@@ -90,9 +190,11 @@ export function renderTasks() {
   if (!host) return;
 
   var visible = tasks().filter(function (t) { return showDone || !t.done; });
+  if (editingId && !visible.some(function (t) { return t.id === editingId; })) editingId = null;
 
   fill(host, GROUPS.map(function (g) {
-    var items = visible.filter(function (t) { return t.group === g.key; });
+    var items = visible.filter(function (t) { return bucketOf(t) === g.key; }).sort(byDue);
+    if (g.optional && !items.length) return null;
     return el('div', [
       el('h3.subhead' + (g.key === 'overdue' ? '.subhead--err' : ''), g.name),
       items.length ? items.map(function (t) { return taskRow(t, true); })
@@ -100,14 +202,15 @@ export function renderTasks() {
     ]);
   }));
 
-  var all = tasks();
-  var overdue = all.filter(function (t) { return t.group === 'overdue' && !t.done; }).length;
-  var dueToday = all.filter(function (t) { return t.today && !t.done; }).length;
-  var open = all.filter(function (t) { return !t.done; }).length;
-  $('taskCounts').textContent = dueToday + ' dnes · ' + open + ' otevřených · ' + overdue + ' po termínu';
-  $('toggleDone').textContent = showDone ? 'Skrýt hotové' : 'Zobrazit hotové';
+  var s = taskSummary();
+  var counts = s.due + ' dnes · ' + s.open + ' otevřených · ' + s.overdue + ' po termínu';
+  $('taskCounts').textContent = counts;
+  $('taskCountsM').textContent = counts;
+  // The phone carries a second pair of these controls in its summary card.
+  var toggles = document.querySelectorAll('#toggleDone, [data-task-act="toggleDone"]');
+  for (var i = 0; i < toggles.length; i++) toggles[i].textContent = showDone ? 'Skrýt hotové' : 'Zobrazit hotové';
 
-  var todayAll = all.filter(function (t) { return t.today; });
+  var todayAll = tasks().filter(isToday);
   var todayDone = todayAll.filter(function (t) { return t.done; }).length;
   $('doneRatio').textContent = todayDone + ' / ' + todayAll.length;
   $('taskBar').style.width = (todayAll.length ? Math.round(todayDone / todayAll.length * 100) : 0) + '%';
@@ -117,10 +220,18 @@ export function renderTasks() {
 export function taskSummary() {
   var all = tasks();
   return {
-    due: all.filter(function (t) { return t.today && !t.done; }).length,
-    overdue: all.filter(function (t) { return t.group === 'overdue' && !t.done; }).length,
+    due: all.filter(function (t) { return isToday(t) && !t.done; }).length,
+    overdue: all.filter(function (t) { return bucketOf(t) === 'overdue'; }).length,
     open: all.filter(function (t) { return !t.done; }).length
   };
+}
+
+/** Undone tasks with a time on `date` ('YYYY-MM-DD'), for "next up". */
+export function timedTasksOn(date) {
+  return tasks().filter(function (t) {
+    var p = parseDue(t.due_at);
+    return !t.done && p && p.time && p.date === date;
+  });
 }
 
 /* ---- focus mode --------------------------------------------------------
@@ -215,23 +326,30 @@ function addChecklistItem(label) {
 export function initTasks() {
   $('taskForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
-    if (addTask($('taskInput').value)) $('taskInput').value = '';
+    var due = dueFrom($('taskDate').value, $('taskTime').value);
+    if (addTask($('taskInput').value, { due_at: due })) {
+      $('taskInput').value = ''; $('taskDate').value = ''; $('taskTime').value = '';
+    }
   });
 
   $('todayTaskForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
-    if (addTask($('todayTaskInput').value)) $('todayTaskInput').value = '';
+    // The today panel adds to today.
+    if (addTask($('todayTaskInput').value, { due_at: logicalToday() })) $('todayTaskInput').value = '';
   });
 
-  $('toggleDone').addEventListener('click', function () {
+  function toggleDone() {
     showDone = !showDone;
     renderTasks(); renderToday();
-  });
-
-  $('clearDone').addEventListener('click', function () {
+  }
+  function clearDone() {
     store.patch('tasks', function (list) { return list.filter(function (t) { return !t.done; }); });
     say('Hotové úkoly smazány.');
-  });
+  }
+  $('toggleDone').addEventListener('click', toggleDone);
+  $('clearDone').addEventListener('click', clearDone);
+  document.querySelector('[data-task-act="toggleDone"]').addEventListener('click', toggleDone);
+  document.querySelector('[data-task-act="clearDone"]').addEventListener('click', clearDone);
 
   $('focusDone').addEventListener('click', function () {
     if (focusId) toggleTaskDone(focusId);
@@ -265,6 +383,16 @@ export function initTasks() {
     if (runId) renderRunner();
     paintFocus();
   });
+
+  /* Groups move with the clock: at 15:01 the 15:00 task is late, and at 04:00
+     today's list becomes yesterday's. Redraw only when a task actually changed
+     group, so an open date editor is not wiped every minute. */
+  setInterval(function () {
+    var now = tasks().map(function (t) { return bucketOf(t) + dueLabel(t.due_at); }).join('|');
+    if (now === lastBuckets) return;
+    lastBuckets = now;
+    renderToday(); renderTasks();
+  }, 60000);
 }
 
 /** Mark done regardless of current value — used when a flow completes. */

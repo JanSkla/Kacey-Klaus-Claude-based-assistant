@@ -29,7 +29,8 @@
 <header class="top">
   <span class="top__brand">
     <span class="top__mark" aria-hidden="true"></span>
-    <b>Kacey</b>
+    <b class="top__name">Kacey</b>
+    <b class="top__title" id="viewTitle">Kacey</b>
   </span>
 
   <span class="conn" id="conn" data-state="connecting">
@@ -37,6 +38,7 @@
       <span class="orb__amp" id="orbAmp"><span class="conn__dot" aria-hidden="true"></span></span>
     </span>
     <span class="conn__label" id="connLabel">Connecting…</span>
+    <span class="conn__short" id="stateShort"></span>
   </span>
 
   <span class="top__stats">
@@ -116,12 +118,17 @@
   </div>
 
   <div class="col col--rail">
-    <section class="card card--pad">
+    <section class="card card--pad nextcard">
       <p class="big" id="stateBig">Idle</p>
       <p class="muted" id="stateSub">—</p>
-      <p class="rule muted-3">Další na řadě</p>
-      <p class="strong" id="nextTitle">—</p>
-      <p class="muted" id="nextMeta">—</p>
+      <button type="button" class="nextcard__toggle" id="todayToggle" aria-expanded="false">
+        <span class="nextcard__text">
+          <span class="rule muted-3">Další na řadě</span>
+          <span class="strong" id="nextTitle">—</span>
+          <span class="muted" id="nextMeta">—</span>
+        </span>
+        <span class="nextcard__label" id="todayToggleLabel">Dnes ▾</span>
+      </button>
       <button type="button" class="btn btn--block" id="askNext">Zeptat se na to</button>
     </section>
 
@@ -134,6 +141,7 @@
         <button type="button" class="btn btn--fn" data-go="calendar">Kalendář</button>
         <button type="button" class="btn btn--fn" data-go="tasks">Úkoly</button>
         <button type="button" class="btn btn--fn" data-go="timer">Časovače</button>
+        <button type="button" class="btn btn--fn" data-go="lights">Světla</button>
       </div>
     </section>
   </div>
@@ -150,6 +158,8 @@
     <div class="card__body card__body--scroll groups" id="taskGroups"></div>
     <form class="card__foot row" id="taskForm">
       <input class="input" id="taskInput" type="text" placeholder="Přidat úkol — nebo řekni „KC, přidej …“" autocomplete="off" />
+      <input class="input input--when" id="taskDate" type="date" aria-label="Termín — datum (prázdné = bez termínu)" title="Termín (prázdné = bez termínu)" />
+      <input class="input input--when" id="taskTime" type="time" step="300" aria-label="Termín — čas (s časem se úkol ukáže v kalendáři)" title="Čas (s časem se úkol ukáže v kalendáři)" />
       <button type="submit" class="btn btn--accent">Přidat</button>
     </form>
   </section>
@@ -160,6 +170,11 @@
       <h2 class="card__title">Hotovo dnes</h2>
       <p class="big" id="doneRatio">0 / 0</p>
       <span class="bar"><span class="bar__fill" id="taskBar"></span></span>
+      <p class="muted phone-only" id="taskCountsM">—</p>
+      <div class="pairrow phone-only">
+        <button type="button" class="btn" data-task-act="toggleDone">Skrýt hotové</button>
+        <button type="button" class="btn" data-task-act="clearDone">Smazat hotové</button>
+      </div>
     </section>
     <section class="card">
       <h2 class="card__title card__title--bar">Funkce</h2>
@@ -179,10 +194,14 @@
       <h2 class="card__title">Diktování</h2>
       <p class="clock" id="jClock">00:00</p>
       <p class="muted" id="jRecState">Připraveno · řekni „konec“ pro ukončení</p>
+      <button type="button" class="btn phone-only" data-dictate><span class="dot" aria-hidden="true"></span><span data-dictate-label>Diktovat</span></button>
     </section>
 
-    <section class="card">
-      <h2 class="card__title card__title--bar">KC chat</h2>
+    <section class="card psheet" id="jChatCard" aria-label="KC chat">
+      <div class="psheet__head">
+        <h2 class="card__title card__title--bar">KC chat</h2>
+        <button type="button" class="sheet__close push phone-only" data-psheet-close aria-label="Zavřít">×</button>
+      </div>
       <div class="card__body card__body--scroll bubbles" id="jChat"></div>
       <form class="card__foot row" id="jChatForm">
         <input class="input" id="jChatInput" type="text" placeholder="Zeptej se KC…" autocomplete="off" />
@@ -197,12 +216,13 @@
       <span class="muted push" id="jSaved">neuloženo</span>
       <button type="button" class="btn btn--accent btn--sm" id="jFinish">Dokončit</button>
     </div>
+    <div class="tagstrip" id="jTags" hidden></div>
     <div class="card__body card__body--scroll prose" id="jBody">
       <textarea class="prose__area" id="jText" spellcheck="false" placeholder="Mluv, nebo piš. Ukládá se samo."></textarea>
     </div>
     <div class="card__foot row">
       <p class="muted" id="jStats">0 slov</p>
-      <button type="button" class="btn push" id="jDictate"><span class="dot" aria-hidden="true"></span><span id="jDictateLabel">Diktovat</span></button>
+      <button type="button" class="btn push" id="jDictate" data-dictate><span class="dot" aria-hidden="true"></span><span id="jDictateLabel" data-dictate-label>Diktovat</span></button>
     </div>
   </section>
 
@@ -215,10 +235,11 @@
     <section class="card">
       <h2 class="card__title card__title--bar">Funkce</h2>
       <div class="fnlist">
+        <button type="button" class="btn btn--fn phone-only" id="jChatOpen">KC chat</button>
         <button type="button" class="btn btn--accent btn--fn" data-go="library">Knihovna deníku</button>
         <button type="button" class="btn btn--fn" id="jNew">Nová relace</button>
         <button type="button" class="btn btn--fn" id="jTag">Otagovat zápis</button>
-        <button type="button" class="btn btn--fn" data-go="calendar">Kalendář</button>
+        <button type="button" class="btn btn--fn desk-only" data-go="calendar">Kalendář</button>
       </div>
     </section>
   </div>
@@ -259,8 +280,15 @@
 <section class="view view--triple" data-view="calendar" hidden>
   <section class="card">
     <div class="card__head">
-      <h2 class="card__title card__title--lg" id="calMonth">—</h2>
-      <span class="row push">
+      <button type="button" class="cal__monthbtn" id="calMonthToggle" aria-expanded="false">
+        <span class="card__title card__title--lg" id="calMonth">—</span><span class="cal__caret" id="calCaret" aria-hidden="true">▾</span>
+      </button>
+      <span class="row push phone-only">
+        <button type="button" class="btn btn--step" id="calStepPrev" aria-label="Předchozí">‹</button>
+        <button type="button" class="btn btn--sm btn--ghostaccent" id="calTodayM">dnes</button>
+        <button type="button" class="btn btn--step" id="calStepNext" aria-label="Další">›</button>
+      </span>
+      <span class="row push desk-only">
         <button type="button" class="btn btn--sm" id="calPrev" aria-label="Předchozí měsíc">‹</button>
         <button type="button" class="btn btn--sm btn--ghostaccent" id="calToday">dnes</button>
         <button type="button" class="btn btn--sm" id="calNext" aria-label="Další měsíc">›</button>
@@ -268,22 +296,44 @@
       </span>
     </div>
     <div class="monthgrid" id="calBody"></div>
+    <div class="weekstrip" id="calWeek"></div>
     <p class="cal__meta muted" id="calMeta">—</p>
-    <div class="card__foot card__foot--block">
-      <p class="muted-3">Zdroje</p>
+    <p class="cal__hint">Táhni přes dny a porovnáš až 7 vedle sebe.</p>
+    <div class="card__foot card__foot--block cal__foot psheet" id="calSourcesSheet" aria-label="Zdroje kalendáře">
+      <div class="psheet__head phone-only">
+        <h2 class="sheet__title">Zdroje kalendáře</h2>
+        <button type="button" class="sheet__close push" data-psheet-close aria-label="Zavřít">×</button>
+      </div>
+      <p class="muted-3 desk-only">Zdroje</p>
       <div class="fnlist fnlist--tight" id="calSources"></div>
-      <div class="cal__jump" id="calJump" hidden></div>
+      <div id="calJumpWrap" hidden>
+        <p class="muted-3">Měsíce s událostmi</p>
+        <div class="cal__jump" id="calJump"></div>
+      </div>
+      <button type="button" class="btn btn--block phone-only" id="calReloadM">↻ Načíst znovu</button>
     </div>
   </section>
 
   <section class="card">
     <div class="card__head">
+      <span class="row">
+        <button type="button" class="btn btn--sm" id="rangePrev" aria-label="Předchozí">‹</button>
+        <button type="button" class="btn btn--sm" id="rangeNext" aria-label="Další">›</button>
+      </span>
       <h2 class="card__title card__title--lg" id="dayLabel">—</h2>
       <span class="muted" id="dayMeta">—</span>
+      <span class="seg" role="group" aria-label="Rozsah" id="calSpans">
+        <button type="button" class="seg__opt" data-span="1" aria-pressed="true">Den</button>
+        <button type="button" class="seg__opt" data-span="3" aria-pressed="false">3 dny</button>
+        <button type="button" class="seg__opt desk-only" data-span="5" aria-pressed="false">Po–Pá</button>
+        <button type="button" class="seg__opt" data-span="7" aria-pressed="false">Týden</button>
+      </span>
+      <button type="button" class="btn btn--sm push phone-only" id="calSourcesOpen">Zdroje</button>
       <button type="button" class="btn btn--sm push" id="openRoutine">Upravit rutinu</button>
     </div>
     <div class="legend" id="routineLegend"></div>
-    <div class="card__body card__body--scroll lanewrap">
+    <div class="card__body card__body--scroll lanewrap" id="laneWrap">
+      <div class="colheads" id="dayCols" hidden></div>
       <div class="alldaystrip" id="dayAllDay"></div>
       <div class="lane" id="dayLane"></div>
       <p class="muted-3" id="routineHours"></p>
@@ -356,6 +406,31 @@
         <button type="button" class="btn btn--fn" data-go="calendar">Otevřít kalendář</button>
       </div>
     </section>
+  </div>
+</section>
+
+<!-- ================= LIGHTS =================
+     lightsd is its own app on the home server, on its own port. Kacey only
+     shows it and links to it; nothing here talks to the bulbs. -->
+<section class="view view--full" data-view="lights" hidden>
+  <div class="col">
+    <div class="viewbar">
+      <button type="button" class="btn btn--sm" data-go="main">← Zpět na hlavní</button>
+      <h2 class="card__title card__title--lg">Světla v místnosti</h2>
+      <span class="muted-3" id="lightsWhere">samostatná aplikace</span>
+      <a class="link push" id="lightsOpen" href="#" target="_blank" rel="noopener">Otevřít samostatně ↗</a>
+    </div>
+    <iframe class="embed" id="lightsFrame" title="Světla v místnosti" hidden></iframe>
+    <div class="card card--pad embed__off" id="lightsDown" hidden>
+      <p class="strong">lightsd neodpovídá.</p>
+      <p class="muted" id="lightsDownNote">Světla běží jako samostatná aplikace na domácím serveru. Až poběží, zkus to znovu.</p>
+      <button type="button" class="btn btn--sm" id="lightsRetry">Zkusit znovu</button>
+    </div>
+    <div class="card card--pad embed__off" id="lightsOff" hidden>
+      <p class="strong">Světla jsou v Controlleru vypnutá.</p>
+      <p class="muted">Kacey je nenačítá, dokud je nezapneš v Zdrojích dat.</p>
+      <button type="button" class="btn btn--sm" data-go="controller">Otevřít Controller</button>
+    </div>
   </div>
 </section>
 
@@ -578,8 +653,9 @@
       <button type="button" class="sheet__close push" id="moreClose" aria-label="Zavřít">×</button>
     </div>
     <div class="fnlist">
-      <button type="button" class="btn btn--fn" data-go="brief" data-tab="brief">Ranní brief</button>
+      <button type="button" class="btn btn--fn btn--accent" data-go="brief" data-tab="brief">Ranní brief</button>
       <button type="button" class="btn btn--fn" data-go="library" data-tab="library">Knihovna deníku</button>
+      <button type="button" class="btn btn--fn" data-go="lights" data-tab="lights">Světla</button>
       <button type="button" class="btn btn--fn" data-go="timer" data-tab="timer">Časovače</button>
       <button type="button" class="btn btn--fn" data-go="controller" data-tab="controller">Controller</button>
     </div>
@@ -600,13 +676,19 @@
     <div class="sheet__bar">
       <span class="label">ŠTĚTEC</span>
       <span class="chips" id="brushes"></span>
-      <button type="button" class="btn btn--sm btn--dangerghost push" id="askClearGrid">Vymazat vše</button>
+      <button type="button" class="btn btn--sm push" id="revertRoutine" disabled>Beze změn</button>
+      <button type="button" class="btn btn--sm btn--dangerghost" id="askClearGrid">Vymazat vše</button>
+    </div>
+
+    <div class="dirty" id="routineDirty" hidden>
+      <span>Neuložené úpravy od otevření plánovače</span>
+      <button type="button" class="btn btn--sm btn--outlineaccent" id="revertRoutineStrip">↶ Vrátit</button>
     </div>
 
     <div class="confirm" id="confirmClear" hidden>
       <span>
         <b>Vymazat celou rutinu?</b>
-        <em>Každý natřený blok i jeho poznámka zmizí. Kalendářních událostí se to netýká. Nelze vrátit.</em>
+        <em>Každý natřený blok i jeho poznámka zmizí. Kalendářních událostí se to netýká. Do zavření plánovače jde vrátit.</em>
       </span>
       <button type="button" class="btn push" id="cancelClearGrid">Nechat být</button>
       <button type="button" class="btn btn--dangerfill" id="clearGrid">Vymazat vše</button>
@@ -626,15 +708,10 @@
       <span class="muted-3">šrafované hodiny jsou spánek — nejdou natřít</span>
     </div>
 
-    <div class="sheet__bar" id="noteBar" hidden>
-      <span class="is-acc" id="noteTarget"></span>
-      <input class="input" id="noteValue" type="text" placeholder="Poznámka k bloku — „Laborka“, „OPT úkol“…" autocomplete="off" />
-      <button type="button" class="btn btn--sm" id="noteClose">Hotovo</button>
-    </div>
-
-    <p class="muted-3 sheet__lede">Tažením do strany v rámci dne natřeš 15minutový úsek. Vyber <b>Poznámka</b> a klepni na blok, abys ho pojmenoval. Tohle je tvar běžného týdne — konkrétní události sedí nahoře.</p>
-
     <div class="sheet__body">
+      <div class="daypick phone-only" id="routineDays" role="group" aria-label="Den"></div>
+      <p class="muted-3 phone-only daypaint__lede">Táhni prstem dolů po dni a natřeš 15minutové úseky. Šrafované je spánek. Štětec <b>Poznámka</b> + klepnutí blok pojmenuje.</p>
+      <div class="daypaint phone-only" id="routineCol"></div>
       <div class="grid" id="routineGrid"></div>
       <div class="weektotals">
         <p class="label">TÝDEN V KOSTCE</p>
@@ -643,7 +720,6 @@
     </div>
 
     <div class="sheet__foot">
-      <p class="muted-3">Kacey plánuje nové věci kolem rutiny a upozorní tě, když událost padne na chráněný blok.</p>
       <button type="button" class="btn btn--accent push" id="routineDone">Hotovo</button>
     </div>
   </div>
@@ -702,6 +778,7 @@
       ▶ přehraje vzorek — takhle přesně ho Kacey slyší. Prostřední číslo je
       vzdálenost od tvého posledního pokusu (zeleně = tenhle vzorek by stačil),
       pravé číslo vzdálenost od ostatních vzorků (červeně = řekl jsi to jinak).
+      Příliš vysoká citlivost budí Kacey uprostřed hovoru.
     </p>
   </div>
 </div>
@@ -711,6 +788,9 @@
   <button type="button" class="btn btn--sm toast__action" id="toastAction" hidden></button>
   <button type="button" class="toast__x" id="toastClose" aria-label="Zavřít">×</button>
 </div>
+
+<!-- behind whichever .psheet is open on a phone (js/ui/psheet.js) -->
+<div class="scrim" id="scrim" hidden></div>
 
 <!-- polite announcer for completed assistant turns -->
 <p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>

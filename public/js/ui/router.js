@@ -1,7 +1,7 @@
 /* =========================================================================
    The router: which view is showing.
 
-   Ten views, one at a time, all of them already in the document. Switching is
+   Eleven views, one at a time, all of them already in the document. Switching is
    a `hidden` flip rather than a render, because the chat log, the composer and
    the microphone have to survive a trip to the calendar and back.
 
@@ -11,13 +11,22 @@
 
 import { $ } from '../core/dom.js';
 import { clear as clearToast } from './toast.js';
+import { closeSheet } from './psheet.js';
 
-var VIEWS = ['main', 'tasks', 'journal', 'library', 'calendar', 'brief', 'timer', 'controller', 'task', 'focus'];
+var VIEWS = ['main', 'tasks', 'journal', 'library', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus'];
 
 var LABELS = {
   main: 'main', tasks: 'úkoly', journal: 'deník', library: 'knihovna deníku',
-  calendar: 'kalendář', brief: 'ranní brief', timer: 'časovače',
+  calendar: 'kalendář', brief: 'ranní brief', timer: 'časovače', lights: 'světla',
   controller: 'controller', task: 'úkol probíhá', focus: 'focus'
+};
+
+/* What the phone header says. The desktop header keeps the small label on the
+   right; a phone has room for one word, so it is the view's name. */
+var TITLES = {
+  main: 'Kacey', tasks: 'Úkoly', journal: 'Deník', library: 'Knihovna deníku',
+  calendar: 'Kalendář', brief: 'Ranní brief', timer: 'Časovače', lights: 'Světla',
+  controller: 'Controller', task: 'Úkol', focus: 'Focus'
 };
 
 var current = 'main';
@@ -33,6 +42,10 @@ export function go(view) {
   if (VIEWS.indexOf(view) === -1) view = 'main';
   current = view;
   clearToast();
+  closeSheet();
+  // The phone stylesheet keys a few things off the view (the toast's height
+  // above the composer, the tab bar in the full-screen views).
+  document.body.setAttribute('data-view', view);
 
   var nodes = document.querySelectorAll('.view');
   for (var i = 0; i < nodes.length; i++) {
@@ -40,6 +53,8 @@ export function go(view) {
   }
   var label = $('viewLabel');
   if (label) label.textContent = LABELS[view] || view;
+  var title = $('viewTitle');
+  if (title) title.textContent = TITLES[view] || 'Kacey';
 
   if (location.hash.slice(1) !== view) {
     try { history.replaceState(null, '', '#' + view); } catch (e) { /* file:// */ }

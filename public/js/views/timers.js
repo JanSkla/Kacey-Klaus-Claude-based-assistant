@@ -124,7 +124,7 @@ function renderActive() {
     ]);
   }) : el('div.card.card--pad', [
     el('p.strong', 'Nic neběží.'),
-    el('p.muted', 'Vyber délku vlevo, nebo to řekni nahlas. Časovače běží dál, i když jsi jinde v aplikaci.')
+    el('p.muted', 'Vyber délku, nebo to řekni nahlas — „KC, deset minut“. Časovače běží dál, i když jsi jinde v aplikaci.')
   ]));
 
   $('timerCount').textContent = running.filter(function (t) { return t.running; }).length +

@@ -17,6 +17,12 @@ import { nextUp } from '../ui/calendar.js';
 import { submit } from '../net/protocol.js';
 import { go } from '../ui/router.js';
 
+/* The phone header has room for three words, not a sentence. */
+var STATE_SHORT = {
+  idle: 'čekám na „KC“', listening: 'poslouchám', thinking: 'přemýšlím',
+  speaking: 'mluvím', offline: 'offline', error: 'chyba', boot: 'startuju'
+};
+
 var STATE_WORDS = {
   idle: ['Idle', 'Budicí slovo připraveno.'],
   listening: ['Poslouchám', 'Mluv — přestanu, až přestaneš ty.'],
@@ -39,6 +45,7 @@ function paintRail() {
   var words = STATE_WORDS[orb] || STATE_WORDS.idle;
 
   $('stateBig').textContent = words[0];
+  $('stateShort').textContent = STATE_SHORT[orb] || STATE_SHORT.idle;
   $('stateSub').textContent = orb === 'idle'
     ? words[1] + ' ' + turnCount() + ' tahů v téhle relaci.'
     : words[1];
@@ -54,6 +61,16 @@ function paintRail() {
 }
 
 export function initMain() {
+  /* On a phone the Today and Tasks panels fold away under "next up"; this
+     opens them. On desktop they are always there and the toggle is hidden. */
+  $('todayToggle').addEventListener('click', function () {
+    var view = document.querySelector('.view[data-view="main"]');
+    var open = view.getAttribute('data-today') !== 'open';
+    view.setAttribute('data-today', open ? 'open' : '');
+    $('todayToggle').setAttribute('aria-expanded', String(open));
+    $('todayToggleLabel').textContent = open ? 'Skrýt' : 'Dnes ▾';
+  });
+
   $('askNext').addEventListener('click', function () {
     var next = nextUp();
     if (!next) return;

@@ -18,7 +18,7 @@
        bus.js         where the orb's followers subscribe
 
      ui/     the DOM — what is on screen and how it is labelled
-       router.js      which of the ten views is showing
+       router.js      which of the eleven views is showing
        toast.js       the one-line confirmations
        orb.js         the state machine every other module reports into
        log.js         the transcript, the status line, the alert strip
@@ -28,6 +28,7 @@
        voice-picker.js the voice select, and its fallback when XTTS is down
        attachments.js images on the way to Kacey: paste, paperclip, drop
        calendar.js    the month grid, the day lane, and the Today panel
+       psheet.js      panels that become bottom sheets on a phone
 
      views/  one module per screen, all of them reading the same store
        main.js        the rail beside the chat
@@ -38,6 +39,7 @@
        timers.js      timers and their presets
        controller.js  sources, memory sections, tool permissions
        routine.js     the painted week the calendar lane draws underneath
+       lights.js      frames lightsd, the separate lights app
 
      voice/  the microphone and the speakers, and who may hold them
        sentences.js   sentence boundaries — pure, no DOM, no state
@@ -85,6 +87,7 @@ import {
 } from './js/net/protocol.js';
 import { initCalendar } from './js/ui/calendar.js';
 import { initRouter } from './js/ui/router.js';
+import { initSheets } from './js/ui/psheet.js';
 import { initAttachments } from './js/ui/attachments.js';
 import { initMain } from './js/views/main.js';
 import { initTasks } from './js/views/tasks.js';
@@ -94,6 +97,7 @@ import { initBrief } from './js/views/brief.js';
 import { initTimers } from './js/views/timers.js';
 import { initController } from './js/views/controller.js';
 import { initRoutine } from './js/views/routine.js';
+import { initLights } from './js/views/lights.js';
 import { installDebugSurface } from './js/debug.js';
 
 /* =======================================================================
@@ -152,7 +156,9 @@ initLibrary();
 initBrief();
 initTimers();
 initController(restartSession);
+initLights();
 initMain();
+initSheets();
 initRouter();
 
 store.load();

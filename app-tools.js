@@ -22,6 +22,28 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 import * as appstate from './appstate.js';
+import { LOGICAL_DAY_START_HOUR } from './config.js';
+import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
+
+if (DAY_START_HOUR !== LOGICAL_DAY_START_HOUR) {
+  console.warn('[app-tools] public/js/core/due.js DAY_START_HOUR differs from config LOGICAL_DAY_START_HOUR');
+}
+
+const BUCKET_WORDS = {
+  overdue: 'PO TERMÍNU', past: 'hotovo dřív', today: 'dnes', week: 'tento týden', later: 'později', none: 'bez termínu',
+};
+
+/** One line of the task list as Kacey reads it. */
+function describeTask(t) {
+  const when = t.due_at
+    ? `${t.due_at} (${dueLabel(t.due_at)}${t.duration ? `, ${t.duration} min` : ''}) — ${BUCKET_WORDS[bucketOf(t)]}`
+    : BUCKET_WORDS.none;
+  return `- [${t.done ? 'x' : ' '}] (${t.id}) ${t.label} — ${when}${t.meta ? ` · ${t.meta}` : ''}`;
+}
+
+const DUE_HELP =
+  'Termín, místní čas: "YYYY-MM-DD" = někdy ten den, "YYYY-MM-DDTHH:MM" = v ten čas ' +
+  '(takový úkol se ukáže i v kalendáři). Dnešní datum máš v kontextu; den končí ve 4:00.';
 
 export const APP_SERVER_NAME = 'kacey-app';
 
@@ -111,7 +133,7 @@ const appRead = tool(
     }
     if (section === 'all' || section === 'tasks') {
       parts.push('TASKS:\n' + (doc.tasks.length
-        ? doc.tasks.map((t) => `- [${t.done ? 'x' : ' '}] (${t.id}) ${t.label} — ${t.group}${t.meta ? ` · ${t.meta}` : ''}`).join('\n')
+        ? doc.tasks.map(describeTask).join('\n')
         : '(žádné)'));
     }
     if (section === 'all' || section === 'journal') {
@@ -279,16 +301,21 @@ const routineHours = tool(
 
 const taskAdd = tool(
   'app_task_add',
-  'Přidej úkol do seznamu v aplikaci.',
+  'Přidej úkol do seznamu v aplikaci. Skupiny (po termínu, dnes, tento týden) ' +
+    'se počítají z termínu samy — nastav termín, ne skupinu.',
   {
     label: z.string().describe('Co je potřeba udělat.'),
-    group: z.enum(['overdue', 'today', 'week']).optional()
-      .describe('Kam patří. Výchozí "today".'),
-    meta: z.string().optional().describe('Doplněk: termín, kontext, štítek.'),
+    due: z.string().optional().describe(DUE_HELP + ' Vynech = bez termínu.'),
+    duration: z.number().int().min(5).max(1440).optional()
+      .describe('Jen pro úkol s časem: kolik minut zabere (výchozí 30). Tak dlouhý blok bude v kalendáři.'),
+    meta: z.string().optional().describe('Doplněk: kontext, štítek. Termín sem nepiš.'),
   },
-  async ({ label, group, meta }) => {
+  async ({ label, due, duration, meta }) => {
     const text = String(label || '').trim();
     if (!text) return fail('Prázdný úkol.');
+
+    let dueAt;
+    try { dueAt = normalizeDue(due); } catch (err) { return fail(err.message + ' Nic se nepřidalo.'); }
 
     const doc = appstate.get();
     const before = doc.tasks.slice();
@@ -296,28 +323,29 @@ const taskAdd = tool(
       id: 't' + Date.now(),
       label: text,
       meta: meta || 'přidala Kacey',
-      group: group || 'today',
       done: false,
-      today: (group || 'today') !== 'week',
+      due_at: dueAt,
+      ...(duration && parseDue(dueAt)?.time ? { duration } : {}),
     };
     appstate.setSection('tasks', doc.tasks.concat([task]));
     onWrite('tasks', before);
-    return ok(`Přidáno: "${text}" (${task.group}, id ${task.id}).`);
+    return ok(`Přidáno: ${describeTask(task).slice(2)}`);
   },
 );
 
 const taskUpdate = tool(
   'app_task_update',
-  'Změň úkol — odškrtni ho, přejmenuj, přesuň do jiné skupiny, nebo smaž. ' +
+  'Změň úkol — odškrtni ho, přejmenuj, změň nebo zruš termín, nebo smaž. ' +
     'Id zjistíš z app_read.',
   {
     id: z.string().describe('Id úkolu z app_read.'),
     done: z.boolean().optional().describe('true = hotovo, false = zpět na nehotovo.'),
     label: z.string().optional().describe('Nový text úkolu.'),
-    group: z.enum(['overdue', 'today', 'week']).optional().describe('Nová skupina.'),
+    due: z.string().nullable().optional().describe(DUE_HELP + ' null = termín zrušit.'),
+    duration: z.number().int().min(5).max(1440).optional().describe('Nová délka v minutách (jen úkol s časem).'),
     remove: z.boolean().optional().describe('true = úkol smaž.'),
   },
-  async ({ id, done, label, group, remove }) => {
+  async ({ id, done, label, due, duration, remove }) => {
     const doc = appstate.get();
     const task = doc.tasks.find((t) => t.id === id);
     if (!task) return fail(`Úkol "${id}" neexistuje. Vypiš si je přes app_read.`);
@@ -330,17 +358,22 @@ const taskUpdate = tool(
       return ok(`Smazáno: "${task.label}".`);
     }
 
+    let dueAt = task.due_at;
+    if (due !== undefined) {
+      try { dueAt = normalizeDue(due); } catch (err) { return fail(err.message + ' Nic se nezměnilo.'); }
+    }
+
     const next = doc.tasks.map((t) => (t.id === id ? {
       ...t,
       ...(done === undefined ? {} : { done }),
       ...(label ? { label } : {}),
-      ...(group ? { group, today: group !== 'week' } : {}),
+      due_at: dueAt,
+      ...(duration ? { duration } : {}),
     } : t));
     appstate.setSection('tasks', next);
     onWrite('tasks', before);
 
-    const now = next.find((t) => t.id === id);
-    return ok(`Upraveno: "${now.label}" — ${now.done ? 'hotovo' : 'nehotovo'}, ${now.group}.`);
+    return ok(`Upraveno: ${describeTask(appstate.get().tasks.find((t) => t.id === id)).slice(2)}`);
   },
 );
 

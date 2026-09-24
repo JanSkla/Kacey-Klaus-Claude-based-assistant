@@ -403,6 +403,17 @@ select:focus-visible, textarea:focus-visible {
 .task.is-done .task__label { color: var(--ink3); text-decoration: line-through; }
 .task__meta { display: block; font-size: 13px; color: var(--ink2); }
 .task--overdue:not(.is-done) .task__meta { color: var(--err); }
+/* The due date: plain words in the today panel, a button in the full view. */
+.task__due { font: inherit; color: inherit; }
+button.task__due { background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted var(--line2); text-underline-offset: 3px; }
+button.task__due:hover, button.task__due[aria-expanded="true"] { color: var(--acc); }
+button.task__due.is-empty { color: var(--ink3); }
+.task { flex-wrap: wrap; }
+.taskwhen { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0 2px 32px; }
+.taskwhen__acts { display: flex; gap: 8px; }
+.taskwhen__note { flex: 1 0 100%; margin: 0; }
+/* Native date/time pickers: dark, and only as wide as what they hold. */
+.input--when { flex: 0 0 auto; width: auto; color-scheme: dark; }
 
 .groups { padding: 16px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; align-content: start; }
 .groups--wide { gap: 26px; }
@@ -427,6 +438,13 @@ select:focus-visible, textarea:focus-visible {
    ======================================================================= */
 
 .prose { padding: 0; display: flex; }
+
+/* The entry's tags, above the text. The same list the library filters on. */
+.tagstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 36px 0; }
+.tag { display: flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; font-size: 12px; background: var(--l3); color: var(--ink2); }
+.tag__x { width: 22px; height: 22px; padding: 0; background: none; border: 0; color: var(--ink3); cursor: pointer; font: inherit; }
+.tag__x:hover { color: var(--ink); }
+.tag__input { flex: 0 1 180px; padding: 4px 8px; font-size: 13px; }
 .prose__area {
   flex: 1; min-height: 0; resize: none; border: 0; background: transparent;
   padding: 28px 36px; font-size: 17px; line-height: 1.75; color: var(--ink);
@@ -446,9 +464,24 @@ select:focus-visible, textarea:focus-visible {
 .day.has-events { background: var(--l2); }
 .day.is-past { color: var(--ink3); }
 .day.is-selected { border-color: var(--acc); }
+.day.is-inrange { border-color: var(--acc); background: var(--acc-dim); }
+.monthgrid { user-select: none; }
 .day.is-today { background: var(--acc); color: var(--on-acc); font-weight: 600; }
 .cal__meta { padding: 0 14px 10px; }
-.cal__jump { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.cal__hint { margin: 0; padding: 0 14px 12px; font-size: 12px; color: var(--ink3); }
+.cal__foot { margin-top: auto; }
+.cal__foot > * + * { margin-top: 8px; }
+.cal__jump { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+
+/* Segmented choice: joined buttons, one pressed. The calendar's range switch. */
+.seg { display: flex; }
+.seg__opt {
+  font: inherit; font-size: 13px; padding: 6px 11px; cursor: pointer;
+  background: var(--l2); border: 1px solid var(--line2); color: var(--ink2);
+}
+.seg__opt + .seg__opt { margin-left: -1px; }
+.seg__opt:hover { background: var(--l3); }
+.seg__opt[aria-pressed="true"] { position: relative; z-index: 1; background: var(--acc); border-color: var(--acc); color: var(--on-acc); font-weight: 600; }
 
 .legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .legend span { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); }
@@ -485,7 +518,61 @@ select:focus-visible, textarea:focus-visible {
 .eblock p { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .eblock em { display: block; margin-top: 2px; font-size: 13px; font-style: normal; color: var(--ink2); font-weight: 400; }
 .eblock.is-short em { display: none; }
+/* A task with a time: dashed, flatter than an event, its own checkbox.
+   Tapping it ticks the task off. */
+.eblock--task { background: var(--l1); border: 1px dashed var(--line2); border-left: 4px solid var(--acc); box-shadow: none; }
+.eblock--task.is-late { border-left-color: var(--err); }
+.eblock--task.is-done { opacity: .6; }
+.eblock--task.is-done p { text-decoration: line-through; color: var(--ink3); }
+.eblock__check {
+  display: inline-grid; place-items: center; width: 13px; height: 13px; margin-right: 6px; vertical-align: -1px;
+  border: 1px solid var(--line2); background: var(--l2); font-size: 10px; line-height: 1; color: #0b2a14;
+}
+[aria-pressed="true"] > .eblock__check, [aria-pressed="true"] > p > .eblock__check { background: var(--ok); border-color: var(--ok); }
+.allday--task, .colhead__allday--task { border-style: dashed; border-left: 4px solid var(--acc); }
+.colhead__allday--task { border: 1px dashed var(--line2); border-left: 3px solid var(--acc); }
+.allday--task.is-done, .colhead__allday--task.is-done { color: var(--ink3); text-decoration: line-through; }
 .nowline { position: absolute; left: 0; right: 0; height: 2px; background: var(--acc); z-index: 3; }
+
+/* Renaming an event happens in place, over the lane. */
+.eventedit { position: absolute; left: 118px; right: 10px; z-index: 5; box-shadow: 0 2px 6px rgb(0 0 0 / .5); }
+.eventedit .row { margin-top: 8px; }
+.eventedit--col { right: auto; width: 340px; max-width: 100%; }
+
+/* ---- several days side by side ----
+   Column heads stay put while the hours scroll. They sit inside .lanewrap, so
+   they borrow back its 52px ruler gutter to paint over the hour labels. */
+.colheads {
+  position: sticky; top: -14px; z-index: 7;
+  margin: -14px 0 8px -52px; padding: 10px 0 8px 52px;
+  background: var(--l1); border-bottom: 1px solid var(--line);
+}
+.colheads__grid, .lanecols { display: grid; gap: 4px; }
+.colhead { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.colhead__day {
+  display: flex; flex-direction: column; align-items: center; width: 100%; padding: 4px 0;
+  font: inherit; cursor: pointer; background: var(--l2); border: 1px solid var(--line); color: var(--ink);
+}
+.colhead__day:hover { background: var(--l3); }
+.colhead__day span { font-size: 11px; letter-spacing: .06em; color: var(--ink3); }
+.colhead__day b { font-size: 16px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.colhead__day.is-today { background: var(--acc); border-color: var(--acc); color: var(--on-acc); }
+.colhead__day.is-today span { color: var(--on-acc); }
+.colhead__meta { font-size: 11px; color: var(--ink3); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colhead__allday {
+  display: block; width: 100%; padding: 3px 6px; font: inherit; font-size: 11px; line-height: 1.3; text-align: left; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--l2); border: 0; border-left: 3px solid var(--line2); color: var(--ink);
+}
+.lanecols { position: absolute; inset: 0; }
+.lanecol { position: relative; min-width: 0; border-left: 1px solid #2e2e2e; }
+.rblock--col { padding: 3px 4px 0 8px; }
+.rblock--col b { font-size: 11px; }
+.eblock--col { left: 14px; right: 2px; z-index: 2; padding: 4px 6px; display: flex; flex-direction: column; }
+.eblock--col.is-short { padding: 0 6px; justify-content: center; }
+.eblock--col p { font-size: 12px; line-height: 1.3; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.eblock--col.is-short p { white-space: nowrap; display: block; }
+.eblock--col em { margin-top: 0; font-size: 11px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* =======================================================================
    BRIEF
@@ -522,6 +609,14 @@ select:focus-visible, textarea:focus-visible {
 }
 .injected[aria-pressed="true"] { border-left-color: var(--ok); color: var(--ink); }
 .injected em { display: block; font-size: 13px; font-style: normal; color: var(--ink3); }
+
+/* =======================================================================
+   LIGHTS — a frame around lightsd, which is its own app
+   ======================================================================= */
+
+.viewbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 0 0 auto; }
+.embed { flex: 1; min-height: 0; width: 100%; border: 1px solid var(--line); background: var(--bg); }
+.embed__off .btn { align-self: flex-start; margin-top: 10px; }
 
 /* =======================================================================
    TIMERS
@@ -629,8 +724,29 @@ select:focus-visible, textarea:focus-visible {
 .grid__day { font-size: 13px; color: var(--ink2); }
 .grid__day.is-today { color: var(--acc); font-weight: 600; }
 .grid__hours { font-size: 13px; color: var(--ink3); font-variant-numeric: tabular-nums; text-align: right; }
+.grid__row { position: relative; min-width: 0; }
 .grid__cells { display: grid; gap: 1px 0; border: 1px solid var(--line); margin-bottom: 4px; }
-.cell { height: 26px; padding: 0; border: 0; cursor: crosshair; background: var(--l2); }
+.cell { height: 44px; padding: 0; border: 0; cursor: crosshair; background: var(--l2); }
+/* A block's name on the row. pointer-events:none, or the label eats the drag. */
+.grid__label {
+  position: absolute; top: 1px; height: 44px; pointer-events: none; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center; padding: 0 5px;
+  border-left: 3px solid var(--line2);
+}
+.grid__label b { font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grid__label em { font-size: 11px; font-style: normal; line-height: 1.25; color: var(--ink2); white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+/* Naming a block: opens under it, clamped inside the row. */
+.noteedit {
+  position: absolute; z-index: 8; top: 48px; width: 300px;
+  display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  background: var(--l1); border: 1px solid var(--acc); border-left: 6px solid var(--acc);
+  box-shadow: 0 2px 6px rgb(0 0 0 / .5); font-size: 12px;
+}
+.noteedit .row { flex-wrap: nowrap; gap: 6px; }
+
+/* Unsaved-since-open strip, with the undo beside it. */
+.dirty { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 20px; background: var(--acc-dim); border-bottom: 1px solid var(--acc); }
+.dirty span { flex: 1; min-width: 0; font-size: 13px; color: var(--acc); }
 .cell.is-mark { border-right: 1px solid #3a3a3a; }
 .cell.is-asleep { cursor: not-allowed; background: repeating-linear-gradient(135deg, #1c1c1c 0 4px, #242424 4px 8px); }
 .cell.is-sel { outline: 1px solid var(--acc); outline-offset: -1px; }
@@ -701,18 +817,59 @@ select:focus-visible, textarea:focus-visible {
 body.is-hidden .conn__dot { animation: none; }
 
 /* =======================================================================
+   PHONE-ONLY PIECES, AS DESKTOP SEES THEM
+
+   A few controls exist only for the phone layout (the week strip, the "Dnes"
+   fold, the day painter) and a few only for desktop. They share the DOM, so
+   each is hidden on the other side here rather than duplicated in JS.
+   ======================================================================= */
+
+@media (min-width: 761px) {
+  .phone-only { display: none !important; }
+}
+
+.top__title, .conn__short { display: none; }
+
+/* The "next up" block is a plain part of the rail on desktop; the toggle
+   only does something on a phone, where it folds the Today panels open. */
+.nextcard__toggle {
+  display: block; width: 100%; padding: 0; text-align: left; cursor: default;
+  background: none; border: 0; color: inherit; font: inherit;
+}
+.nextcard__text > * { display: block; }
+.nextcard__text .strong { margin-top: 2px; }
+.nextcard__label { display: none; }
+.nextcard .btn--block { margin-top: 8px; }
+
+.cal__monthbtn { display: flex; align-items: baseline; gap: 8px; padding: 0; background: none; border: 0; color: var(--ink); font: inherit; cursor: default; }
+.cal__caret { display: none; font-size: 13px; color: var(--ink3); }
+.weekstrip { display: none; }
+.daypaint, .daypick { display: none; }
+
+.pairrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+
+.psheet__head { display: block; }
+
+/* Behind a phone sheet. Only ever unhidden by js/ui/psheet.js. */
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .6); }
+
+/* =======================================================================
    PHONE
 
-   Not the desktop layout squeezed. A phone gets one view at a time, filling
-   the screen, with a thumb-reachable tab bar instead of the function rail —
-   the first pass stacked every column into one long scroll, which buried the
-   chat under two panels and left navigation at the bottom of it.
+   Its own design, not the desktop squeezed (Claude Design: "Kacey Mobile").
+   One view at a time under a 52px header that names it, a five-tab bar at the
+   bottom, cards inset by 12px, 44px+ touch targets, inputs at 16px so iOS
+   does not zoom. Panels that sit beside the content on desktop become bottom
+   sheets (.psheet, js/ui/psheet.js); the rest is the same DOM re-ordered —
+   `display: contents` lets a column's cards join the view's own order.
 
    Heights use dvh, not vh: on iOS the on-screen keyboard shrinks the visual
    viewport and vh does not notice, so the composer ends up underneath it.
    Safe-area insets keep the tab bar clear of the home indicator.
    ======================================================================= */
 @media (max-width: 760px) {
+  .desk-only { display: none !important; }
+
   body {
     /* dvh follows the keyboard; the vh line is the fallback for older Android. */
     height: 100vh;
@@ -723,162 +880,52 @@ body.is-hidden .conn__dot { animation: none; }
     padding-top: env(safe-area-inset-top);
   }
 
-  /* ---- header: one line, never wrapping ---- */
+  /* ---- header: the view's name, and a three-word state ---- */
   .top {
-    flex: 0 0 44px; height: 44px;
-    gap: 10px; padding: 0 12px;
+    flex: 0 0 52px; height: 52px;
+    gap: 10px; padding: 0 16px;
     border-left: 0; border-right: 0; border-top: 0;
   }
-  .top__stats, .top__end .btn { display: none; }
-  .top__end { gap: 8px; }
-  .top__view { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-  .conn__label { display: none; }            /* the dot already says it */
+  .top__mark { width: 12px; height: 12px; flex: 0 0 12px; }
+  .top__name, .top__stats, .top__end, .conn__label { display: none; }
+  .top__brand { min-width: 0; }
+  .top__title {
+    display: block; min-width: 0; font-size: 16px; font-weight: 600; letter-spacing: .02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .conn { margin-left: auto; }
+  .conn__short { display: inline; font-size: 13px; color: var(--ink2); }
+  .conn__dot { width: 8px; height: 8px; }
 
   /* ---- one view, full height, scrolling inside itself ---- */
   .views { display: block; min-height: 0; flex: 1; overflow: hidden; }
   .view {
     display: flex; flex-direction: column;
-    height: 100%; gap: 1px;
-    overflow-y: auto; -webkit-overflow-scrolling: touch;
-    padding: 0 0 8px;
+    height: 100%; gap: 12px; padding: 12px;
+    overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
   }
   .view > * { flex: 0 0 auto; }
+  /* Cards pulled up into the view's own order by `display: contents` are
+     flex items of the view too, and would otherwise shrink to nothing. */
+  .view > .col > *, .view > section.card > * { flex: 0 0 auto; }
+  .col, .col--rail, .col--stack, .view--triple > .col--stack { display: flex; gap: 12px; overflow: visible; }
 
-  /* Cards run edge to edge: a 375px screen cannot spare 32px of gutter. */
-  .card, .col--rail > .card { border-left: 0; border-right: 0; }
+  /* The back buttons and most function lists are what the tab bar replaces. */
+  .btn--back { display: none; }
+  .view[data-view="main"] .col--rail > .card:last-child,
+  .view[data-view="tasks"] .col--rail > .card:last-child,
+  .view[data-view="calendar"] > .col--rail { display: none; }
 
-  /* The rail's function list and the back buttons are exactly what the tab
-     bar replaces. Keeping both would be two navigations disagreeing. */
-  .col--rail .card:last-child, .btn--back { display: none; }
-  .col--rail { overflow: visible; gap: 1px; }
-  .col--stack, .col--chat { display: flex; gap: 1px; }
-  .view--triple > .col--stack { display: flex; }
-
-  /* ---- chat gets the whole screen ---- */
-  .col--chat { flex: 1 1 auto; min-height: 0; }
-  .chatbox { flex: 1 1 auto; min-height: 0; }
-  .logwrap { padding: 14px 14px 4px; }
-  .msg { max-width: 92%; }
-  .msg__bubble { font-size: 15px; padding: 10px 12px; }
-
-  /* On the chat screen the Today and Tasks panels are noise — both have a tab
-     of their own. Hidden here, kept everywhere else. */
-  .view[data-view="main"] > .col--stack { display: none; }
-  .view[data-view="main"] > .col--rail > .card:first-child { display: none; }
-
-  /* ---- composer ---- */
-  .dock {
-    position: sticky; bottom: 0; z-index: 5;
-    /* minmax(0,...) not 1fr: a grid track's implicit min-width is auto, so the
-       composer refuses to shrink and pushes the mic off the right edge. */
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px; padding: 6px 8px;
-    background: var(--bg); border-top: 1px solid var(--line);
-  }
-  .attachstrip { padding: 6px; }
-  .composer { height: 48px; padding: 0 4px 0 8px; gap: 6px; }
-  .composer__input { font-size: 16px; }      /* below 16px iOS zooms on focus */
-  .composer .btn { height: 38px; padding: 0 14px; }
-  .btn--talk { height: 48px; padding: 0 14px; }
-  .btn--talk span:not(.dot) { display: none; }
-  .miczone { align-items: stretch; }
-
-  /* ---- lists and grids collapse to one column ---- */
-  .groups, .cards, .runner__list { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 14px; }
-  .card__head { padding: 10px 12px; gap: 8px; }
-  .card__title--lg { font-size: 14px; }
-  .card__foot { padding: 8px; }
-
-  /* A task row on a phone: checkbox and label on one line, actions on the
-     next. The label has to CLAIM the row (min-width, not just flex-grow) —
-     otherwise it shrinks to fit beside the buttons and wraps one word per
-     line, which is what it did before. */
-  .groups .task { flex-wrap: wrap; row-gap: 10px; align-items: flex-start; }
-  .groups .task__text { flex: 1 1 calc(100% - 34px); min-width: calc(100% - 34px); }
-  .groups .task .btn { flex: 1 1 40%; }
-  .groups .check { margin-top: 2px; }
-  .task__label { font-size: 16px; }
-
-  /* ---- journal ----
-     The editor is the point of this view, so it goes first and takes the
-     room. Stacked in DOM order it ended up third, three lines tall, under a
-     clock and a side chat. The side chat is a desktop affordance — on a phone
-     the Chat tab is right there and does the same job. */
-  .view[data-view="journal"] { flex-direction: column; }
-  .view[data-view="journal"] > section.card { order: 1; flex: 1 1 auto; min-height: 45vh; }
-  .view[data-view="journal"] > .col--stack { order: 2; }
-  .view[data-view="journal"] > .col--rail { order: 3; }
-  .view[data-view="journal"] .col--stack > .card:nth-child(2) { display: none; }
-  .view[data-view="journal"] .clock { font-size: 20px; display: inline-block; margin-right: 10px; }
-  .view[data-view="journal"] .card--pad { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-  .view[data-view="journal"] .card--pad .muted { margin: 0; }
-  .prose__area { padding: 14px; font-size: 16px; line-height: 1.6; }
-
-  /* ---- calendar ----
-     The sources list is a stack of full-width buttons on desktop, which on a
-     phone pushes the day lane below the fold. As chips it costs one line. */
-  #calSources { flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
-  #calSources .btn--fn {
-    width: auto; flex: 0 0 auto; padding: 6px 10px; font-size: 12px;
-  }
-  .cal__meta { padding: 0 12px 8px; font-size: 12px; }
-  .cal__jump { gap: 4px; }
-  .monthgrid { padding: 8px; gap: 2px; }
-  .day { padding: 10px 0; }                  /* a real tap target */
-  .lanewrap { padding: 12px 10px 12px 44px; }
-  .eblock { left: 84px; right: 4px; }        /* 118px leaves nothing at 375px */
-  .tick span { left: -44px; width: 38px; }
-  .legend { gap: 10px; padding: 8px 12px; }
-
-  /* ---- brief ----
-     Same reasoning as the journal: the spoken lines are what you came for, so
-     they lead. The morning-cycle timeline and the prompt editor are things you
-     configure once, and they can sit below. */
-  .view[data-view="brief"] > section.card { order: 1; flex: 1 1 auto; min-height: 50vh; }
-  .view[data-view="brief"] > .col--stack { order: 2; }
-  .view[data-view="brief"] > .col--rail { order: 3; }
-  .view[data-view="brief"] .card__foot.row { flex-wrap: wrap; row-gap: 8px; }
-  .view[data-view="brief"] .bar--grow { flex-basis: 100%; order: 3; }
-
-  /* ---- timers, controller ---- */
-  .tiles { padding: 10px 12px; }
-  .brieflines { padding: 14px 12px; }
-  .briefline { font-size: 16px; padding: 8px 10px; }
-  .briefline.is-current { font-size: 17px; }
-  .presetgrid { grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); }
-  .presetgrid .btn { padding: 14px 6px; font-size: 15px; }
-  .savedgrid { grid-template-columns: minmax(0, 1fr); }
-  .customtimer { padding: 12px; gap: 10px; }
-  .readout__row { font-size: 13px; }
-  .ctrlrow > * { flex: 1 1 100%; }
-
-  /* ---- focus and the checklist runner ----
-     Both are full-bleed views, so they have to claim the height the flex
-     parent hands out rather than sitting at the top with dead space below. */
-  .view--full > .runner, .view--full > .focus { flex: 1 1 auto; min-height: 0; }
-  .runner, .focus { padding: 14px; border: 0; }
-  .runner__title { font-size: 28px; }
-  .focus__title { font-size: 32px; }
-  .focus__clock { font-size: 52px; margin-top: 24px; }
-  .focus .row { margin-top: 28px; }
-
-  /* ---- sheets go full-screen ---- */
-  .sheet { padding: 0; }
-  /* :not() keeps the "Víc" sheet a bottom sheet — it matches .sheet__box too,
-     and a blanket height:100% here turned it into a full-screen page. */
-  .sheet__box:not(.sheet__box--sheetbottom) {
-    width: 100%; height: 100%; max-height: 100%;
-  }
-  .sheet__lede { display: none; }            /* instructions written for a mouse */
-
-  /* The routine grid cannot shrink to 375px and stay usable, so it scrolls
-     sideways with the day column pinned — that column is the one thing you
-     must keep in view while dragging across hours. */
-  .sheet__body { padding: 8px; }
-  .grid { min-width: 620px; grid-template-columns: 34px minmax(0, 1fr) 40px; gap: 0 6px; }
-  .grid__day { position: sticky; left: 0; z-index: 2; background: var(--l1); font-size: 12px; }
-  .cell { height: 32px; }                    /* taller: this is a touch target */
-  .weektotals > div { grid-template-columns: minmax(0, 1fr); }
+  .card__head { padding: 10px 14px; gap: 8px; }
+  .card__title--lg { font-size: 15px; }
+  .card__foot { padding: 10px 14px; }
+  .btn { min-height: 44px; }
+  .btn--sm { min-height: 40px; }
+  .btn--fn { min-height: 48px; }
+  .input, .select { min-height: 48px; font-size: 16px; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .chip { flex: 0 0 auto; min-height: 32px; }
+  .chip--filter { min-height: 40px; }
 
   /* ---- the tab bar ---- */
   .tabbar {
@@ -887,7 +934,425 @@ body.is-hidden .conn__dot { animation: none; }
     background: var(--l1); border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .toast { bottom: calc(62px + env(safe-area-inset-bottom)); left: 8px; right: 8px; max-width: none; }
+  .tab { min-height: 56px; gap: 2px; padding: 6px 0 4px; color: var(--ink2); }
+  .tab svg { width: 22px; height: 22px; }
+  body[data-view="task"] .tabbar, body[data-view="focus"] .tabbar { display: none; }
+
+  /* ---- toast: above the tab bar, and above the composer on the chat ---- */
+  .toast { left: 10px; right: 10px; max-width: none; bottom: calc(66px + env(safe-area-inset-bottom)); padding: 8px 8px 8px 14px; }
+  body[data-view="main"] .toast { bottom: calc(196px + env(safe-area-inset-bottom)); }
+  .toast__x { width: 40px; height: 40px; }
+
+  /* ---- phone sheets: whichever .psheet is open slides up over the scrim ---- */
+  .psheet { display: none; }
+  .is-psheet-open {
+    display: flex !important; flex-direction: column;
+    position: fixed; left: 0 !important; right: 0; bottom: 0; top: auto !important; z-index: 31;
+    width: auto; max-height: calc(100% - 70px); overflow-y: auto; margin: 0;
+    background: var(--l1); border: 0; border-top: 1px solid var(--line2);
+    box-shadow: 0 -2px 6px rgb(0 0 0 / .5);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .psheet__head { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 16px; border-bottom: 1px solid var(--line); }
+  .psheet__head .card__title--bar { padding: 0; border: 0; font-size: 15px; letter-spacing: .04em; }
+  .psheet__head .sheet__close { width: 44px; height: 44px; font-size: 20px; }
+
+  /* =====================================================================
+     CHAT — "next up" on top, folding open to today; composer and a
+     full-width talk button docked at the bottom
+     ===================================================================== */
+  .view[data-view="main"] { padding: 0; gap: 0; }
+  .view[data-view="main"] > .col--rail { order: 0; margin: 12px 12px 0; }
+  .view[data-view="main"] > .col--stack { order: 1; display: none; padding: 12px 12px 0; }
+  .view[data-view="main"][data-today="open"] > .col--stack { display: flex; }
+  .view[data-view="main"] > .col--chat { order: 2; flex: 1 1 auto; min-height: 0; display: flex; gap: 0; }
+
+  .nextcard { padding: 0; }
+  .nextcard .big, .nextcard #stateSub { display: none; }
+  .nextcard__toggle { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 14px; cursor: pointer; }
+  .nextcard__text { flex: 1; min-width: 0; }
+  .nextcard__text .rule { margin: 0; padding: 0; border: 0; }
+  .nextcard__text .strong { font-size: 16px; margin: 0; }
+  .nextcard__text .muted { margin: 0; }
+  .nextcard__label { display: block; font-size: 13px; color: var(--acc); white-space: nowrap; }
+  .nextcard .btn--block { display: none; margin: 0 14px 14px; width: calc(100% - 28px); }
+  .view[data-view="main"][data-today="open"] .nextcard .btn--block { display: flex; }
+  .view[data-view="main"] .col--stack .card__body--scroll { overflow: visible; }
+
+  .view[data-view="main"] .chatbox { flex: 1 1 auto; min-height: 0; background: none; border: 0; }
+  .view[data-view="main"] .dock { flex-shrink: 0; }
+  .logwrap { padding: 16px 12px; }
+  .log { gap: 14px; }
+  .msg { max-width: 92%; }
+  .msg__bubble { font-size: 15px; padding: 10px 12px; }
+  .listening { padding: 8px 12px; font-size: 13px; }
+
+  .dock {
+    position: sticky; bottom: 0; z-index: 5;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px; padding: 8px 12px;
+    background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .attachstrip { padding: 6px; flex-wrap: nowrap; overflow-x: auto; }
+  .composer { height: auto; min-height: 52px; padding: 0 4px; gap: 4px; }
+  .composer__clip { width: 44px; height: 44px; flex-basis: 44px; }
+  .composer__input { font-size: 16px; padding: 10px 4px; }
+  .composer .btn { height: 44px; padding: 0 14px; }
+  .miczone { display: block; }
+  .btn--talk { display: flex; width: 100%; height: auto; min-height: 52px; font-size: 15px; }
+
+  /* =====================================================================
+     CALENDAR — the month folds into its name; a week strip stands in
+     ===================================================================== */
+  .view[data-view="calendar"] { padding: 0; gap: 0; }
+  .view[data-view="calendar"] > .card { border-left: 0; border-right: 0; border-top: 0; }
+  .view[data-view="calendar"] > .card:first-child { background: var(--l1); }
+  .view[data-view="calendar"] > .card:nth-child(2) { background: var(--bg); border-bottom: 0; }
+
+  .cal__monthbtn { min-height: 44px; padding: 0 6px; cursor: pointer; }
+  .cal__monthbtn .card__title--lg { font-size: 16px; letter-spacing: 0; }
+  .cal__caret { display: inline; }
+  .view[data-view="calendar"] .btn--step { width: 44px; height: 44px; padding: 0; background: var(--l2); }
+  .view[data-view="calendar"] .card:first-child .card__head { padding: 10px 12px; }
+
+  .monthgrid { display: none; padding: 10px 12px; gap: 4px; border-bottom: 1px solid var(--line); }
+  .view[data-view="calendar"][data-month="open"] .monthgrid { display: grid; }
+  .monthgrid__dow { font-size: 12px; }
+  .day { min-height: 40px; padding: 0; }
+  .cal__meta, .cal__hint { display: none; }
+  .view[data-view="calendar"][data-month="open"] .cal__meta { display: block; padding: 0 12px 10px; }
+  .view[data-view="calendar"] > .card:first-child .cal__foot:not(.is-psheet-open) { display: none; }
+
+  .weekstrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .view[data-view="calendar"][data-month="open"] .weekstrip { display: none; }
+  .weekday {
+    min-height: 62px; padding: 4px 0; font: inherit; cursor: pointer;
+    background: var(--l1); border: 1px solid var(--line); color: var(--ink);
+  }
+  .weekday span { display: block; font-size: 11px; color: var(--ink3); }
+  .weekday b { display: block; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .weekday i { display: block; width: 5px; height: 5px; margin: 3px auto 0; }
+  .weekday i.has { background: var(--acc); }
+  .weekday.is-inrange { border-color: var(--acc); background: var(--l2); }
+  .weekday.is-today { background: var(--acc); color: var(--on-acc); }
+  .weekday.is-today span { color: var(--on-acc); }
+  .weekday.is-today i.has { background: var(--on-acc); }
+
+  /* Sources: a sheet, from the "Zdroje" button. */
+  .cal__foot.is-psheet-open { padding: 0 0 24px; }
+  .cal__foot.is-psheet-open > :not(.psheet__head) { margin: 0 16px; }
+  .cal__foot.is-psheet-open > * + * { margin-top: 12px; }
+  #calSources { padding: 0; gap: 0; }
+  #calSources .btn--fn {
+    min-height: 52px; font-size: 15px; background: none; border: 0; border-bottom: 1px solid #2e2e2e;
+    padding: 0; gap: 12px; color: var(--ink);
+  }
+  #calSources .btn--fn[aria-pressed="false"] { color: var(--ink3); }
+  #calSources .swatch { width: 16px; height: 16px; flex-basis: 16px; }
+
+  /* The day: its name, Zdroje and Upravit rutinu, then the range switch. */
+  .view[data-view="calendar"] > .card:nth-child(2) > .card__head { padding: 12px 12px 8px; border: 0; }
+  .view[data-view="calendar"] > .card:nth-child(2) > .card__head > .row:first-child { display: none; }
+  #dayLabel { flex: 1 1 100%; font-size: 16px; letter-spacing: 0; }
+  #dayMeta { flex: 1 1 auto; margin: 0; }
+  .view[data-view="calendar"] #openRoutine { margin-left: 0; }
+  .view[data-view="calendar"] .seg { order: 5; flex: 1 1 100%; display: grid; grid-template-columns: repeat(3, 1fr); }
+  .view[data-view="calendar"] .seg__opt { min-height: 40px; padding: 0 4px; }
+  .legend { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 12px; padding: 0 12px 8px; border: 0; }
+  .legend span { white-space: nowrap; font-size: 12px; }
+
+  /* The lane scrolls with the page, so its sticky heads pin to the view. */
+  .lanewrap { padding: 12px 12px 20px 50px; overflow: visible; }
+  .alldaystrip { flex-direction: column; gap: 4px; }
+  .allday { min-height: 36px; text-align: left; }
+  .tick span { left: -50px; width: 44px; }
+  .eblock { left: 92px; right: 4px; padding: 6px 10px; }
+  .eblock.is-short { padding: 0 10px; }
+  .eblock p { font-size: 13px; }
+  .eblock em { font-size: 12px; }
+  .rblock { padding: 4px 6px 4px 10px; }
+  .rblock b { width: 74px; font-size: 12px; }
+  .rblock em { width: 74px; font-size: 11px; overflow: hidden; white-space: nowrap; }
+  .colheads { top: -12px; margin: -12px 0 8px -50px; padding: 8px 0 6px 50px; background: var(--bg); }
+  .colheads__grid, .lanecols { gap: 3px; }
+  .colhead__day { min-height: 44px; justify-content: center; padding: 2px 0; background: var(--l1); }
+  .colhead__day b { font-size: 14px; }
+  .colhead__meta { display: none; }
+  .colhead__allday { font-size: 10px; padding: 2px 4px; background: var(--l1); }
+  .eblock--col { left: 3px; right: 1px; padding: 3px 4px; }
+  .eblock--col p { font-size: 10px; -webkit-line-clamp: 3; }
+  .rblock--col { padding: 2px 3px 0 6px; }
+  .rblock--col b { width: auto; font-size: 10px; }
+
+  /* Renaming an event: a sheet, buttons stacked. */
+  .eventedit.is-psheet-open { padding: 14px 16px 24px; gap: 10px; box-shadow: 0 -2px 6px rgb(0 0 0 / .5); }
+  .eventedit .row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .eventedit .row .btn { min-height: 48px; font-size: 14px; }
+
+  /* =====================================================================
+     TASKS — the summary card carries the controls; groups are cards; the
+     add field docks above the tab bar
+     ===================================================================== */
+  .view[data-view="tasks"] { padding-bottom: 0; }
+  .view[data-view="tasks"] > .col--rail { order: 0; }
+  .view[data-view="tasks"] > .card { order: 1; flex: 1 0 auto; background: none; border: 0; }
+  .view[data-view="tasks"] > .card > .card__head { display: none; }
+  .view[data-view="tasks"] .card--pad { display: grid; grid-template-columns: 1fr auto; align-items: baseline; padding: 14px; }
+  .view[data-view="tasks"] .card--pad .card__title { font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--ink3); }
+  .view[data-view="tasks"] .card--pad .big { font-size: 24px; font-variant-numeric: tabular-nums; }
+  .view[data-view="tasks"] .card--pad > .bar, .view[data-view="tasks"] .card--pad > .muted,
+  .view[data-view="tasks"] .card--pad > .pairrow { grid-column: 1 / -1; }
+  .view[data-view="tasks"] .card--pad > .bar { margin-top: 10px; }
+  .view[data-view="tasks"] .card--pad > .muted { margin: 10px 0 0; }
+
+  .groups { display: flex; flex-direction: column; gap: 12px; padding: 0; overflow: visible; }
+  .groups > div { background: var(--l1); border: 1px solid var(--line); }
+  .groups .subhead { margin: 0; padding: 12px 14px; border: 0; font-size: 13px; letter-spacing: .06em; }
+  .groups .task { min-height: 60px; padding: 8px 14px; border-bottom: 0; border-top: 1px solid #2e2e2e; }
+  .groups > div > .muted { margin: 0; padding: 12px 14px; border-top: 1px solid #2e2e2e; font-size: 14px; color: var(--ink3); }
+  .groups .task { flex-wrap: wrap; row-gap: 8px; }
+  .groups .task__text { flex: 1 1 calc(100% - 56px); min-width: calc(100% - 56px); }
+  .groups .task .btn { flex: 1 1 40%; min-height: 40px; }
+  .check { width: 22px; height: 22px; flex-basis: 22px; }
+  .task__label { font-size: 16px; }
+
+  #taskForm {
+    position: sticky; bottom: 0; z-index: 5; margin: 12px -12px 0; padding: 8px 12px;
+    background: var(--bg); border-top: 1px solid var(--line); flex-wrap: wrap;
+  }
+  /* The label takes the first line; date, time and Přidat share the second. */
+  #taskInput { flex: 1 0 100%; }
+  #taskForm .input--when { flex: 1 1 0; }
+  #taskForm .btn { min-height: 48px; padding: 0 16px; }
+  .taskwhen { padding-left: 0; }
+  .taskwhen .input--when { flex: 1 1 40%; }
+  .taskwhen__acts { flex: 1 0 100%; }
+  .groups .taskwhen__acts .btn { flex: 1 1 0; min-height: 44px; }
+
+  /* the checklist runner and focus: full-screen, no tab bar */
+  .view--full { padding: 0; }
+  .view--full > .runner, .view--full > .focus { flex: 1 1 auto; min-height: 0; }
+  .runner { padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); border: 0; background: var(--bg); }
+  .runner__head { flex-wrap: wrap; gap: 4px 10px; padding-bottom: 10px; }
+  .runner__title { margin-top: 14px; font-size: 28px; line-height: 1.2; }
+  .runner__list { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
+  .runitem { min-height: 60px; padding: 0 14px; gap: 14px; }
+  .runitem__label { font-size: 17px; }
+  .runner__add { flex-wrap: nowrap; }
+  .runner__foot { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; }
+  .runner__foot .bar { grid-column: 1 / -1; }
+  .runner__foot .btn { min-height: 52px; }
+  .focus { padding: 24px 24px calc(40px + env(safe-area-inset-bottom)); border: 0; background: var(--bg); }
+  .focus__title { font-size: 30px; line-height: 1.25; }
+  .focus__clock { margin-top: 36px; font-size: 64px; }
+  .focus .row { flex-direction: column; align-items: stretch; width: 100%; gap: 8px; margin-top: 36px; }
+  .focus .btn--lg { min-height: 56px; }
+
+  /* =====================================================================
+     JOURNAL — dictate from the top card; the side chat is a sheet
+     ===================================================================== */
+  .view[data-view="journal"] > .col--stack,
+  .view[data-view="journal"] > .col--rail { display: contents; }
+  .view[data-view="journal"] .col--stack > .card--pad { order: 1; }
+  .view[data-view="journal"] > section.card { order: 2; }
+  .view[data-view="journal"] .col--rail > .card:last-child { order: 3; }
+  .view[data-view="journal"] .col--rail > .card:first-child { order: 4; }
+
+  .view[data-view="journal"] .card--pad {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: center;
+  }
+  .view[data-view="journal"] .card--pad .card__title { display: none; }
+  .view[data-view="journal"] .card--pad .clock { font-size: 28px; line-height: 1.2; }
+  .view[data-view="journal"] .card--pad .muted { grid-column: 1; margin: 0; }
+  .view[data-view="journal"] .card--pad [data-dictate] { grid-column: 2; grid-row: 1 / span 2; min-height: 48px; }
+  .view[data-view="journal"] > section.card > .card__foot [data-dictate] { display: none; }
+  .view[data-view="journal"] > section.card > .card__head {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 0;
+  }
+  .view[data-view="journal"] > section.card > .card__head #jSaved { grid-column: 1; margin: 0; font-size: 12px; color: var(--ink3); }
+  .view[data-view="journal"] > section.card > .card__head #jFinish { grid-column: 2; grid-row: 1 / span 2; }
+  .view[data-view="journal"] #jFinish { min-height: 44px; padding: 0 16px; font-size: 14px; }
+  .prose__area { min-height: 300px; padding: 16px; font-size: 16px; line-height: 1.7; }
+  .tagstrip { padding: 10px 14px 0; }
+  .tag { font-size: 13px; padding: 0 0 0 10px; }
+  .tag__x { width: 36px; height: 36px; font-size: 15px; }
+
+  .view[data-view="journal"] .col--rail > .card:last-child { background: none; border: 0; }
+  .view[data-view="journal"] .col--rail > .card:last-child > .card__title { display: none; }
+  .view[data-view="journal"] .col--rail > .card:last-child .fnlist { display: grid; grid-template-columns: 1fr 1fr; padding: 0; }
+  .view[data-view="journal"] .col--rail > .card:last-child .btn--fn { justify-content: center; font-weight: 400; background: var(--l2); border: 1px solid var(--line2); color: var(--ink); }
+  #jUnfinished { padding: 0; gap: 0; }
+  #jUnfinished .btn--fn { min-height: 56px; background: none; border: 0; border-top: 1px solid #2e2e2e; padding: 10px 14px; }
+
+  #jChatCard.is-psheet-open { height: calc(100% - 70px); }
+  #jChatCard .card__body { flex: 1 1 auto; }
+  #jChatCard .card__foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); flex-wrap: nowrap; }
+
+  /* =====================================================================
+     LIBRARY — search first, filters on one swiping line, actions last
+     ===================================================================== */
+  .view[data-view="library"] { gap: 10px; }
+  .view[data-view="library"] > section.card { display: contents; }
+  .view[data-view="library"] .card__sub { order: 1; padding: 0; border: 0; }
+  .view[data-view="library"] .card__sub .input { width: 100%; background: var(--l1); }
+  .view[data-view="library"] > section.card > .card__head { order: 2; padding: 0; border: 0; flex-direction: column-reverse; align-items: stretch; }
+  .view[data-view="library"] > section.card > .card__head .card__title { display: none; }
+  .view[data-view="library"] #libFilters { margin: 0 -12px; padding: 0 12px; }
+  .view[data-view="library"] #libCount { margin: 0; }
+  .view[data-view="library"] .cards { order: 3; display: flex; flex-direction: column; gap: 10px; padding: 0; overflow: visible; }
+  .view[data-view="library"] > .col--rail { order: 4; }
+  .view[data-view="library"] .col--rail > .card { background: none; border: 0; }
+  .view[data-view="library"] .col--rail .card__title--bar { display: none; }
+  .view[data-view="library"] .col--rail .fnlist { display: grid; grid-template-columns: 1fr 1fr; padding: 0; }
+  .view[data-view="library"] .col--rail .fnlist .btn--accent { grid-column: 1 / -1; justify-content: center; }
+  .view[data-view="library"] .col--rail .fnlist .btn--fn:not(.btn--accent) { justify-content: center; font-size: 13px; }
+  .view[data-view="library"] .col--rail .card__foot { padding: 12px 0 0; border: 0; }
+  .entry__foot .btn { min-height: 40px; }
+
+  /* =====================================================================
+     BRIEF — ready card, three tiles, the spoken lines with their player,
+     then the things you set once
+     ===================================================================== */
+  .view[data-view="brief"] > .col--stack,
+  .view[data-view="brief"] > .col--rail,
+  .view[data-view="brief"] > section.card { display: contents; }
+  .view[data-view="brief"] .col--stack > .card--pad { order: 1; }
+  .view[data-view="brief"] > section.card > .card__head { display: none; }
+  .view[data-view="brief"] .tiles { order: 2; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0; border: 0; }
+  .view[data-view="brief"] .tile { background: var(--l1); padding: 10px; }
+  .view[data-view="brief"] .tile b, .view[data-view="brief"] .tile em { font-size: 12px; }
+  .view[data-view="brief"] .tile b { color: var(--ink3); }
+  .view[data-view="brief"] .tile strong { font-size: 15px; }
+  .view[data-view="brief"] .brieflines { order: 3; padding: 6px 0; background: var(--l1); border: 1px solid var(--line); border-bottom: 0; }
+  .view[data-view="brief"] > section.card > .card__foot { order: 4; margin-top: -12px; background: var(--l1); border: 1px solid var(--line); padding: 12px 14px; flex-wrap: wrap; row-gap: 8px; }
+  .view[data-view="brief"] .bar--grow { flex: 1 1 100%; order: 3; }
+  .view[data-view="brief"] .col--stack > .card:not(.card--pad) { order: 5; }
+  .view[data-view="brief"] .col--rail > .card:nth-of-type(1) { order: 6; }
+  .view[data-view="brief"] .col--rail > .card:last-child { order: 7; }
+  .view[data-view="brief"] .card--pad .big { font-size: 22px; }
+  .briefline { font-size: 16px; padding: 10px 14px; }
+  .briefline.is-current { font-size: 17px; }
+  .view[data-view="brief"] .card__foot--block .row .btn { width: 52px; }
+  .injected { min-height: 44px; }
+
+  /* =====================================================================
+     TIMERS — what is running first, then the ways to start one
+     ===================================================================== */
+  .view[data-view="timer"] > .col--rail { order: 0; }
+  .view[data-view="timer"] > .card { order: 1; background: none; border: 0; }
+  .view[data-view="timer"] > .card > .card__head { display: none; }
+  .view[data-view="timer"] > .card > .card__body { padding: 0; overflow: visible; }
+  .view[data-view="timer"] .col--scroll { overflow: visible; }
+  .view[data-view="timer"] .label { margin: 6px 0 10px; }
+  .presetgrid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .presetgrid .btn { min-height: 56px; padding: 0 6px; font-size: 15px; }
+  .customtimer { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; background: var(--l1); }
+  .customtimer > .row:first-child { flex-wrap: nowrap; }
+  .customtimer > .row:first-child .clock--sm { flex: 1; font-size: 34px; }
+  .customtimer .btn--step { width: 52px; height: 52px; font-size: 18px; background: var(--l2); }
+  .customtimer > .row:nth-child(2) .muted-3 { margin-right: auto; }
+  .customtimer .input { flex: 0 0 auto; }
+  .customtimer .btn--accent { min-height: 48px; font-size: 15px; }
+  .savedgrid { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .savedgrid .btn { min-height: 52px; font-size: 15px; }
+  .timercard .row .btn { min-height: 44px; font-size: 14px; }
+
+  /* =====================================================================
+     LIGHTS — one line of where it lives, then the app itself
+     ===================================================================== */
+  .view[data-view="lights"] .viewbar { gap: 8px; }
+  .view[data-view="lights"] .viewbar .card__title { display: none; }
+  .view[data-view="lights"] .viewbar .muted-3 { font-size: 12px; }
+  .view[data-view="lights"] .viewbar .link { min-height: 44px; }
+  .embed { flex: 1 0 auto; min-height: 80vh; }
+
+  /* =====================================================================
+     CONTROLLER — every group a card, the switches easy to hit
+     ===================================================================== */
+  .view[data-view="controller"] > section.card { display: contents; }
+  .view[data-view="controller"] > section.card > .card__head { padding: 0; border: 0; }
+  .view[data-view="controller"] > section.card > .card__head .card__title { display: none; }
+  .view[data-view="controller"] > section.card > .card__head .muted { margin: 0; }
+  .groups--wide { gap: 12px; }
+  .groups--wide > div { padding: 4px 14px 14px; }
+  .groups--wide .subhead { padding: 8px 0; }
+  .groups--wide > div > .muted.narrow { margin: 0 0 12px; font-size: 13px; }
+  .srow { min-height: 60px; padding: 8px 0; border-bottom: 0; border-top: 1px solid #2e2e2e; }
+  .srow__text em { font-size: 12px; color: var(--ink3); }
+  .srow__state { min-width: 0; }
+  .readout__row { font-size: 14px; padding: 8px 0; border-bottom: 0; border-top: 1px solid #2e2e2e; }
+  .readout dt { font-size: 12px; letter-spacing: .06em; color: var(--ink3); }
+  .ctrlrow { flex-direction: column; }
+  .ctrlrow > * { flex: 1 1 auto; min-height: 48px; }
+  .ctrlrow:last-of-type { display: grid; grid-template-columns: 1fr 1fr; }
+  .view[data-view="controller"] > .col--rail .card:last-child { background: none; border: 0; }
+  .view[data-view="controller"] > .col--rail .card:last-child > .card__title--bar { display: none; }
+  .view[data-view="controller"] > .col--rail .card:last-child .fnlist { display: grid; grid-template-columns: 1fr 1fr; padding: 0; }
+  .view[data-view="controller"] > .col--rail .card:last-child .btn--fn { justify-content: center; }
+
+  /* =====================================================================
+     SHEETS — the planner and the voiceprint slide up, 70px short of the top
+     ===================================================================== */
+  .sheet { padding: 0; align-items: flex-end; }
+  .sheet__box:not(.sheet__box--sheetbottom) {
+    width: 100%; max-height: calc(100% - 70px);
+    border-left: 0; border-right: 0; border-bottom: 0;
+    box-shadow: 0 -2px 6px rgb(0 0 0 / .5);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sheet__box--xwide { height: calc(100% - 70px); }
+  .sheet__head { padding: 4px 4px 4px 16px; }
+  .sheet__head .muted { display: none; }
+  .sheet__close { width: 44px; height: 44px; font-size: 20px; }
+  .sheet__lede { display: none; }
+  .sheet__bar { padding: 10px 16px; gap: 8px; }
+  .sheet__foot { padding: 12px 16px; }
+  .sheet__foot .btn { min-height: 48px; }
+
+  /* Víc */
+  .sheet--bottom .fnlist { padding: 12px 16px 24px; }
+  .sheet--bottom .btn--fn { min-height: 56px; padding: 0 16px; font-size: 15px; }
+
+  /* The planner: one day at a time, painted downwards (routine.js). */
+  #routinePanel .grid { display: none; }
+  #routinePanel .sheet__bar:first-of-type .chips { flex: 1 1 100%; order: -1; }
+  #routinePanel .sheet__bar .btn--sm { flex: 1 1 0; min-height: 44px; }
+  #routinePanel .sheet__bar .chips .btn { flex: 0 0 auto; }
+  .sheet__body { padding: 0 16px 16px; }
+  .daypick { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  .daypick__day {
+    min-height: 48px; font: inherit; font-size: 14px; cursor: pointer;
+    background: var(--l2); border: 1px solid var(--line2); color: var(--ink);
+  }
+  .daypick__day span { display: block; }
+  .daypick__day em { display: block; font-size: 11px; font-style: normal; color: var(--ink3); }
+  .daypick__day[aria-pressed="true"] { background: var(--acc-dim); border-color: var(--acc); color: var(--acc); }
+  .daypaint__lede { padding: 10px 0 0; font-size: 12px; line-height: 1.6; }
+  .daypaint__lede b { color: var(--ink2); }
+  .daypaint { display: flex; flex-direction: column; margin: 10px 0 0 52px; border: 1px solid var(--line); }
+  .cell--v {
+    position: relative; display: block; width: 100%; height: 22px; padding: 0 8px; text-align: left;
+    border-top: 1px solid transparent; touch-action: none;
+  }
+  .cell--v.is-hour { border-top-color: #3a3a3a; }
+  .cell__time {
+    position: absolute; left: -52px; top: -8px; width: 44px; text-align: right; pointer-events: none;
+    font-size: 12px; color: var(--ink3); font-variant-numeric: tabular-nums;
+  }
+  .cell__name { pointer-events: none; font-size: 12px; font-weight: 600; line-height: 22px; color: var(--ink); white-space: nowrap; }
+  .noteedit--inline { position: static; width: auto; margin: 2px 0; font-size: 12px; }
+  .noteedit--inline .input { min-height: 44px; }
+  .weektotals > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .confirm { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 16px; }
+  .confirm .btn { min-height: 44px; margin: 0; }
+
+  /* voiceprint */
+  .vw__modes { padding: 0 16px; }
+  .vw__mode { min-height: 48px; }
+  .vw__rec, .vw__list, .vw__spread, .vw__test, .vw__sens, .vw__foot { padding-left: 16px; padding-right: 16px; }
+  .vw__play { width: 40px; height: 40px; }
+  .vw__del { width: 40px; height: 40px; }
+  .vw__sens input { height: 32px; }
 }
 
 /* A phone in landscape has no vertical room for full chrome. */
@@ -900,6 +1365,6 @@ body.is-hidden .conn__dot { animation: none; }
 /* 320px still has to work. */
 @media (max-width: 360px) {
   .tab span { font-size: 10px; }
-  .top__brand b { display: none; }
+  .conn__short { display: none; }
   .presetgrid { grid-template-columns: repeat(2, 1fr); }
 }

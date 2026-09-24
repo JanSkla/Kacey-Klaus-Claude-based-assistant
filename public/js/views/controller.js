@@ -27,7 +27,9 @@ var SOURCES = [
   { key: 'cal_rodina', name: 'Kalendář · rodina', meta: 'čte se z klaus_memory' },
   { key: 'mail', name: 'Pošta', meta: 'v plánu · souhrny jen ke čtení', planned: true },
   { key: 'health', name: 'Zdraví — spánek, běhy', meta: 'export z hodinek · v plánu', planned: true },
-  { key: 'lights', name: 'Světla v místnosti', meta: 'lokální bridge · v plánu', planned: true }
+  // lightsd is a separate app; this switch decides whether Kacey shows it.
+  { key: 'lights', name: 'Světla v místnosti', meta: 'lightsd :8080 · samostatná aplikace' },
+  { key: 'music', name: 'Hudba — Spotify', meta: 'nowplayingd :8081 · barvy obalu do světel · v plánu', planned: true }
 ];
 
 var MEMORY = [
