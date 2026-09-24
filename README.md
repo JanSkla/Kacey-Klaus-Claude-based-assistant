@@ -34,7 +34,7 @@ Check it is alive:
 
 ```sh
 curl http://localhost:8082/api/health
-# {"ok":true,"model":"claude-opus-5-5","effort":"low","mcpServers":["klaus-memory"]}
+# {"ok":true,"version":"1.0.0","model":"claude-opus-5-5","effort":"low","mcpServers":["klaus-memory"]}
 ```
 
 ## The XTTS voices (optional)

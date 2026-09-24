@@ -14,12 +14,16 @@
  * The reference table for these knobs is in README.md.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The repo root — this file sits next to server.js. */
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/* The release, as "KC 1.0.0" — package.json is the one place it is written
+   (CHANGELOG.md says how to bump it). */
+export const VERSION = JSON.parse(readFileSync(path.join(HERE, 'package.json'), 'utf8')).version;
 
 // ---------------------------------------------------------------------------
 // Server and model

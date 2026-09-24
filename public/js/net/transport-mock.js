@@ -53,7 +53,7 @@ export function makeMockTransport(onServer, onConn, submit) {
   function ready() {
     open = true;
     onConn('online');
-    at(120, function () { onServer({ type: 'ready', model: 'claude-opus-4-6 (mock)', mcpServers: ['klaus-memory'] }); });
+    at(120, function () { onServer({ type: 'ready', version: '1.0.0', model: 'claude-opus-4-6 (mock)', mcpServers: ['klaus-memory'] }); });
     at(200, function () { onServer({ type: 'session', sessionId: 'mock-' + Math.random().toString(36).slice(2, 9) }); });
   }
 

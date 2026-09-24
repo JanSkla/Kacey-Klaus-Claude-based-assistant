@@ -21,7 +21,7 @@ import * as appstate from './appstate.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 
 import {
-  HERE, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
+  HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
@@ -485,7 +485,7 @@ const persona = loadPersona();
 const app = express();
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, model: MODEL, effort: EFFORT, mcpServers: Object.keys(MCP_SERVERS) });
+  res.json({ ok: true, version: VERSION, model: MODEL, effort: EFFORT, mcpServers: Object.keys(MCP_SERVERS) });
 });
 
 app.get('/api/voices', async (_req, res) => {
@@ -927,7 +927,7 @@ wss.on('connection', (ws) => {
   const session = new KaceySession(ws, persona);
 
   // Sent immediately, before the SDK has finished booting, so the UI can render.
-  session.send({ type: 'ready', model: MODEL, mcpServers: Object.keys(MCP_SERVERS) });
+  session.send({ type: 'ready', version: VERSION, model: MODEL, mcpServers: Object.keys(MCP_SERVERS) });
 
   try {
     session.start();
@@ -979,7 +979,7 @@ wss.on('connection', (ws) => {
 
 server.listen(PORT, HOST, () => {
   log(`listening on http://${HOST}:${PORT}  (ws://${HOST}:${PORT}/ws)`);
-  log(`model=${MODEL} effort=${EFFORT}`);
+  log(`KC ${VERSION} | model=${MODEL} effort=${EFFORT}`);
   log(`memory db=${KLAUS_DB}`);
   // A missing database is not an error to SQLite — it creates an empty one and
   // Kacey then runs with no memory and no calendar. Say so at startup instead.

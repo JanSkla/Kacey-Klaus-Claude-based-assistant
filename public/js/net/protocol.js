@@ -84,6 +84,9 @@ export function onServer(msg) {
       dom.connLabel.textContent = t().online;
       dom.conn.title = info;
       setModel(typeof msg.model === 'string' ? msg.model : '?');
+      // The server's release; an old server without one shows a dash.
+      var ver = document.getElementById('topVersion');
+      if (ver) ver.textContent = typeof msg.version === 'string' ? msg.version : '—';
       setMcp(msg.mcpServers);
       flashHint(info, false, 4200);
       break;
