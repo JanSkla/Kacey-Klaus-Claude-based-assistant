@@ -34,7 +34,7 @@ Check it is alive:
 
 ```sh
 curl http://localhost:8082/api/health
-# {"ok":true,"model":"claude-opus-5","mcpServers":["klaus-memory"]}
+# {"ok":true,"model":"claude-opus-5-5","effort":"low","mcpServers":["klaus-memory"]}
 ```
 
 ## The XTTS voices (optional)
@@ -161,7 +161,8 @@ All environment variables, all with working defaults — see `.env.example`.
 > localhost. Over plain http at a hostname the browser refuses speech
 > recognition and Kacey says so. To use voice from a phone, put TLS in front:
 > `tailscale serve --bg 8082` gives a real certificate on the tailnet.
-| `KACEY_MODEL`             | `claude-opus-5`                        |                                           |
+| `KACEY_MODEL`             | `claude-opus-5-5`                      |                                           |
+| `KACEY_EFFORT`            | `low`                                  | low · medium · high · xhigh · max         |
 | `KACEY_PERSONA_PATH`      | `./persona/kacey.md`                   | Missing file → built-in default + warning |
 | `PYTHON_BIN`              | `python`                               | Launches the MCP server                   |
 | `KLAUS_DB`                | `<PYTHONPATH>\klaus.db`                | Passed as `--db`                          |
@@ -227,7 +228,7 @@ Client → server:
 Server → client:
 
 ```jsonc
-{ "type": "ready",   "model": "claude-opus-5", "mcpServers": ["klaus-memory"] }
+{ "type": "ready",   "model": "claude-opus-5-5", "mcpServers": ["klaus-memory"] }
 { "type": "session", "sessionId": "..." }
 { "type": "thinking" }
 { "type": "delta",   "text": "..." }              // assistant speech, verbatim

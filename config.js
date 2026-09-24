@@ -41,7 +41,12 @@ export const PORT = Number(process.env.PORT || 8082);
  * front (tailscale serve) if voice is meant to work there.
  */
 export const HOST = process.env.HOST || '127.0.0.1';
-export const MODEL = process.env.KACEY_MODEL || 'claude-opus-5';
+export const MODEL = process.env.KACEY_MODEL || 'claude-opus-5-5';
+/* How hard the model thinks before answering: low | medium | high | xhigh | max.
+   Low by default — Kacey is a voice assistant, and time to first word matters
+   more than depth on almost every turn. */
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+export const EFFORT = EFFORTS.includes(process.env.KACEY_EFFORT) ? process.env.KACEY_EFFORT : 'low';
 export const PERSONA_PATH = process.env.KACEY_PERSONA_PATH || path.join(HERE, 'persona', 'kacey.md');
 export const PUBLIC_DIR = path.join(HERE, 'public');
 

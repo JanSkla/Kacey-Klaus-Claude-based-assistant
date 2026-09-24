@@ -21,7 +21,7 @@ import * as appstate from './appstate.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 
 import {
-  HERE, PORT, HOST, MODEL, PERSONA_PATH, PUBLIC_DIR,
+  HERE, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
@@ -203,6 +203,7 @@ class KaceySession {
       prompt: this.userMessageStream(),
       options: {
         model: MODEL,
+        effort: EFFORT,
 
         // The persona replaces the Claude Code system prompt entirely — we do not
         // want coding-agent instructions in a voice assistant.
@@ -435,7 +436,7 @@ const persona = loadPersona();
 const app = express();
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, model: MODEL, mcpServers: Object.keys(MCP_SERVERS) });
+  res.json({ ok: true, model: MODEL, effort: EFFORT, mcpServers: Object.keys(MCP_SERVERS) });
 });
 
 app.get('/api/voices', async (_req, res) => {
@@ -929,7 +930,7 @@ wss.on('connection', (ws) => {
 
 server.listen(PORT, HOST, () => {
   log(`listening on http://${HOST}:${PORT}  (ws://${HOST}:${PORT}/ws)`);
-  log(`model=${MODEL}`);
+  log(`model=${MODEL} effort=${EFFORT}`);
   log(`memory db=${KLAUS_DB}`);
   // A missing database is not an error to SQLite — it creates an empty one and
   // Kacey then runs with no memory and no calendar. Say so at startup instead.
