@@ -85,10 +85,10 @@ const log = (...a) => console.log('[kacey]', ...a);
 const shortToolName = (name) =>
   name?.startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name;
 
-/* What the user is told when a turn dies on us. Deliberately vague: this text is
-   SPOKEN aloud and shown in her own voice, and the SDK's own wording is English
-   diagnostics ("[ede_diagnostic] result_type=user stop_reason=tool_use") that
-   means nothing to the person in the room. The real detail goes to the log. */
+/* What the user is told when a turn dies for a reason explainError() below does
+   not recognise. The SDK's own wording is English diagnostics
+   ("[ede_diagnostic] result_type=user stop_reason=tool_use") that means nothing
+   to the person in the room, so it is never passed through; it goes to the log. */
 const ERR_TURN = 'Něco se nepovedlo. Zkus to prosím znovu.';
 
 /* Not a failure but a real loss of capability, so it is worth saying out loud —
@@ -96,11 +96,57 @@ const ERR_TURN = 'Něco se nepovedlo. Zkus to prosím znovu.';
 const ERR_NO_MEMORY = 'Teď nemám přístup k paměti ani ke kalendáři.';
 
 const AUTH_HINT =
-  'Claude is not authenticated. Open a terminal, run `claude`, log in, then restart Kacey. ' +
-  '(Alternatively set ANTHROPIC_API_KEY in the environment.)';
+  'Kacey není přihlášená ke Claude. Na serveru spusť `claude`, přihlas se a restartuj Kacey ' +
+  '(nebo nastav ANTHROPIC_API_KEY).';
 
 function isAuthError(err) {
   return err === 'authentication_failed' || err === 'oauth_org_not_allowed';
+}
+
+/* The text of an assistant error message — the SDK puts the real reason there
+   ("API Error: 400 Claude Code 2.1.220 does not support this model; …") while
+   `error` is often just 'unknown'. */
+function errorText(msg) {
+  return (msg.message?.content || [])
+    .map((b) => (b.type === 'text' ? b.text : ''))
+    .join(' ').trim();
+}
+
+/**
+ * What to tell the person when a turn fails, from the SDK's error code and
+ * text. Shown as an alert, never spoken (protocol.js cancels speech on
+ * `error`), so it can name the cause and what to do about it. Anything not
+ * recognised stays the plain sentence, plus a pointer to the log, which always
+ * gets the full detail.
+ */
+function explainError(code, text = '') {
+  const t = String(text);
+  if (isAuthError(code) || /not authenticated|invalid.*(api key|token)|API Error: 401/i.test(t)) return AUTH_HINT;
+  if (/does not support this model|or newer is required/i.test(t)) {
+    const need = /version ([\d.]+) or newer/i.exec(t);
+    return `Model ${MODEL} potřebuje novější Claude Agent SDK${need ? ` (Claude Code ${need[1]}+)` : ''}. ` +
+      'Na serveru spusť `npm install` a restartuj Kacey, nebo nastav KACEY_MODEL na starší model.';
+  }
+  if (code === 'model_not_found' || /model.{0,40}(not found|not_found|does not exist)/i.test(t)) {
+    return `Model „${MODEL}“ API nezná. Zkontroluj KACEY_MODEL v nastavení serveru.`;
+  }
+  if (code === 'rate_limit' || /rate.?limit|usage limit|\b429\b/i.test(t)) {
+    return 'Došel limit používání Claude. Zkus to za chvíli znovu.';
+  }
+  if (code === 'overloaded' || /overloaded|\b529\b/i.test(t)) {
+    return 'Claude je teď přetížený. Zkus to za chvíli znovu.';
+  }
+  if (code === 'billing_error' || code === 'account_on_hold') {
+    return 'Účet Claude, na kterém Kacey běží, je pozastavený nebo nemá zaplaceno. Zkontroluj ho na claude.ai.';
+  }
+  if (code === 'server_error' || /API Error: 5\d\d/.test(t)) {
+    return 'Claude má výpadek na své straně. Zkus to za chvíli znovu.';
+  }
+  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|fetch failed|network/i.test(t)) {
+    return 'Kacey se nedostane ke Claude. Zkontroluj připojení serveru k internetu.';
+  }
+  if (code === 'max_output_tokens') return 'Odpověď byla moc dlouhá a uřízla se. Zkus otázku zúžit.';
+  return ERR_TURN + ' Podrobnosti jsou v logu serveru.';
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +306,7 @@ class KaceySession {
     } catch (err) {
       if (this.closed) return;
       log('session error:', err?.message || err);
-      this.send({ type: 'error', message: ERR_TURN });
+      this.send({ type: 'error', message: explainError(null, err?.message) });
       this.send({ type: 'done' });
       this.turnActive = false;
     }
@@ -310,12 +356,13 @@ class KaceySession {
         // text is the error string. Surface it as `error` — never as `delta`, or
         // the browser would read "Failed to authenticate..." out loud.
         if (msg.error) {
-          // AUTH_HINT is the one exception: it is actionable setup instructions
-          // for whoever runs Kacey. Everything else gets the plain sentence, and
-          // the model's own error code goes to the log.
-          const message = isAuthError(msg.error) ? AUTH_HINT : ERR_TURN;
-          log('assistant error:', msg.error);
-          this.send({ type: 'error', message });
+          // The code is often just 'unknown'; the reason is in the text. Both
+          // go to the log, and explainError() turns them into something the
+          // person can act on.
+          const text = errorText(msg);
+          log(`assistant error: ${msg.error}${text ? ` — ${text}` : ''}`);
+          this.errorShown = true;
+          this.send({ type: 'error', message: explainError(msg.error, text) });
           return;
         }
 
@@ -365,7 +412,8 @@ class KaceySession {
             log(`turn cancelled by the user (${detail})`);
           } else {
             log(`turn failed: ${detail}`);
-            this.send({ type: 'error', message: ERR_TURN });
+            // Once per turn: an assistant error before this already said why.
+            if (!this.errorShown) this.send({ type: 'error', message: explainError(null, detail) });
           }
         }
         for (const denial of msg.permission_denials || []) {
@@ -392,6 +440,7 @@ class KaceySession {
 
   onUserMessage(text, images) {
     this.turnActive = true;
+    this.errorShown = false;
     this.interrupted = false;
     this.send({ type: 'thinking' });
     this.pushUserMessage(text, images);
@@ -884,7 +933,7 @@ wss.on('connection', (ws) => {
     session.start();
   } catch (err) {
     log('failed to start session:', err?.message || err);
-    session.send({ type: 'error', message: ERR_TURN });
+    session.send({ type: 'error', message: explainError(null, err?.message) });
   }
 
   ws.on('message', async (raw) => {
