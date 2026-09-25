@@ -1,0 +1,28 @@
+# Whisper speech-to-text for Kacey on kaceybody — a systemd USER unit.
+#
+#   cp voicelab/stt.service ~/.config/systemd/user/stt.service
+#   systemctl --user daemon-reload && systemctl --user enable --now stt
+#
+# The venv is ~/.venvs/stt (Python 3.11 + faster-whisper). On the CPU: the
+# 2 GB GPU belongs to XTTS. See docs/RUNBOOK-kaceybody.md.
+
+[Unit]
+Description=Whisper speech-to-text for Kacey (CPU)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Kacey/Kacey-Klaus-Claude-based-assistant
+ExecStart=%h/.venvs/stt/bin/python voicelab/stt_server.py
+Environment=STT_MODEL=small
+Environment=STT_DEVICE=cpu
+Environment=STT_COMPUTE=int8
+Environment=STT_THREADS=4
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=10
+# Whisper on the CPU should not starve Kacey's own event loop.
+Nice=5
+
+[Install]
+WantedBy=default.target

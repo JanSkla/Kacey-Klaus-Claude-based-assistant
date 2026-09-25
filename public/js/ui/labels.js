@@ -12,7 +12,7 @@ import { t } from '../core/i18n.js';
 import * as dom from '../core/dom.js';
 import { flashHint } from './log.js';
 import { hasSynth } from '../voice/tts.js';
-import { SR, micBlocked } from '../voice/recognition.js';
+import { recognitionAvailable, micBlocked } from '../voice/recognition.js';
 import { readyInfo } from '../net/protocol.js';
 
 export function applyLangToUI() {
@@ -27,7 +27,7 @@ export function applyLangToUI() {
   dom.stopBtn.setAttribute('aria-label', s.stop);
   dom.stopBtn.title = s.stop;
   applyMuteToUI();
-  if (!SR) {
+  if (!recognitionAvailable() && !micBlocked()) {
     dom.micNote.textContent = s.errUnsupported;
   } else if (micBlocked()) {
     dom.micNote.textContent = s.errDenied;

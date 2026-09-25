@@ -1,0 +1,33 @@
+# XTTS-v2 for Kacey on kaceybody — a systemd USER unit (no root needed).
+#
+#   cp voicelab/xtts.service ~/.config/systemd/user/xtts.service
+#   systemctl --user daemon-reload && systemctl --user enable --now xtts
+#   journalctl --user -u xtts -f
+#
+# The venv is ~/.venvs/xtts (Python 3.11, torch cu126 — the last CUDA builds
+# with sm_50 for the GeForce 940MX). XTTS_HALF=1 runs the model in float16:
+# the card has 2 GB and the float32 weights alone are ~1.8 GB. See
+# docs/RUNBOOK-kaceybody.md P2.4.
+#
+# It loads before ollama's embedding model is next needed, so it gets the
+# GPU; ollama then falls back to the CPU for embeddings, which is fine for a
+# model that small.
+
+[Unit]
+Description=XTTS-v2 speech for Kacey (GPU, float16)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Kacey/Kacey-Klaus-Claude-based-assistant
+ExecStart=%h/.venvs/xtts/bin/python voicelab/xtts_server.py
+Environment=XTTS_HALF=1
+Environment=XTTS_HOST=127.0.0.1
+Environment=XTTS_PORT=8790
+Environment=PYTHONUNBUFFERED=1
+Environment=COQUI_TOS_AGREED=1
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -36,7 +36,7 @@ import {
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
-  XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS,
+  XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL,
   LOGICAL_DAY_START_HOUR, LIGHTSD_URL,
 } from './config.js';
 
@@ -993,6 +993,40 @@ function ttsText(input) {
   s = s.replace(/([!?])\s*,/g, '$1');
   return s.trim();
 }
+
+/* ---------------------------------------------------------------------------
+ * Speech-to-text, for a browser without Web Speech recognition (the kiosk's
+ * Epiphany). The page records one utterance as WAV and posts it here; the
+ * Whisper sidecar transcribes it on this machine — the audio never leaves it.
+ * ------------------------------------------------------------------------- */
+
+app.get('/api/stt/health', async (_req, res) => {
+  try {
+    const r = await fetch(`${STT_URL}/health`, { signal: AbortSignal.timeout(3000) });
+    res.json(await r.json());
+  } catch {
+    res.json({ ok: false });
+  }
+});
+
+app.post('/api/stt', express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '12mb' }), async (req, res) => {
+  const lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(String(req.query.lang || '')) ? String(req.query.lang) : 'cs';
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'žádný zvuk' });
+  try {
+    const started = Date.now();
+    const r = await fetch(`${STT_URL}/transcribe?lang=${encodeURIComponent(lang)}`, {
+      method: 'POST', headers: { 'Content-Type': req.get('content-type') || 'audio/wav' },
+      body: req.body, signal: AbortSignal.timeout(60000),
+    });
+    const out = await r.json();
+    if (!r.ok) throw new Error(out.error || `STT ${r.status}`);
+    log(`stt: ${out.audio_seconds}s -> ${JSON.stringify(out.text).slice(0, 80)} in ${Date.now() - started} ms`);
+    res.json(out);
+  } catch (err) {
+    log(`stt failed: ${err.message}`);
+    res.status(502).json({ error: `Přepis řeči neodpovídá (${err.message})` });
+  }
+});
 
 app.post('/api/tts', express.json({ limit: '64kb' }), async (req, res) => {
   const { text, voice } = req.body || {};

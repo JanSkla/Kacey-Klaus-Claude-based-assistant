@@ -23,7 +23,7 @@
    ========================================================================= */
 
 import { state } from '../core/state.js';
-import { SR, recognitionAvailable } from './recognition.js';
+import { SR, nativeAvailable } from './recognition.js';
 import { voiceWakeStop } from './wake-panel.js';
 import { pauseReply, stopAndEnd } from './commands.js';
 
@@ -49,7 +49,7 @@ var bargeBackoffUntil = 0;
 var bargeHits = 0;
 
 function bargeShouldRun() {
-  if (!bargeAvailable || !recognitionAvailable()) return false;
+  if (!bargeAvailable || !nativeAvailable()) return false;
   if (state.listening || state.micDesired) return false;   // dictation owns the mic
   if (document.hidden || state.conn !== 'online') return false;
   if (Date.now() < bargeBackoffUntil) return false;

@@ -61,9 +61,19 @@ def load_model() -> None:
     # faster, which is what makes streaming playback continuous.
     import torch
 
-    use_gpu = torch.cuda.is_available()
-    _tts = TTS(MODEL, progress_bar=False, gpu=use_gpu)
+    use_gpu = torch.cuda.is_available() and os.environ.get("XTTS_DEVICE", "") != "cpu"
+    # XTTS_HALF=1: float16 on the GPU. For a small card — kaceybody's GeForce
+    # 940MX has 2 GB, and the full-precision weights alone are ~1.8 GB. Loaded
+    # on the CPU first and converted there, so the float32 copy never touches
+    # the card; then moved over at half the size.
+    half = use_gpu and os.environ.get("XTTS_HALF", "") == "1"
+    _tts = TTS(MODEL, progress_bar=False, gpu=use_gpu and not half)
+    if half:
+        _tts.synthesizer.tts_model.half().cuda()
+        _tts.synthesizer.use_cuda = True
     device = torch.cuda.get_device_name(0) if use_gpu else "cpu"
+    if use_gpu:
+        device += f" ({'float16' if half else 'float32'}, {torch.cuda.memory_allocated() / 2**20:.0f} MiB allocated)"
     print(f"[xtts] device: {device}", flush=True)
     speakers = list(_tts.synthesizer.tts_model.speaker_manager.speakers.keys())
     _meta = {
@@ -94,10 +104,16 @@ _latents: dict = {}
 
 
 def speaker_latents(speaker: str):
-    """Conditioning latents per speaker, computed once and reused."""
+    """Conditioning latents per speaker, computed once and reused — on the
+    model's device and in its dtype, so a float16 model gets float16 latents."""
     if speaker not in _latents:
-        entry = _tts.synthesizer.tts_model.speaker_manager.speakers[speaker]
-        _latents[speaker] = (entry["gpt_cond_latent"], entry["speaker_embedding"])
+        model = _tts.synthesizer.tts_model
+        entry = model.speaker_manager.speakers[speaker]
+        p = next(model.parameters())
+        _latents[speaker] = (
+            entry["gpt_cond_latent"].to(p.device, p.dtype),
+            entry["speaker_embedding"].to(p.device, p.dtype),
+        )
     return _latents[speaker]
 
 
@@ -123,7 +139,7 @@ def stream_pcm(text: str, speaker: str, language: str = "cs", speed: float = 1.0
         for chunk in model.inference_stream(
             text, language, latent, emb, speed=speed, enable_text_splitting=False
         ):
-            yield pcm16(chunk.squeeze().tolist() if hasattr(chunk, "squeeze") else chunk)
+            yield pcm16(chunk.float().squeeze().tolist() if hasattr(chunk, "float") else chunk)
 
 
 # XTTS ends every clip with roughly 0.55-0.6 s of near-silence (measured across
@@ -162,8 +178,14 @@ def trim_tail(samples: list, rate: int) -> list:
 
 def synth_wav(text: str, speaker: str, language: str = "cs", speed: float = 1.0) -> bytes:
     """Synthesise and return a WAV container (the model yields raw float samples)."""
+    # model.inference with our own latents rather than _tts.tts(): the latter
+    # looks the speaker up itself, in float32, which a float16 model rejects.
+    model = _tts.synthesizer.tts_model
+    latent, emb = speaker_latents(speaker)
     with _lock:
-        wav = _tts.tts(text=text, speaker=speaker, language=language, speed=speed)
+        out = model.inference(text, language, latent, emb, speed=speed, enable_text_splitting=False)
+    wav = out["wav"]
+    wav = wav.float().squeeze().tolist() if hasattr(wav, "float") else list(wav)
 
     rate = _tts.synthesizer.output_sample_rate
     wav = trim_tail(list(wav), rate)

@@ -10,7 +10,7 @@
    dictation wins — it stops the barge-in listener before taking the device.
    ========================================================================= */
 
-import { state } from '../core/state.js';
+import { state, KIOSK } from '../core/state.js';
 import { t } from '../core/i18n.js';
 import * as dom from '../core/dom.js';
 import { syncOrb } from '../ui/orb.js';
@@ -18,16 +18,40 @@ import { showAlert, flashHint } from '../ui/log.js';
 import { cancelSpeech, primeTTS } from './tts.js';
 import { stopBarge } from './barge.js';
 import { submit } from '../net/protocol.js';
+import { ServerRecognition, serverSttAvailable, serverSttKnown } from './server-stt.js';
 
 /* Whether the browser has the API at all — read by the wake word, the barge-in
    listener and the mic button, none of which can work without it. */
 export var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
+/* Dictation's engine: the browser's own, or — where there is none (the bedside
+   kiosk's Epiphany) or on the kiosk, or when asked with ?stt=server — the
+   server's Whisper (server-stt.js), which has the same shape. Only dictation
+   uses it: the wake word and barge-in need a continuous native engine and keep
+   asking for SR / nativeAvailable(). */
+var PREFER_SERVER = KIOSK || /(?:^|[?&])stt=server(?:&|$)/.test(location.search);
+function engine() {
+  if (serverSttKnown() && (PREFER_SERVER || !SR)) return ServerRecognition;
+  return SR;
+}
+/* Whether Whisper is there is only known after one request; when it is, the
+   mic becomes usable on a page that had no engine at load. */
+serverSttAvailable().then(function (ok) {
+  if (!ok || !dom.micBtn) return;
+  if (!SR) {
+    dom.micBtn.disabled = false;
+    dom.micBtn.removeAttribute('data-unavailable');
+  }
+  if (!recBlocked) dom.micNote.textContent = t().micHint;
+});
+
 var rec = null;
 var recBlocked = false;    // permission denied / hardware missing -> stop offering it
 var baseText = '';         // whatever the user had typed before dictating
 
-export function recognitionAvailable() { return !!SR && !recBlocked; }
+export function recognitionAvailable() { return !!engine() && !recBlocked; }
+/** The browser's own engine — what the wake word and barge-in need. */
+export function nativeAvailable() { return !!SR && !recBlocked; }
 export function micBlocked() { return recBlocked; }
 
 /* The composer prefix is dictation's own state: submit() has to be able to drop
@@ -46,8 +70,10 @@ export function setDictationSink(fn) { sink = typeof fn === 'function' ? fn : nu
 export function dictationSink() { return sink; }
 
 function buildRecognition() {
-  if (!SR) return null;
-  var r = new SR();
+  var Engine = engine();
+  if (!Engine) return null;
+  var r = new Engine();
+  r._engine = Engine;
   r.lang = state.lang;
   r.continuous = false;      // one utterance per press; onend always resets the UI
   r.interimResults = true;
@@ -177,7 +203,7 @@ function resetMicUI() {
   state.listening = false;
   dom.micBtn.setAttribute('aria-pressed', 'false');
   dom.micBtn.setAttribute('aria-label', t().micStart);
-  if (!recBlocked && SR) dom.micNote.textContent = t().micHint;
+  if (!recBlocked && engine()) dom.micNote.textContent = t().micHint;
   syncOrb();
 }
 
@@ -188,7 +214,8 @@ export function startRecognition() {
   // let go before dictation can take it.
   stopBarge(true);
   cancelSpeech();
-  if (!rec) rec = buildRecognition();
+  // Rebuilt when the engine changed (Whisper turned out to be there).
+  if (!rec || rec._engine !== engine()) rec = buildRecognition();
   if (!rec) return;
   rec.lang = state.lang;
   /* Whatever is in the composer becomes the prefix of this turn. A command

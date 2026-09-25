@@ -262,6 +262,12 @@ export const VOICES = [
 
 export const DEFAULT_VOICE = process.env.KACEY_TTS_VOICE || 'Nova Hogarth';
 
+/* Server-side speech-to-text (voicelab/stt_server.py, faster-whisper). The
+ * bedside kiosk's browser (Epiphany/WebKitGTK) has no working Web Speech
+ * recognition, so it records the utterance and Kacey transcribes it here.
+ * Loopback, no auth — never expose the sidecar itself. */
+export const STT_URL = process.env.KACEY_STT_URL || 'http://127.0.0.1:8791';
+
 /* 'comma' rewrites full stops before synthesis, which measurably cleans up
  * XTTS's delivery — see ttsText() in server.js for why, and where. Set
  * KACEY_TTS_DOTS=keep to send the text through untouched. */

@@ -23,7 +23,7 @@ import * as dom from '../core/dom.js';
 import { flashHint } from '../ui/log.js';
 import { primeTTS } from './tts.js';
 import { playWakeChime, WAKE_CHIME_MS } from './chime.js';
-import { SR, recognitionAvailable, startRecognition } from './recognition.js';
+import { SR, nativeAvailable, startRecognition } from './recognition.js';
 import { noteInteraction } from '../net/activity.js';
 import {
   voiceWakePriority, voiceWakeSupervise, voiceWakeStop, voiceWakeActive,
@@ -85,7 +85,7 @@ export function isWakePhrase(heard) {
 }
 
 function wakeShouldRun() {
-  return wakeEnabled && !wakeBlocked && recognitionAvailable() &&
+  return wakeEnabled && !wakeBlocked && nativeAvailable() &&
     !state.listening && !state.micDesired &&
     state.ttsPending === 0 &&            // never let it hear Kacey's own voice
     !state.streaming &&                  // her turn belongs to the barge listener
