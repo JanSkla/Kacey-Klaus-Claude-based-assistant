@@ -47,10 +47,27 @@ MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
 _tts = None
 _lock = threading.Lock()          # the model is not safe for concurrent calls
 _meta: dict = {}
+_half = False
+
+
+def precision():
+    """The context every inference runs in. A float16 model also needs
+    autocast: coqui's GPT feeds float32 hidden states into its LayerNorms,
+    and autocast casts each op's inputs (weights included) to what that op
+    wants — LayerNorm in float32, matmuls in float16 — while the weights stay
+    half-size in memory. Found on kaceybody's 940MX (2026-09-25)."""
+    import contextlib
+    import torch
+
+    stack = contextlib.ExitStack()
+    stack.enter_context(torch.inference_mode())
+    if _half:
+        stack.enter_context(torch.autocast("cuda", dtype=torch.float16))
+    return stack
 
 
 def load_model() -> None:
-    global _tts, _meta
+    global _tts, _meta, _half
     from TTS.api import TTS
 
     t0 = time.time()
@@ -66,7 +83,7 @@ def load_model() -> None:
     # 940MX has 2 GB, and the full-precision weights alone are ~1.8 GB. Loaded
     # on the CPU first and converted there, so the float32 copy never touches
     # the card; then moved over at half the size.
-    half = use_gpu and os.environ.get("XTTS_HALF", "") == "1"
+    half = _half = use_gpu and os.environ.get("XTTS_HALF", "") == "1"
     _tts = TTS(MODEL, progress_bar=False, gpu=use_gpu and not half)
     if half:
         _tts.synthesizer.tts_model.half().cuda()
@@ -92,9 +109,10 @@ def load_model() -> None:
         t1 = time.time()
         model = _tts.synthesizer.tts_model
         latent, emb = speaker_latents(speakers[0])
-        for _ in model.inference_stream("Dobrý den.", "cs", latent, emb,
-                                        enable_text_splitting=False):
-            break                                  # first chunk is enough to warm up
+        with precision():
+            for _ in model.inference_stream("Dobrý den.", "cs", latent, emb,
+                                            enable_text_splitting=False):
+                break                              # first chunk is enough to warm up
         print(f"[xtts] warmed up in {time.time() - t1:.1f}s", flush=True)
     except Exception as exc:
         print(f"[xtts] warmup skipped: {exc}", flush=True)
@@ -135,7 +153,7 @@ def stream_pcm(text: str, speaker: str, language: str = "cs", speed: float = 1.0
     """
     model = _tts.synthesizer.tts_model
     latent, emb = speaker_latents(speaker)
-    with _lock:
+    with _lock, precision():
         for chunk in model.inference_stream(
             text, language, latent, emb, speed=speed, enable_text_splitting=False
         ):
@@ -182,7 +200,7 @@ def synth_wav(text: str, speaker: str, language: str = "cs", speed: float = 1.0)
     # looks the speaker up itself, in float32, which a float16 model rejects.
     model = _tts.synthesizer.tts_model
     latent, emb = speaker_latents(speaker)
-    with _lock:
+    with _lock, precision():
         out = model.inference(text, language, latent, emb, speed=speed, enable_text_splitting=False)
     wav = out["wav"]
     wav = wav.float().squeeze().tolist() if hasattr(wav, "float") else list(wav)
