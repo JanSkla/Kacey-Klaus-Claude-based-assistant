@@ -153,7 +153,9 @@ All environment variables, all with working defaults — see `.env.example`.
 | `PORT`                    | `8082`                                 |                                           |
 | `HOST`                    | `127.0.0.1`                            | Interface to bind; see the note below     |
 
-> **`HOST` and the microphone.** Kacey listens on loopback by default: the
+> **`HOST` and the microphone.** Whatever `HOST` says, Kacey also listens on
+> `127.0.0.1`, so the bedside kiosk can open `http://localhost:8082` (a secure
+> origin for the microphone) and local tools work. Kacey listens on loopback by default: the
 > server hands out a logged-in Claude session, so it must not turn up on a
 > network by accident. Point `HOST` at a Tailscale address to reach it as
 > `kaceybody:8082` from the tailnet, or `0.0.0.0` for every interface.

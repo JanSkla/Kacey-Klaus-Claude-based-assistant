@@ -19,6 +19,10 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**Fix: Kacey also listens on localhost when `HOST` is set** (a Tailscale
+address on kaceybody). The kiosk needs `http://localhost:8082` for the
+microphone, and `npm run night:run` and the runbook's checks call localhost.
+
 **The night routine, phase P7: learning**
 - The night's reasoning pass now sees the last 30 decisions about its
   proposals, so what was rejected doesn't come back.

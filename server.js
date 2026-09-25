@@ -1031,6 +1031,13 @@ app.use(express.static(PUBLIC_DIR));
 app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 const server = createServer(app);
+/* Loopback as well, whenever HOST is something else (a Tailscale address).
+   The bedside kiosk has to open Kacey at http://localhost — the only plain-
+   http origin a browser grants the microphone on — and local tools (npm run
+   night:run, the runbook's checks) call localhost too. Loopback is reachable
+   only from this machine, so it exposes nothing HOST did not already. */
+const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1', '0.0.0.0', '::'];
+const loopback = LOCAL_HOSTS.includes(HOST) ? null : createServer(app);
 /* ---------------------------------------------------------------------------
  * Attachments.
  *
@@ -1072,7 +1079,17 @@ function sanitiseImages(raw) {
   return out;
 }
 
-const wss = new WebSocketServer({ server, path: '/ws' });
+/* One WebSocket server for both listeners: attached by hand to each one's
+   upgrade event, since `{ server }` can only bind to one. */
+const wss = new WebSocketServer({ noServer: true });
+function onUpgrade(req, socket, head) {
+  let pathname = '';
+  try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { /* malformed */ }
+  if (pathname !== '/ws') { socket.destroy(); return; }
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+}
+server.on('upgrade', onUpgrade);
+if (loopback) loopback.on('upgrade', onUpgrade);
 
 /** One frame to every open page. */
 function broadcast(frame) {
@@ -1163,6 +1180,11 @@ wss.on('connection', (ws) => {
   ws.on('error', (err) => log('websocket error:', err?.message || err));
 });
 
+if (loopback) {
+  loopback.on('error', (err) => log(`loopback listener failed (${err.message}) — the kiosk needs http://localhost:${PORT}`));
+  loopback.listen(PORT, '127.0.0.1', () => log(`also listening on http://127.0.0.1:${PORT} (the kiosk, local tools)`));
+}
+
 server.listen(PORT, HOST, () => {
   log(`listening on http://${HOST}:${PORT}  (ws://${HOST}:${PORT}/ws)`);
   log(`KC ${VERSION} | model=${MODEL} effort=${EFFORT}`);
@@ -1212,6 +1234,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     stopNight();
     appstate.flushNow();            // close the database cleanly
     for (const ws of wss.clients) ws.close();
+    loopback?.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2000);
   });

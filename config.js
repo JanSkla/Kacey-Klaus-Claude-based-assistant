@@ -32,7 +32,8 @@ export const VERSION = JSON.parse(readFileSync(path.join(HERE, 'package.json'), 
 
 export const PORT = Number(process.env.PORT || 8082);
 
-/* Which interface to listen on.
+/* Which interface to listen on — in addition to loopback, which server.js
+ * always adds when this is anything else (the kiosk needs localhost).
  *
  * Loopback by default, deliberately: this server hands a logged-in Claude
  * session to anything that can reach it, so it must not appear on a network
