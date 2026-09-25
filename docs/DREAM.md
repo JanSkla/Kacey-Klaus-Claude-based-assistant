@@ -286,6 +286,24 @@ Three of these rows exist because of how lightsd works:
 
 ### The kiosk
 
+> **What kaceybody really is (found at deployment, 2026-09-25).** Not the
+> GNOME/X11 laptop assumed below. It runs **cage** (Wayland) + **Epiphany**
+> (WebKitGTK) from `kiosk.service`, with no desktop and plain ALSA audio, and
+> the lid is already ignored. So:
+> - **The screen** is switched at the **backlight** (`bl_power`, via a udev
+>   rule), not with `xset`. It is dark by default. A tap, a key, the wake word,
+>   or the mouse moving over the page (the `presence` frame, which is not an
+>   interaction) lights it, and the idle timeout darkens it. `screen.js` picks
+>   the backend at start: backlight, else xset, else a no-op.
+> - **The kiosk** only needs `KIOSK_URL=http://127.0.0.1:8082/?kiosk=1`.
+> - **The voice** will be XTTS on the laptop's GeForce 940MX (once the 580
+>   legacy driver replaces the 610 one that ignores it).
+> - **Listening** moves to a server-side Whisper, because WebKitGTK has no
+>   working speech recognition.
+>
+> The runbook's P2 is rewritten for this. The rest of this section is the
+> original X11 design, kept for a desktop setup.
+
 **Target state:** the laptop boots into an **X11** session with autologin, and
 that session runs only
 

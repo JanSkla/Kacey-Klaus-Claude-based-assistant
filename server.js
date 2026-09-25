@@ -23,7 +23,7 @@ import * as nightstore from './nightstore.js';
 import { RuleSchema, explainIssues } from './rules.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 import {
-  startNight, stopNight, noteInteraction, noteSpeaking, noteVisibility, nightState, INTERACTION_KINDS,
+  startNight, stopNight, noteInteraction, noteSpeaking, noteVisibility, notePresence, nightState, INTERACTION_KINDS,
   startRun as startNight_run, push as pushNight, extendNight, nightLog, runSummary, settings as nightSettings,
 } from './night.js';
 import * as morning from './morning.js';
@@ -1161,6 +1161,8 @@ wss.on('connection', (ws) => {
       // A tap, a key, the wake word — the page throttles these. Anything else
       // in `kind` is dropped silently: it is a signal, not a request.
       if (INTERACTION_KINDS.includes(frame.kind)) noteInteraction(frame.kind);
+    } else if (frame?.type === 'presence') {
+      notePresence();
     } else if (frame?.type === 'speaking') {
       noteSpeaking(frame.on === true);
     } else if (frame?.type === 'morning_ack') {

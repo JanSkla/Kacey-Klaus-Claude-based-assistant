@@ -18,7 +18,9 @@ import { sendFrame, serverHas } from './protocol.js';
 import { state } from '../core/state.js';
 
 var THROTTLE_MS = 10000;
+var PRESENCE_MS = 5000;
 var lastSent = 0;
+var lastPresence = 0;
 
 export function noteInteraction(kind) {
   if (!serverHas('night')) return;
@@ -46,6 +48,17 @@ export function initActivity() {
      the server log can answer it on the real machine. */
   document.addEventListener('visibilitychange', function () {
     if (serverHas('night')) sendFrame({ type: 'visibility', state: document.visibilityState });
+  });
+
+  /* The mouse over the page: wakes the bedside screen (docs/DREAM.md §6),
+     but is sent as `presence`, never as an interaction. */
+  ['pointermove', 'wheel'].forEach(function (ev) {
+    window.addEventListener(ev, function () {
+      var now = Date.now();
+      if (now - lastPresence < PRESENCE_MS || !serverHas('night')) return;
+      lastPresence = now;
+      sendFrame({ type: 'presence' });
+    }, { capture: true, passive: true });
   });
 
   var kinds = { pointerdown: 'pointer', keydown: 'key', touchstart: 'touch' };

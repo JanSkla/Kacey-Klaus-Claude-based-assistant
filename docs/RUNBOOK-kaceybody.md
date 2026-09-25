@@ -31,189 +31,131 @@ keypoints into one routine (`group: "morning"`).
 
 ---
 
-## P2 — kiosk, screen, lid
+## P2 — the screen, the GPU, the kiosk
 
-### 1. What is there now
+### What kaceybody actually runs (found 2026-09-25)
 
-Run these and **send the output back** before changing anything. The rest of
-this section assumes an X11 session, and this is where that gets confirmed.
+Not a desktop. There is no display manager and no GNOME:
 
-```bash
-loginctl list-sessions
-loginctl show-session $(loginctl list-sessions --no-legend | awk '$3=="<user>"{print $1; exit}') -p Type -p Desktop -p Service -p Name -p State
-echo "session type: $XDG_SESSION_TYPE"
-ps -eo user,pid,cmd | grep -Ei 'chrom|firefox' | grep -v grep
-ls -l ~/.Xauthority /run/user/$(id -u)/gdm/Xauthority 2>&1
-cat /etc/gdm3/custom.conf 2>/dev/null | grep -Ev '^\s*(#|$)'
-which xset xprintidle chromium chromium-browser google-chrome 2>&1
-snap list 2>/dev/null | grep -i chrom
-ls /proc/acpi/button/lid/ && cat /proc/acpi/button/lid/*/state
-systemctl cat kacey | grep -E 'User|Environment'
-```
+- **`kiosk.service`** (system unit) runs `/usr/local/bin/kiosk-session` on
+  tty1. That's **cage 0.2.1**, a Wayland compositor that runs one fullscreen
+  client, showing **Epiphany** (GNOME Web, WebKitGTK) at `KIOSK_URL`. The
+  default is nowplayingd's record page on `:8081`. It's documented in the
+  lights repo's `tools/kiosk/README.md`.
+- **Audio** is plain ALSA (no PipeWire, no PulseAudio).
+- **The lid** is already ignored by logind (`/etc/systemd/logind.conf.d/99-server.conf`).
+- **The GPU** is an NVIDIA **GeForce 940MX** (Maxwell). The installed driver is
+  NVIDIA's **610** from their CUDA repo, which dropped Maxwell. That's the
+  console's "supported through the NVIDIA 580.xx Legacy drivers … No NVIDIA
+  GPU found". That repo's apt list is also corrupted, so `apt` currently fails.
+- **Kacey** binds `HOST=100.110.245.58` (Tailscale) and, since `ff1774c`, also
+  127.0.0.1.
 
-### 2. X11, not Wayland
+What that means:
 
-`xset dpms` does nothing under Wayland, and Ubuntu's GDM defaults to Wayland.
+- **The screen:** cage has no protocol for switching the panel off, so `xset`
+  and DPMS do nothing. Kacey darkens the screen at the **backlight**
+  (`/sys/class/backlight/intel_backlight/bl_power`), which needs write access
+  (step 2). The compositor keeps running with the backlight off, so the page
+  still sees the mouse and the keyboard. That's how a dark screen wakes up.
+- **The voice:** there's no speech engine on the box. The plan is **XTTS on the
+  940MX**, which first needs the right driver (step 1).
+- **Listening:** WebKitGTK has no working speech recognition, so dictation
+  moves to a server-side Whisper (a later step).
 
-```bash
-sudo sed -i 's/^#\?\s*WaylandEnable=.*/WaylandEnable=false/' /etc/gdm3/custom.conf
-grep -q '^WaylandEnable=false' /etc/gdm3/custom.conf || echo 'WaylandEnable=false' | sudo tee -a /etc/gdm3/custom.conf
-```
+### 1. The NVIDIA 580 legacy driver (root, then reboot)
 
-**Check (after the reboot in step 8):** `echo $XDG_SESSION_TYPE` → `x11`.
-
-### 3. Autologin
-
-In `/etc/gdm3/custom.conf`, under `[daemon]`:
-
-```ini
-AutomaticLoginEnable=true
-AutomaticLogin=<user>
-```
-
-**Check (after the reboot):** the laptop boots straight into the desktop with
-no password prompt.
-
-### 4. The desktop must not blank, lock or suspend on its own
-
-`screen.js` decides when the panel sleeps. Two owners would fight.
+Only compute is needed. The Intel GPU keeps driving the screen, so install the
+**headless** 580 packages from Ubuntu's own archive, not the NVIDIA repo that
+broke apt.
 
 ```bash
-gsettings set org.gnome.desktop.session idle-delay 0
-gsettings set org.gnome.desktop.screensaver lock-enabled false
-gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
-gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
-gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
-gsettings set org.gnome.settings-daemon.plugins.power idle-dim false
-sudo apt install -y xprintidle x11-xserver-utils
+# apt works again: drop the corrupted list and the CUDA repo (PyTorch brings its own CUDA runtime)
+sudo rm -f /var/lib/apt/lists/developer.download.nvidia.com_compute_cuda_repos_ubuntu2604_x86%5f64_Packages
+sudo mv /etc/apt/sources.list.d/cuda-ubuntu2604-x86_64.list /etc/apt/sources.list.d/cuda-ubuntu2604-x86_64.list.disabled
+sudo mv /etc/apt/preferences.d/cuda-repository-pin-600 /etc/apt/preferences.d/cuda-repository-pin-600.disabled
+
+# the 610 stack that ignores this GPU
+sudo apt purge -y 'nvidia-*' 'libnvidia-*' cuda-drivers cuda-keyring
+sudo apt autoremove -y
+
+# Ubuntu's 580 branch, compute only (Maxwell needs the proprietary modules, not -open)
+sudo apt update
+sudo apt install -y nvidia-headless-580 nvidia-utils-580
 ```
 
-**Check:** `xprintidle` prints a number of milliseconds; `xset q | grep -A2 DPMS` works.
+Don't reboot yet: step 2 needs one too.
 
-### 5. The kiosk
+**Check (after the reboot):** `nvidia-smi` shows the GeForce 940MX and its
+memory. Send Claude that output, since XTTS-v2 needs about 3 GB of VRAM. With
+4 GB it fits; with 2 GB it may not.
 
-A script that the session starts at login. It hands DPMS to Kacey (on, but with
-no timeouts of its own) and opens Chromium full-screen on Kacey.
-
-`~/bin/kacey-kiosk.sh`:
-
-```bash
-#!/bin/sh
-# Kacey's bedside kiosk. Started by ~/.config/autostart/kacey-kiosk.desktop.
-xset s off            # no X screensaver
-xset +dpms            # DPMS on, so `xset dpms force on|off` works...
-xset dpms 0 0 0       # ...but with no timers: Kacey's screen.js is the only owner
-# Wait for Kacey to answer before opening the page.
-until curl -sf http://localhost:8082/api/health >/dev/null; do sleep 2; done
-exec chromium \
-  --kiosk --noerrdialogs --disable-infobars \
-  --autoplay-policy=no-user-gesture-required \
-  --check-for-update-interval=31536000 \
-  'http://localhost:8082/?kiosk=1'
-```
-
-`?kiosk=1` is what makes this page the one that plays the morning brief by
-itself. Any other page (a phone) only gets a toast.
-
-Use `chromium-browser` or `google-chrome` if that's what step 1 found.
+### 2. Kacey may switch the backlight (root, then reboot)
 
 ```bash
-chmod +x ~/bin/kacey-kiosk.sh
-mkdir -p ~/.config/autostart
-cat > ~/.config/autostart/kacey-kiosk.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Kacey kiosk
-Exec=/home/<user>/bin/kacey-kiosk.sh
-X-GNOME-Autostart-enabled=true
+sudo tee /etc/udev/rules.d/90-kacey-backlight.rules >/dev/null <<'EOF'
+# Let the video group switch the panel's backlight - Kacey darkens the bedside screen (docs/DREAM.md §6).
+ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys%p/bl_power /sys%p/brightness", RUN+="/bin/chmod g+w /sys%p/bl_power /sys%p/brightness"
 EOF
-```
-
-**Why the autoplay flag:** the morning brief is spoken with nobody touching the
-screen. Without the flag Chromium blocks the audio until the first tap.
-
-### 6. The microphone without a prompt
-
-The wake word needs the microphone with nobody there to click "Allow". Grant it
-to this one origin with a managed policy. That is narrower than
-`--use-fake-ui-for-media-stream`, which accepts every prompt from every site.
-
-```bash
-# deb Chromium / Chrome:
-sudo mkdir -p /etc/chromium/policies/managed /etc/opt/chrome/policies/managed
-# snap Chromium reads this one instead:
-sudo mkdir -p /etc/chromium-browser/policies/managed
-for d in /etc/chromium/policies/managed /etc/chromium-browser/policies/managed /etc/opt/chrome/policies/managed; do
-  echo '{ "AudioCaptureAllowedUrls": ["http://localhost:8082"], "AutoplayAllowed": true }' | sudo tee $d/kacey.json >/dev/null
-done
-```
-
-**Check:** in the kiosk, `chrome://policy` lists `AudioCaptureAllowedUrls`.
-Saying "KC" works after a reboot without any prompt.
-
-### 7. A closed lid must not suspend the laptop
-
-```bash
-sudo mkdir -p /etc/systemd/logind.conf.d
-sudo tee /etc/systemd/logind.conf.d/kacey-lid.conf >/dev/null <<'EOF'
-[Login]
-HandleLidSwitch=ignore
-HandleLidSwitchExternalPower=ignore
-HandleLidSwitchDocked=ignore
-EOF
-```
-
-Apply it by **rebooting** (step 8), not with `systemctl restart systemd-logind`.
-That can end the graphical session, which on a kiosk means a black screen until
-someone logs in.
-
-**Check (after the reboot):** close the lid for a minute and open it. Kacey is
-still reachable (`curl http://kaceybody:8082/api/health` from another machine
-works while the lid is shut), and `cat /proc/acpi/button/lid/*/state` says
-`closed` while shut.
-
-### 8. Tell Kacey where the display is, then reboot
-
-A systemd service inherits neither `DISPLAY` nor `XAUTHORITY`. Put them in
-Kacey's environment file (`/etc/kacey.env`, or wherever `systemctl cat kacey`
-points). Use the Xauthority path step 1 found:
-
-```bash
-echo 'KACEY_DISPLAY=:0' | sudo tee -a /etc/kacey.env
-echo 'KACEY_XAUTHORITY=/run/user/1000/gdm/Xauthority' | sudo tee -a /etc/kacey.env   # or /home/<user>/.Xauthority
+sudo usermod -aG video kaceybody
 sudo reboot
 ```
 
-**Check, after the reboot:**
+**Check:** `ls -l /sys/class/backlight/intel_backlight/bl_power` shows group
+`video` and `rw-rw-r--`. `id` lists `video`. After Kacey starts,
+`journalctl -u kacey | grep "\[screen\] backend"` says `backlight`.
+
+### 3. The kiosk shows Kacey (root)
 
 ```bash
-journalctl -u kacey -n 50 | grep -E '\[screen\]|\[night\]'
-curl -s http://127.0.0.1:8082/api/night | python3 -m json.tool | head -30
+sudo systemctl edit kiosk
 ```
 
-Within about 2 minutes of nobody touching it, the log shows
-`[screen] off (idle)` and the panel goes dark. Moving the mouse wakes it (the
-OS does that), and 2 minutes later it goes dark again. `"lid": "open"` is in
-`/api/night`.
+Add:
 
-### 9. Does the page stay "visible" with the panel off?
+```ini
+[Service]
+Environment=KIOSK_URL=http://127.0.0.1:8082/?kiosk=1
+```
 
-This decides whether the wake word works at night. It must be measured on the
-real machine, not assumed:
+Then:
 
-1. Let the panel go dark (or run `xset dpms force off` in the session).
+```bash
+sudo systemctl restart kiosk
+```
+
+- `127.0.0.1` because the browser treats it as a secure origin, which is what
+  lets the page use the microphone.
+- `?kiosk=1` makes this page the one that plays the morning brief by itself.
+- `kiosk-session` already waits for the URL to answer before starting the
+  browser.
+
+**Check:** the laptop shows Kacey. Within 2 minutes the screen goes dark
+(`[screen] off (idle)` in `journalctl -u kacey`). Moving the mouse or pressing
+a key lights it again.
+
+**If Epiphany asks for the microphone or for sound** (a bar at the top of the
+page): tap *Allow* once with the touchpad. It remembers it for this address.
+
+To go back to the record: `sudo systemctl revert kiosk && sudo systemctl restart kiosk`.
+
+### 4. XTTS on the GPU (done by Claude, no root)
+
+After steps 1–3, Claude installs XTTS in a user venv (`~/.venvs/xtts`) and runs
+it as a **user** unit (`systemctl --user`). That needs no sudo. The voices are
+the ones picked in the Voice Lab.
+
+### 5. Does the page keep listening in the dark?
+
+Run this once the wake word runs in the kiosk:
+
+1. Let the screen go dark.
 2. Wait 5 minutes, then say "KC".
-3. `journalctl -u kacey --since '-10 min' | grep 'page visibility'`
+3. `journalctl -u kacey --since '-10 min' | grep -E 'page visibility|\[screen\]'`.
 
-- **No `page visibility: hidden` line, and "KC" lit the screen:** done. Write
-  "visible with DPMS off" into [DREAM.md §6](DREAM.md#the-screen-dpms).
-- **A `hidden` line, or "KC" did nothing:** add these flags to the Chromium line
-  in `kacey-kiosk.sh`, reboot, and repeat:
-  `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling`
-  If it is still hidden, tell Claude. The fallback is a change to the wake
-  predicate in code (DREAM.md §6).
-4. Repeat the test **with the lid closed**. Some setups switch the internal
-   output off on lid close, which can hide the window.
+With the backlight backend the page should never go hidden, because the
+compositor doesn't know the panel is off. If a `page visibility: hidden` line
+shows up anyway, tell Claude.
 
 ---
 
@@ -226,10 +168,8 @@ sudo systemctl restart kacey
 journalctl -u kacey -n 30
 ```
 
-The kiosk page then reconnects on its own. After a change to anything under
-`public/`, reload the page as well (a tap-and-hold is not available in kiosk
-mode, so restart the kiosk: `pkill chromium`, and the autostart script brings
-it back on the next login, or run `~/bin/kacey-kiosk.sh &` in the session).
+The kiosk page reconnects on its own. After a change to anything under
+`public/`, reload it by restarting the kiosk: `sudo systemctl restart kiosk`.
 
 **P3 check:** press "Jdu spát" in lightsd. `journalctl -u kacey -f` shows
 `awake -> winding_down` and `[screen] off (winding_down)`. Tap the screen, and
@@ -241,7 +181,9 @@ it shows `-> awake (interaction)`.
 
 | Section | Done on | Notes |
 | ------- | ------- | ----- |
-| P1 lightsd restart |  |  |
-| P2.1 current state sent back |  |  |
-| P2.2–8 kiosk, DPMS, lid, env, reboot |  |  |
-| P2.9 visibility with DPMS off |  |  |
+| P1 lightsd (deployed by Claude) | 2026-09-25 | wake_at 06:30, morning_peak_at 07:00 |
+| P2.1 NVIDIA 580 driver |  | send `nvidia-smi` |
+| P2.2 backlight udev rule + reboot |  |  |
+| P2.3 kiosk shows Kacey |  |  |
+| P2.4 XTTS on the GPU (Claude) |  |  |
+| P2.5 listening in the dark |  |  |

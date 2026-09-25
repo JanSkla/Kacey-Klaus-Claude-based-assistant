@@ -173,7 +173,7 @@ function renderNightState() {
         (last.status === 'done' ? 'ok · ' + last.tasks + ' úk., ' + last.proposals + ' návr.' : last.status === 'failed' ? 'selhal' : 'běží')
       : 'zatím žádný';
     rows = [
-      ['SCREEN', (sc.state || 'unknown') + (sc.reason ? ' · ' + sc.reason : '') + (sc.available === false ? ' · bez X' : '')],
+      ['SCREEN', (sc.state || 'unknown') + (sc.reason ? ' · ' + sc.reason : '') + (sc.backend ? ' · ' + ({ backlight: 'podsvícení', xset: 'DPMS', none: 'neřízeno' }[sc.backend] || sc.backend) : ''), sc.backend === 'none' ? 'warn' : null],
       ['LID', { open: 'otevřené', closed: 'zavřené', unknown: 'neznámé' }[sc.lid] || '—', sc.lid === 'closed' ? 'warn' : sc.lid === 'open' ? 'ok' : null],
       ['SLEEP', sleepText],
       ['LAST RUN', lastText, last ? (last.status === 'done' ? 'ok' : last.status === 'failed' ? 'bad' : null) : null],

@@ -184,12 +184,22 @@ function catchUp(now = new Date()) {
 /** The owner did something: a tap, a key, the wake word, a message. */
 export function noteInteraction(kind) {
   if (!sleep || !INTERACTION_KINDS.includes(kind)) return;
-  screen.noteActivity();
-  // The wake word is said from bed, in the dark: light the panel for the answer.
-  // A tap or a key already woke it through the OS.
-  if (kind === 'wake') screen.on('wake word');
+  /* Light the panel for whoever is there: the wake word said from bed, or a
+     tap or key at the kiosk. On kaceybody nothing else would — the panel is
+     dark at the backlight and the OS does not know. A message typed on a
+     phone is not somebody at the bedside. */
+  if (kind === 'message') screen.noteActivity();
+  else screen.wake(kind === 'wake' ? 'wake word' : kind);
   apply({ type: 'interaction', kind });
   if (deps.onInteraction) deps.onInteraction(kind);
+}
+
+/**
+ * The mouse moved over the kiosk page. Wakes or keeps the panel lit, but is
+ * NOT an interaction: a cat on the touchpad must not cancel the night.
+ */
+export function notePresence() {
+  screen.wake('pointer');
 }
 
 /** The page started or stopped speaking. Keeps the panel lit; not an interaction. */

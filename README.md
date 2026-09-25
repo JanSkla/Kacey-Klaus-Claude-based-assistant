@@ -232,6 +232,7 @@ Client → server:
 { "type": "interrupt" }
 { "type": "interaction", "kind": "pointer" }        // pointer | key | touch | wake; throttled, only if ready.features has "night"
 { "type": "speaking", "on": true }                  // TTS started / stopped: keeps the bedside panel lit
+{ "type": "presence" }                              // the mouse moved over the page: wakes the panel; not an interaction
 { "type": "visibility", "state": "hidden" }         // logged: does the kiosk page go hidden with the panel off?
 { "type": "morning_ack", "logical_date": "…" }      // the kiosk started playing the morning brief
 ```

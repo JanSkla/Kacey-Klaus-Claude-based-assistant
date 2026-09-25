@@ -19,6 +19,16 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The bedside screen, for kaceybody as it really is** (cage + Epiphany on
+Wayland, no desktop)
+- `screen.js` switches the panel at the backlight (`/sys/class/backlight`)
+  when it can, and falls back to `xset` on a desktop. The screen is dark by
+  default. A tap, a key, the wake word or the mouse over the page lights it
+  (new `presence` frame, which does not count as interaction for sleep).
+- The runbook's P2 is rewritten for the real machine: the NVIDIA 580 legacy
+  driver for the GeForce 940MX (the installed 610 ignores it), a udev rule for
+  the backlight, and pointing the existing cage kiosk at Kacey.
+
 **Fix: Kacey also listens on localhost when `HOST` is set** (a Tailscale
 address on kaceybody). The kiosk needs `http://localhost:8082` for the
 microphone, and `npm run night:run` and the runbook's checks call localhost.
