@@ -266,6 +266,11 @@ HTTP:
 - `GET /` → `public/index.html` (static file server over `public/`)
 - `GET /api/health` → `{ "ok": true, "model": "...", "mcpServers": [...] }`
 - `GET /api/night` → the same snapshot as the `night_state` frame
+- `GET /api/rules` · `PUT /api/rules/sets/:id|new` · `DELETE /api/rules/sets/:id` ·
+  `PUT /api/rules/:id|new` · `DELETE /api/rules/:id` · `POST /api/rules/preview`
+  → the night routine's rules ([docs/DREAM.md §8](docs/DREAM.md#8-rules))
+- `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
+  `base_rev` is stale (the night run added tasks since the page loaded)
 
 ## Editing the persona
 

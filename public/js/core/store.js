@@ -17,6 +17,7 @@ import { say } from '../ui/toast.js';
 
 var listeners = [];
 var pending = {};          // section -> timer
+var ops = {};              // section -> the patches since the last successful save
 var ready = false;
 
 /* The same shape the server defaults to, so a view rendered before the fetch
@@ -30,6 +31,10 @@ export var data = {
   /* Read-only, from the server: the tools refused by configuration. Not a
      section, so it is never written back. */
   deniedTools: [],
+  /* Read-only, from the server: the revision `tasks` came from. Sent back with
+     every tasks save, so a copy that went stale (the night run added tasks
+     since) is refused instead of deleting them. */
+  tasksRev: 0,
   settings: {
     hue: 193, wakeMin: 405, briefPrompt: '',
     injected: {}, sources: {}, memory: {}, calOn: {}, tools: {}
@@ -51,15 +56,45 @@ export function emit() {
    changes a second, and every one of them must not become a request. */
 function save(section) {
   clearTimeout(pending[section]);
-  pending[section] = setTimeout(function () {
-    fetch('/api/app/' + section, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: data[section] })
-    }).catch(function (err) {
-      console.warn('[kacey] could not save ' + section + ': ' + err.message);
+  pending[section] = setTimeout(function () { send(section, 0); }, 500);
+}
+
+function send(section, attempt) {
+  var sent = (ops[section] || []).splice(0);
+  var body = { value: data[section] };
+  if (section === 'tasks') body.base_rev = data.tasksRev;
+  fetch('/api/app/' + section, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function (res) {
+    if (res.status === 409 && section === 'tasks') return rebase(section, sent, attempt);
+    return res.json().then(function (out) {
+      if (section === 'tasks' && out && typeof out.tasksRev === 'number') data.tasksRev = out.tasksRev;
     });
-  }, 500);
+  }).catch(function (err) {
+    console.warn('[kacey] could not save ' + section + ': ' + err.message);
+  });
+}
+
+/* The server's list moved on (the night run, Kacey, another page). Fetch it,
+   replay this page's edits on top — patch() is called with a function almost
+   everywhere, precisely so an edit can be re-applied to a newer list — and
+   save again. A whole-value patch cannot be replayed safely; it is dropped
+   and said so, rather than allowed to overwrite what changed. */
+function rebase(section, sent, attempt) {
+  return load().then(function () {
+    var all = sent.concat((ops[section] || []).splice(0));
+    var lost = false;
+    all.forEach(function (op) {
+      if (typeof op === 'function') data[section] = op(data[section]);
+      else lost = true;
+    });
+    ops[section] = all.filter(function (op) { return typeof op === 'function'; });
+    emit();
+    if (lost) say('Úkoly se mezitím změnily — načetla jsem aktuální stav.');
+    if (ops[section].length && attempt < 3) send(section, attempt + 1);
+  });
 }
 
 /**
@@ -70,6 +105,7 @@ function save(section) {
  * a read-modify-write across an await can lose a concurrent edit.
  */
 export function patch(section, value) {
+  (ops[section] || (ops[section] = [])).push(typeof value === 'function' ? value : { value: value });
   data[section] = typeof value === 'function' ? value(data[section]) : value;
   save(section);
   emit();
@@ -101,7 +137,7 @@ export async function applyRemoteChange(section, undo) {
 
   var names = {
     routine: 'Rutina', tasks: 'Úkoly', journal: 'Deník',
-    settings: 'Nastavení', timers: 'Časovače', checklists: 'Seznamy'
+    settings: 'Nastavení', timers: 'Časovače', checklists: 'Seznamy', rules: 'Pravidla'
   };
   var label = names[section] || 'Aplikace';
 

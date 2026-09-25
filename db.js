@@ -29,6 +29,19 @@ import { dueFromGroup, normalizeDue } from './public/js/core/due.js';
 
 let db = null;
 
+/* Who made a task, and why (docs/DREAM.md §9). Written only by the night
+   routine's generator; appstate.writeTasks() carries them over by task_id and
+   ignores whatever a client sends for them. Listed once, because the table
+   definition and the migration that adds them to an older table must agree. */
+const TASK_GEN_COLUMNS = [
+  "origin       TEXT NOT NULL DEFAULT 'user' CHECK (origin IN ('user','rule','dream'))",
+  'rule_id      TEXT',
+  // The occurrence this task is for; at most one task per key (index below).
+  'source_key   TEXT',
+  'reason       TEXT',
+  'note         TEXT',
+];
+
 /* The task table, by name, so the migration below can build its replacement
    from the same definition the schema uses. */
 const taskTable = (name) => `
@@ -48,7 +61,8 @@ CREATE TABLE IF NOT EXISTS ${name} (
                CHECK (sensitivity IN ('cloud_safe','local_only')),
   sort_order   INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT NOT NULL,
-  updated_at   TEXT NOT NULL
+  updated_at   TEXT NOT NULL,
+${TASK_GEN_COLUMNS.map((c) => '  ' + c).join(',\n')}
 );`;
 
 /* Kacey's tables. `IF NOT EXISTS` throughout: this runs on every boot and must
@@ -91,6 +105,43 @@ CREATE TABLE IF NOT EXISTS kacey_kv (
   value      TEXT NOT NULL,                       -- JSON
   updated_at TEXT NOT NULL
 );
+
+/* The night routine's rules (docs/DREAM.md §8): data, not code, so Kacey can
+   make them from speech and the UI can edit them. A rule runs only when both
+   it and its ruleset are enabled. The JSON columns are validated by one zod
+   schema in rules.js; a row that fails is skipped, never fatal. */
+CREATE TABLE IF NOT EXISTS kacey_ruleset (
+  ruleset_id  TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kacey_rule (
+  rule_id     TEXT PRIMARY KEY,
+  ruleset_id  TEXT NOT NULL REFERENCES kacey_ruleset(ruleset_id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  trigger     TEXT NOT NULL,                      -- JSON
+  timing      TEXT NOT NULL,                      -- JSON
+  task        TEXT NOT NULL,                      -- JSON
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS kacey_rule_set_idx ON kacey_rule (ruleset_id, sort_order);
+
+/* A generated task the owner deleted stays deleted: its occurrence key lands
+   here and the generator never makes it again. 'merged' is the routine half
+   of a calendar x routine pair folded into one task. */
+CREATE TABLE IF NOT EXISTS kacey_dream_suppress (
+  source_key TEXT PRIMARY KEY,
+  reason     TEXT NOT NULL CHECK (reason IN ('deleted','merged')),
+  created_at TEXT NOT NULL
+);
 `;
 
 export function now() { return new Date().toISOString(); }
@@ -121,8 +172,31 @@ export function open() {
    the file is klaus_memory's. */
 
 function migrate(h) {
-  const taskCols = h.prepare('PRAGMA table_info(kacey_task)').all().map((c) => c.name);
-  if (taskCols.includes('task_group')) dropTaskGroups(h);
+  let taskCols = h.prepare('PRAGMA table_info(kacey_task)').all().map((c) => c.name);
+  if (taskCols.includes('task_group')) {
+    dropTaskGroups(h);
+    taskCols = h.prepare('PRAGMA table_info(kacey_task)').all().map((c) => c.name);
+  }
+  if (!taskCols.includes('origin')) addTaskGenColumns(h);
+  /* After the columns exist — on an older table the CREATE in SCHEMA runs
+     before this, when there is no source_key yet to index. */
+  h.exec(`CREATE UNIQUE INDEX IF NOT EXISTS kacey_task_source_idx
+            ON kacey_task (source_key) WHERE source_key IS NOT NULL`);
+}
+
+/* The night routine's columns on an existing task table. ADD COLUMN, not a
+   rebuild: every one of them has a default or allows NULL, so existing rows
+   simply become 'user' tasks with no source. */
+function addTaskGenColumns(h) {
+  h.exec('BEGIN IMMEDIATE');
+  try {
+    for (const col of TASK_GEN_COLUMNS) h.exec(`ALTER TABLE kacey_task ADD COLUMN ${col}`);
+    h.exec('COMMIT');
+    console.log('[db] tasks: added origin, rule_id, source_key, reason, note');
+  } catch (err) {
+    try { h.exec('ROLLBACK'); } catch { /* the BEGIN never took */ }
+    throw err;
+  }
 }
 
 /* Tasks used to sit in a fixed group — overdue, today, this week — written

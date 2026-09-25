@@ -24,6 +24,11 @@ import { z } from 'zod';
 import * as appstate from './appstate.js';
 import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
+import { CATEGORY_KEYS } from './public/js/core/routine-cats.js';
+import * as nightstore from './nightstore.js';
+import {
+  RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
+} from './rules.js';
 
 if (DAY_START_HOUR !== LOGICAL_DAY_START_HOUR) {
   console.warn('[app-tools] public/js/core/due.js DAY_START_HOUR differs from config LOGICAL_DAY_START_HOUR');
@@ -47,10 +52,9 @@ const DUE_HELP =
 
 export const APP_SERVER_NAME = 'kacey-app';
 
-/* The routine's categories, and the days, exactly as the browser knows them.
-   Kept in step with public/js/views/routine.js by hand — there are six of them
-   and they have not changed in the life of the project. */
-const CATEGORIES = ['routine', 'gym', 'work', 'study', 'free', 'commute'];
+/* The routine's categories come from the file the browser uses too
+   (public/js/core/routine-cats.js); the days are spelled here. */
+const CATEGORIES = CATEGORY_KEYS;
 const DAYS = ['po', 'ut', 'st', 'ct', 'pa', 'so', 'ne'];
 const DAY_ALIASES = {
   po: 0, pondělí: 0, pondeli: 0, mon: 0, monday: 0, '0': 0,
@@ -155,7 +159,7 @@ const routinePaint = tool(
       days: z.array(z.string()).describe('Dny: "po","ut","st","ct","pa","so","ne" (nebo 0-6).'),
       from: z.string().describe('Začátek "HH:MM".'),
       to: z.string().describe('Konec "HH:MM".'),
-      category: z.enum(['routine', 'gym', 'work', 'study', 'free', 'commute'])
+      category: z.enum(CATEGORIES)
         .describe('Kategorie bloku.'),
       note: z.string().optional().describe('Volitelný popisek bloku, např. "Laborka".'),
     })).describe('Bloky k natření.'),
@@ -407,16 +411,174 @@ const journalAdd = tool(
   },
 );
 
+/* ---- the night routine's rules --------------------------------------------
+   docs/DREAM.md §8. A rule turns a standing pattern ("whenever I have gym,
+   remind me the evening before to pack my bag") into tasks the night run
+   creates by itself. The input shapes mirror rules.js's zod schema, which
+   has the last word (it also checks that a calendar rule has keywords and a
+   routine rule a category). */
+
+const TRIGGER_SHAPE = z.object({
+  sources: z.array(z.enum(['calendar', 'routine'])).min(1)
+    .describe('Odkud: "calendar" (události v kalendáři), "routine" (bloky týdenní rutiny), nebo obojí.'),
+  calendar_match: z.array(z.string()).optional()
+    .describe('Klíčová slova v názvu události (bez ohledu na diakritiku a velikost). Slova od 5 písmen chytají i skloňování ("posilovna" → "posilovnu"), kratší jen přesně ("run").'),
+  routine_category: z.enum(CATEGORIES).optional().describe('Kategorie bloku rutiny.'),
+  routine_note_match: z.array(z.string()).optional().describe('Jen bloky, jejichž poznámka obsahuje některé z těchto slov.'),
+  starts_before: z.string().optional().describe('Jen když událost/blok začíná před "HH:MM".'),
+});
+
+const TIMING_SHAPE = z.object({
+  anchor: z.enum(['evening_before', 'morning_of', 'before_start'])
+    .describe('evening_before = večer předem, morning_of = ráno toho dne, before_start = X minut před začátkem.'),
+  at: z.string().optional().describe('Čas "HH:MM" pro evening_before (výchozí 20:00) a morning_of (výchozí 07:00).'),
+  offset_min: z.number().int().min(0).max(1440).optional().describe('Minuty před začátkem pro before_start (výchozí 60).'),
+});
+
+const TASK_SHAPE = z.object({
+  label: z.string().describe('Text úkolu, který pravidlo vytvoří.'),
+  meta: z.string().optional().describe('Doplněk k úkolu.'),
+  duration_min: z.number().int().min(5).max(1440).optional().describe('Délka v minutách (úkol má čas, ukáže se v kalendáři).'),
+  checklist: z.array(z.string()).optional().describe('Položky seznamu, který se k úkolu založí.'),
+});
+
+function previewLines(rule, days = 7) {
+  const from = new Date();
+  let items;
+  try {
+    items = nightstore.previewWindow({ from, to: new Date(from.getTime() + days * 86400000), now: from, rules: [rule] });
+  } catch (err) {
+    return `(náhled nejde spočítat: ${err.message})`;
+  }
+  // An exact calendar × routine pair is merged into the calendar one.
+  items = items.filter((i) => !(i.source === 'routine' && i.overlap && i.overlap.exact));
+  return items.length
+    ? items.map((i) => '- ' + describeItem(i)).join('\n')
+    : `(v příštích ${days} dnech by nevytvořilo nic — zkontroluj klíčová slova proti tomu, jak se události v kalendáři opravdu jmenují)`;
+}
+
+function describeFull(rule) {
+  return `${describeRule(rule)}${rule.enabled === false ? ' [vypnuto]' : ''}\n    spouští: ${describeTrigger(rule.trigger)}; kdy: ${describeTiming(rule.timing)}` +
+    (rule.task.checklist && rule.task.checklist.length ? `; seznam: ${rule.task.checklist.join(', ')}` : '') +
+    (rule.invalid ? `\n    NEPLATNÉ: ${rule.invalid}` : '');
+}
+
+const rulesList = tool(
+  'rules_list',
+  'Vypiš pravidla nočního plánování: sady pravidel a v nich pravidla (co je spouští, kdy a jaký úkol vytvoří). ' +
+    'Zavolej před úpravou pravidla, ať znáš id.',
+  {},
+  async () => {
+    const sets = nightstore.listRulesets();
+    if (!sets.length) return ok('Žádná pravidla.');
+    return ok(sets.map((s) =>
+      `SADA (${s.id}) „${s.name}“${s.enabled ? '' : ' [vypnutá]'}:\n` +
+      (s.rules.length ? s.rules.map((r) => `  - (${r.id}) ${describeFull(r)}`).join('\n') : '  (prázdná)'),
+    ).join('\n\n'));
+  },
+);
+
+const rulesetUpsert = tool(
+  'ruleset_upsert',
+  'Založ novou sadu pravidel, nebo stávající přejmenuj / zapni / vypni (vypnutá sada = žádné její pravidlo neběží, např. na dovolenou).',
+  {
+    id: z.string().optional().describe('Id sady z rules_list; vynech = nová sada.'),
+    name: z.string().optional().describe('Název sady.'),
+    enabled: z.boolean().optional().describe('Zapnuto / vypnuto.'),
+    description: z.string().optional(),
+  },
+  async (args) => {
+    try {
+      const set = nightstore.upsertRuleset(args);
+      onWrite('rules');
+      return ok(`Sada „${set.name}“ (${set.id}) ${set.enabled ? 'zapnutá' : 'vypnutá'}, ${set.rules.length} pravidel.`);
+    } catch (err) {
+      return fail(`${err.message}. Nic se nezměnilo.`);
+    }
+  },
+);
+
+const ruleUpsert = tool(
+  'rule_upsert',
+  'Vytvoř nebo změň pravidlo nočního plánování: když je v kalendáři nebo v rutině něco, vytvoř úkol v daný čas. ' +
+    'Pro stálé vzorce ("kdykoli mám posilovnu, připomeň mi večer předem sbalit tašku") — ne pro jednorázové úkoly. ' +
+    'Vrátí náhled toho, co by pravidlo vytvořilo v příštích 7 dnech.',
+  {
+    id: z.string().optional().describe('Id pravidla z rules_list; vynech = nové pravidlo.'),
+    ruleset_id: z.string().optional().describe('Do které sady; vynech = první sada.'),
+    name: z.string().optional().describe('Krátký název, např. "Posilovna".'),
+    enabled: z.boolean().optional(),
+    trigger: TRIGGER_SHAPE.optional(),
+    timing: TIMING_SHAPE.optional(),
+    task: TASK_SHAPE.optional(),
+  },
+  async (args) => {
+    let result;
+    try {
+      result = nightstore.upsertRule(args);
+    } catch (err) {
+      return fail(`Pravidlo neuloženo: ${err.message}. Nic se nezměnilo.`);
+    }
+    onWrite('rules');
+    return ok(
+      `${result.before ? 'Upraveno' : 'Vytvořeno'}: (${result.rule.id}) ${describeFull(result.rule)}\n\n` +
+      `V příštích 7 dnech by vytvořilo:\n${previewLines(result.rule)}`,
+    );
+  },
+);
+
+const ruleDelete = tool(
+  'rule_delete',
+  'Smaž pravidlo nočního plánování. Úkoly, které už vytvořilo, zůstanou.',
+  { id: z.string().describe('Id pravidla z rules_list.') },
+  async ({ id }) => {
+    try {
+      const before = nightstore.deleteRule(id);
+      onWrite('rules');
+      return ok(`Smazáno pravidlo „${before.name}“.`);
+    } catch (err) {
+      return fail(`${err.message}. Nic se nezměnilo.`);
+    }
+  },
+);
+
+const rulePreview = tool(
+  'rule_preview',
+  'Ukaž, co by pravidlo vytvořilo v příštích dnech — uložené (id), nebo návrh ještě před uložením (name, trigger, timing, task).',
+  {
+    id: z.string().optional().describe('Id uloženého pravidla.'),
+    name: z.string().optional(),
+    trigger: TRIGGER_SHAPE.optional(),
+    timing: TIMING_SHAPE.optional(),
+    task: TASK_SHAPE.optional(),
+    days: z.number().int().min(1).max(31).optional().describe('Kolik dní dopředu (výchozí 7).'),
+  },
+  async ({ id, days, ...draft }) => {
+    let rule;
+    if (id) {
+      rule = nightstore.getRule(id);
+      if (!rule) return fail(`Pravidlo "${id}" neexistuje. Vypiš si je přes rules_list.`);
+    } else {
+      const parsed = RuleSchema.safeParse({ name: draft.name || 'Návrh', ...draft });
+      if (!parsed.success) return fail(`Návrh nedává smysl: ${explainIssues(parsed.error)}`);
+      rule = { id: 'draft', ...parsed.data };
+    }
+    return ok(`${describeRule(rule)}\n\nV příštích ${days || 7} dnech:\n${previewLines(rule, days || 7)}`);
+  },
+);
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, taskAdd, taskUpdate, journalAdd,
+  rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
 export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours',
   'app_task_add', 'app_task_update', 'app_journal_add',
+  'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 export function makeAppServer() {
@@ -424,7 +586,8 @@ export function makeAppServer() {
     name: APP_SERVER_NAME,
     version: '1.0.0',
     instructions:
-      'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly, deník. ' +
+      'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly, deník, ' +
+      'a pravidla nočního plánování (rules_*, rule_*), podle kterých se v noci samy zakládají úkoly. ' +
       'Rutina je tvar běžného týdne (opakující se bloky), NE konkrétní události — ' +
       'ty patří do kalendáře přes klaus-memory. Před úpravou si přečti stav přes app_read. ' +
       'Když uživatel pošle obrázek rozvrhu, přečti ho a natři přes app_routine_paint ' +

@@ -18,6 +18,9 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import * as appstate from './appstate.js';
+import { logicalDayOf, dayRangeOf, dayIndex } from './calendar-days.js';
+import * as nightstore from './nightstore.js';
+import { RuleSchema, explainIssues } from './rules.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 import {
   startNight, stopNight, noteInteraction, noteSpeaking, noteVisibility, nightState, INTERACTION_KINDS,
@@ -536,10 +539,80 @@ app.put('/api/app/:section', express.json({ limit: '1mb' }), (req, res) => {
     : req.body;
   if (value === undefined) return res.status(400).json({ error: 'nothing to store' });
 
+  /* The task list is saved whole from the browser's copy, so it carries the
+     revision that copy came from; a stale one is refused rather than allowed
+     to delete what the night run added since (appstate.writeTasks). */
+  const baseRev = name === 'tasks' && Number.isInteger(req.body?.base_rev) ? req.body.base_rev : undefined;
   try {
-    res.json({ ok: true, section: name, value: appstate.setSection(name, value) });
+    const stored = appstate.setSection(name, value, { baseRev });
+    res.json({ ok: true, section: name, value: stored, ...(name === 'tasks' ? { tasksRev: appstate.tasksRev() } : {}) });
   } catch (err) {
+    if (err.code === 'CONFLICT') return res.status(409).json({ error: err.message, tasksRev: err.rev });
     res.status(400).json({ error: err.message });
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * The night routine's rules (docs/DREAM.md §8) — for the rules editor. Kacey
+ * edits the same rows through her rules_* tools; both paths validate with the
+ * one zod schema in rules.js, and both broadcast app_changed { section:
+ * 'rules' } so every open page reloads them.
+ * ------------------------------------------------------------------------- */
+
+function rulesPayload() {
+  return { rulesets: nightstore.listRulesets() };
+}
+
+function rulesRoute(fn) {
+  return (req, res) => {
+    try {
+      const out = fn(req);
+      broadcast({ type: 'app_changed', section: 'rules' });
+      res.json({ ok: true, ...out, ...rulesPayload() });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  };
+}
+
+app.get('/api/rules', (_req, res) => {
+  res.json(rulesPayload());
+});
+
+app.put('/api/rules/sets/:id', express.json({ limit: '32kb' }), rulesRoute((req) => {
+  const id = req.params.id === 'new' ? undefined : req.params.id;
+  return { ruleset: nightstore.upsertRuleset({ ...(req.body || {}), id }) };
+}));
+
+app.delete('/api/rules/sets/:id', rulesRoute((req) => ({ deleted: nightstore.deleteRuleset(req.params.id) })));
+
+app.put('/api/rules/:id', express.json({ limit: '64kb' }), rulesRoute((req) => {
+  const id = req.params.id === 'new' ? undefined : req.params.id;
+  return { rule: nightstore.upsertRule({ ...(req.body || {}), id }).rule };
+}));
+
+app.delete('/api/rules/:id', rulesRoute((req) => ({ deleted: nightstore.deleteRule(req.params.id) })));
+
+/* What a rule — saved, or a draft from the editor — would create over the
+   next `days` (default 7). The same previewRules() the night run executes. */
+app.post('/api/rules/preview', express.json({ limit: '64kb' }), (req, res) => {
+  const body = req.body || {};
+  const days = Math.min(31, Math.max(1, Number(body.days) || 7));
+  let rules;
+  if (body.rule_id) {
+    const rule = nightstore.getRule(body.rule_id);
+    if (!rule) return res.status(404).json({ error: 'pravidlo neexistuje' });
+    rules = [rule];
+  } else if (body.rule) {
+    const parsed = RuleSchema.safeParse({ name: 'Návrh', ...body.rule });
+    if (!parsed.success) return res.status(400).json({ error: explainIssues(parsed.error) });
+    rules = [{ id: body.rule.id || 'draft', ...parsed.data }];
+  }
+  try {
+    const from = new Date();
+    res.json({ items: nightstore.previewWindow({ from, to: new Date(from.getTime() + days * 86400000), now: from, rules }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -558,61 +631,6 @@ app.put('/api/app/:section', express.json({ limit: '1mb' }), (req, res) => {
  * Day boundaries follow klaus_memory's logical day, which ends at 04:00 — an
  * event at 01:30 belongs to the previous date, same rule the persona uses.
  * ------------------------------------------------------------------------- */
-
-/** Local calendar date of a Date, as 'YYYY-MM-DD'. */
-function calDayOf(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function logicalDayOf(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return null;
-  return calDayOf(new Date(d.getTime() - LOGICAL_DAY_START_HOUR * 3600 * 1000));
-}
-
-/* All-day events arrive from the calendar sync as whole clock days: midnight to
-   midnight with an EXCLUSIVE end, or midnight to 23:59. They must not get the
-   4-hour logical-day shift — midnight belongs to the previous logical day, so a
-   holiday starting at 00:00 on the 26th would be filed as starting on the 25th
-   and ending a day early. Detect the shape and use plain calendar days for it. */
-function isAllDay(startIso, endIso) {
-  if (!endIso) return false;
-  const s = new Date(startIso), e = new Date(endIso);
-  if (isNaN(s) || isNaN(e)) return false;
-  if (s.getHours() !== 0 || s.getMinutes() !== 0) return false;
-  const endsAtMidnight = e.getHours() === 0 && e.getMinutes() === 0;
-  const endsAtDayEnd = e.getHours() === 23 && e.getMinutes() === 59;
-  if (!endsAtMidnight && !endsAtDayEnd) return false;
-  return e.getTime() - s.getTime() >= 20 * 3600 * 1000;    // at least most of a day
-}
-
-/* The inclusive range of days an event occupies. The end is treated as
-   exclusive throughout — an event ending at 00:00, or at 04:00 for a timed one,
-   does not reach into the day that begins there. */
-function dayRangeOf(r) {
-  const s = new Date(r.starts_at);
-  if (isNaN(s)) return null;
-  const allDay = isAllDay(r.starts_at, r.ends_at);
-  const first = allDay ? calDayOf(s) : logicalDayOf(r.starts_at);
-  if (!first) return null;
-
-  let last = first;
-  if (r.ends_at) {
-    const e = new Date(r.ends_at);
-    if (!isNaN(e) && e.getTime() > s.getTime()) {
-      const endMoment = new Date(e.getTime() - 1);
-      const end = allDay ? calDayOf(endMoment) : logicalDayOf(endMoment.toISOString());
-      if (end && end > first) last = end;
-    }
-  }
-  return { first, last, allDay };
-}
-
-/** Days since epoch for a 'YYYY-MM-DD'. UTC so a DST change cannot shift it. */
-function dayIndex(date) {
-  const [y, m, d] = date.split('-').map(Number);
-  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
-}
 
 /** Every 'YYYY-MM' from a to b inclusive. Capped: a corrupt far-future row must
     not turn into an unbounded loop. */
@@ -1030,6 +1048,7 @@ server.listen(PORT, HOST, () => {
         'an event from Google or TimeTree will fail. Set KLAUS_CALENDARS.');
   }
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
+  try { nightstore.seedStarterRules(); } catch (err) { log(`starter rules not seeded: ${err.message}`); }
   startNight({ broadcast });
 });
 

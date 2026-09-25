@@ -69,7 +69,38 @@ function readTasks() {
     ...(r.duration_min ? { duration: r.duration_min } : {}),
     sensitivity: r.sensitivity,
     created: r.created_at,
+    /* Read-only: who made it and why (docs/DREAM.md §9). A client may send
+       these back; writeTasks() ignores them and keeps the stored ones. */
+    origin: r.origin || 'user',
+    ...(r.rule_id ? { rule_id: r.rule_id } : {}),
+    ...(r.source_key ? { source_key: r.source_key } : {}),
+    ...(r.reason ? { reason: r.reason } : {}),
+    ...(r.note ? { note: r.note } : {}),
   }));
+}
+
+/* ---- the tasks revision ---------------------------------------------------
+   The browser saves the whole task list from its own copy. A page loaded
+   before the night run would, on its first tick, save a list without the
+   tasks the run made — deleting them, and (below) suppressing them for good.
+   So every tasks write bumps a revision; the browser sends the revision its
+   copy came from, and a stale one is refused (409) instead of written. */
+
+export class ConflictError extends Error {
+  constructor(rev) {
+    super('Úkoly se mezitím změnily.');
+    this.code = 'CONFLICT';
+    this.rev = rev;
+  }
+}
+
+export function tasksRev() { return Number(kvGet('tasks.rev', 0)) || 0; }
+
+/** Bump the revision. Callers that write kacey_task directly (the night run) call this too. */
+export function bumpTasksRev() {
+  const next = tasksRev() + 1;
+  kvSet('tasks.rev', next);
+  return next;
 }
 
 function readJournal() {
@@ -113,21 +144,53 @@ function taskDue(t) {
   try { return normalizeDue(t.due_at); } catch { return null; }
 }
 
-function writeTasks(list) {
+/**
+ * Replace the task list.
+ *
+ * The generation columns (origin, rule_id, source_key, reason, note) are the
+ * night routine's, not the client's: they are carried over from the stored
+ * row with the same id, and a new row from a client is always a 'user' task.
+ * Without that, every browser save would wipe them.
+ *
+ * A generated task missing from the new list was deleted by the owner, so its
+ * occurrence key is suppressed and the generator never makes it again. This
+ * is the one place every kind of delete passes through (the ✕, "Smazat
+ * hotové", Kacey's app_task_update).
+ *
+ * `baseRev` is the revision the caller's list came from; a stale one throws
+ * ConflictError and writes nothing. Server-side callers, which hold the
+ * current document, pass nothing.
+ */
+function writeTasks(list, { baseRev } = {}) {
   const stamp = now();
   transact((h) => {
+    const rev = tasksRev();
+    if (baseRev !== undefined && baseRev !== null && Number(baseRev) !== rev) throw new ConflictError(rev);
+
+    const before = new Map(
+      h.prepare('SELECT task_id, origin, rule_id, source_key, reason, note FROM kacey_task').all()
+        .map((r) => [r.task_id, r]),
+    );
+    const incoming = Array.isArray(list) ? list : [];
+
     h.prepare('DELETE FROM kacey_task').run();
     const insert = h.prepare(
       `INSERT INTO kacey_task
-         (task_id, label, meta, done, due_at, duration_min, sensitivity, sort_order, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (task_id, label, meta, done, due_at, duration_min, sensitivity, sort_order, created_at, updated_at,
+          origin, rule_id, source_key, reason, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    (Array.isArray(list) ? list : []).forEach((t, i) => {
+    const kept = new Set();
+    incoming.forEach((t, i) => {
+      const id = String(t.id || ('t' + Date.now() + i));
+      if (kept.has(id)) return;              // a duplicated id would abort the whole write
+      kept.add(id);
       const due = taskDue(t);
       const timed = !!(parseDue(due) || {}).time;
       const minutes = Math.round(Number(t.duration));
+      const gen = before.get(id) || {};
       insert.run(
-        String(t.id || ('t' + Date.now() + i)),
+        id,
         String(t.label || ''),
         String(t.meta || ''),
         t.done ? 1 : 0,
@@ -137,8 +200,21 @@ function writeTasks(list) {
         i,
         String(t.created || stamp),
         stamp,
+        gen.origin || 'user',
+        gen.rule_id || null,
+        gen.source_key || null,
+        gen.reason || null,
+        gen.note || null,
       );
     });
+
+    const suppress = h.prepare(
+      `INSERT OR IGNORE INTO kacey_dream_suppress (source_key, reason, created_at) VALUES (?, 'deleted', ?)`,
+    );
+    for (const [id, row] of before) {
+      if (row.source_key && !kept.has(id)) suppress.run(row.source_key, stamp);
+    }
+    kvSet('tasks.rev', rev + 1);
   });
 }
 
@@ -197,6 +273,8 @@ export function get() {
   return {
     version: 2,
     tasks: readTasks(),
+    // Not a section: the revision the task list above is at (see writeTasks).
+    tasksRev: tasksRev(),
     journal: readJournal(),
     routine: readRoutine(),
     timers: { presets: kvGet('timers.presets', DEFAULT_PRESETS) },
@@ -205,12 +283,12 @@ export function get() {
   };
 }
 
-export function setSection(name, value) {
+export function setSection(name, value, opts = {}) {
   if (!SECTIONS.includes(name)) throw new Error(`unknown section "${name}"`);
   importLegacyOnce();
 
   switch (name) {
-    case 'tasks': writeTasks(value); break;
+    case 'tasks': writeTasks(value, { baseRev: opts.baseRev }); break;
     case 'journal': writeJournal(value); break;
     case 'routine': writeRoutine(value); break;
     case 'timers': kvSet('timers.presets', (value && value.presets) || []); break;

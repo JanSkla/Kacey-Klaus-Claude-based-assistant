@@ -19,6 +19,23 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The night routine, phase P4: rules**
+- Rules turn the calendar and the weekly routine into tasks: "whenever there's
+  gym, the evening before at 20:00: pack the gym bag". They are data
+  (`kacey_ruleset`, `kacey_rule`), matched case- and diacritics-insensitively,
+  with Czech inflection handled for keywords of 5+ letters. The starters are
+  Posilovna and Běh ráno.
+- Kacey edits rules by talking: new tools `rules_list`, `ruleset_upsert`,
+  `rule_upsert`, `rule_delete` and `rule_preview` (what a rule would create in
+  the next 7 days). The persona has a new section, *Pravidla*.
+- Tasks gain `origin`, `rule_id`, `source_key`, `reason` and `note`. The
+  migration adds them on first start. A deleted generated task stays deleted
+  (`kacey_dream_suppress`). The task list now carries a revision, so a stale
+  page can no longer overwrite newer tasks: it gets a 409, reloads, and
+  re-applies its edit.
+- The routine categories and the calendar day model moved into shared modules
+  (`public/js/core/routine-cats.js`, `calendar-days.js`). No behaviour change.
+
 **The night routine, phases P1–P2: the sunrise peak, the screen, the lid**
 - lightsd publishes `morning_peak_at`, the top of the sunrise ramp: when the
   brief will play (lightsd repo, `7093fb6`).

@@ -471,6 +471,17 @@ off. The two pure modules are what `test/sleep.mjs` and `test/lightsd-diff.mjs`
 cover. `server.js` starts `night.js` after it listens, and feeds it every
 `user_message` and `interaction` frame.
 
+The rules are the other half so far. `rules.js` is the pure engine: the zod
+schema, keyword matching, timing and `previewRules()`, which the night run, the
+`rule_preview` tool and the rules editor all share. `nightstore.js` stores the
+rulesets and rules, and reads klaus_memory's calendar read-only.
+`calendar-days.js` holds the day model above, moved out of `server.js`
+unchanged so the calendar view and the rules agree about which day an event is
+on. The task section gained server-owned generation columns and a revision:
+`writeTasks()` carries the columns over, suppresses a deleted generated task,
+and refuses a stale list with a 409, which `store.js` answers by re-applying
+its pending edits to the fresh list.
+
 In short: lightsd's sleep button starts a wind-down, and an hour with no
 interaction means asleep. Kacey then plans the next day once per logical date.
 Deterministic rules turn the calendar and routine into tasks, and a read-only

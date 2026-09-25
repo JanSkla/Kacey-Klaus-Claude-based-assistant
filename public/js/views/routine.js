@@ -22,15 +22,12 @@ import { el, fill, hhmm } from '../core/el.js';
 import * as store from '../core/store.js';
 import { say } from '../ui/toast.js';
 import { isPhone } from '../ui/psheet.js';
+import { CATS } from '../core/routine-cats.js';
 
-export var CATS = {
-  routine: { label: 'Rutina', color: '#d2a106' },
-  gym:     { label: 'Pohyb',  color: '#ee5396' },
-  work:    { label: 'Práce',  color: '#009d9a' },
-  study:   { label: 'Studium', color: '#a56eff' },
-  free:    { label: 'Volno',  color: '#24a148' },
-  commute: { label: 'Cesta',  color: '#8d8d8d' }
-};
+/* The categories live in core/ so the server (Kacey's tools, the rules)
+   reads the same list; re-exported here for the calendar, which has always
+   imported them from this module. */
+export { CATS };
 
 var DAYS = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
 
