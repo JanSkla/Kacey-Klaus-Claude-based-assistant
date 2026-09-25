@@ -10,7 +10,7 @@
    ========================================================================= */
 
 import { state } from '../core/state.js';
-import { feedTTS, flushTTS, cancelSpeech, primeTTS } from '../voice/tts.js';
+import { feedTTS, flushTTS, cancelSpeech, primeTTS, playClip } from '../voice/tts.js';
 
 /* Roughly how long a line takes to say — for the progress bar and the clock
    only; the advance itself waits for the queue. */
@@ -26,6 +26,7 @@ export function clockText(secs) {
  */
 export function makeLinePlayer(onChange) {
   var lines = [];
+  var audio = [];            // per line: a URL of a clip rendered ahead of time, or null
   var index = 0;
   var playing = false;
   var finished = false;
@@ -37,6 +38,8 @@ export function makeLinePlayer(onChange) {
     if (state.muted || !lines[i]) return;
     primeTTS();
     cancelSpeech();
+    // A clip the night rendered plays as it is; otherwise synthesise now.
+    if (audio[i]) { playClip(audio[i], lines[i]); return; }
     feedTTS(lines[i] + ' ');
     flushTTS();
   }
@@ -64,10 +67,12 @@ export function makeLinePlayer(onChange) {
     playing: function () { return playing; },
     finished: function () { return finished; },
 
-    setLines: function (next) {
+    /** `clips` (optional): per line, the URL of audio rendered ahead of time. */
+    setLines: function (next, clips) {
       clearTimeout(timer);
       if (playing) cancelSpeech();
       lines = Array.isArray(next) ? next.slice() : [];
+      audio = Array.isArray(clips) ? clips.slice() : [];
       index = 0; playing = false; finished = false;
       changed('lines');
     },

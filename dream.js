@@ -18,11 +18,12 @@
  * search. The model's only output is JSON; Node decides what becomes a row.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
+import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
 import {
-  MODEL, DREAM_EFFORT, DREAM_STUCK_HOURS, DREAM_PLANNER_PATH, MCP_SERVERS, MCP_SERVER_NAME,
+  BRIEF_AUDIO_DIR, MODEL, DREAM_EFFORT, DREAM_STUCK_HOURS, DREAM_PLANNER_PATH, MCP_SERVERS, MCP_SERVER_NAME,
   DISALLOWED_TOOLS, OWNER_PROFILE, FALLBACK_PERSONA,
 } from './config.js';
 import * as appstate from './appstate.js';
@@ -277,13 +278,44 @@ async function reasoningPass(ctx, date, now, rulesOut, report, runner, { decisio
   return { changed, proposals: ids.length };
 }
 
-/* ---- step 4: the brief ---------------------------------------------------------- */
+/* ---- step 4: the brief ----------------------------------------------------------
+   Written at night, and on a machine where speech synthesis is slower than
+   real time (kaceybody: XTTS on a 2 GB GPU, ~2x slower) also RENDERED at
+   night: one WAV per line, played as finished files in the morning. */
+
+export { BRIEF_AUDIO_DIR };
+const KEEP_AUDIO_DAYS = 3;
+
+/** Render each line to data/brief-audio/<date>/<i>.wav. Returns per line a URL, or null where it failed. */
+async function renderBriefAudio(date, lines, synth) {
+  const dir = path.join(BRIEF_AUDIO_DIR, date);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  const stamp = Date.now();
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      writeFileSync(path.join(dir, `${i}.wav`), await synth(lines[i]));
+      out.push(`/api/brief/audio/${date}/${i}?v=${stamp}`);
+    } catch (err) {
+      log(`brief line ${i + 1} not rendered: ${err.message}`);
+      out.push(null);
+    }
+  }
+  // Only the last few mornings are worth keeping.
+  try {
+    const days = readdirSync(BRIEF_AUDIO_DIR).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    for (const d of days.slice(0, Math.max(0, days.length - KEEP_AUDIO_DAYS))) rmSync(path.join(BRIEF_AUDIO_DIR, d), { recursive: true, force: true });
+  } catch { /* nothing to tidy */ }
+  return out;
+}
+
 
 /**
  * Write the brief for `date` and store it with the hash of what it was written
  * from. Used by the night run and by the morning's T−5 refresh (§12).
  */
-export async function writeBrief({ date, runner, persona, trigger = 'night', created = [], peakAt = null }) {
+export async function writeBrief({ date, runner, persona, synth = null, trigger = 'night', created = [], peakAt = null }) {
   const doc = appstate.get();
   const start = logicalStart(date);
   const events = nightstore.readCalendar(new Date(start.getTime() - DAY), new Date(start.getTime() + 2 * DAY),
@@ -299,6 +331,7 @@ export async function writeBrief({ date, runner, persona, trigger = 'night', cre
   const draft = {
     logical_date: date, lines, made_at: new Date().toISOString(),
     input_hash: briefInputHash({ date, events, tasks: doc.tasks }), trigger,
+    audio: synth ? await renderBriefAudio(date, lines, synth) : [],
   };
   nightstore.saveBriefDraft(draft);
   return draft;
@@ -353,8 +386,11 @@ export async function runNight({ date, trigger, now = new Date(), force = false 
 
     try {
       const peak = (kvGet('lightsd.last', null) || {}).morning_peak_at || null;
-      const draft = await writeBrief({ date, runner, persona: deps.persona, created: rulesOut.created, peakAt: peak });
-      report.brief = { status: 'done', lines: draft.lines.length, input_hash: draft.input_hash };
+      const draft = await writeBrief({ date, runner, persona: deps.persona, synth: deps.synth || null, created: rulesOut.created, peakAt: peak });
+      report.brief = {
+        status: 'done', lines: draft.lines.length, input_hash: draft.input_hash,
+        audio: draft.audio.filter(Boolean).length,
+      };
     } catch (err) {
       // A failed brief does not fail the run: the morning tries again at T−5.
       report.brief = { status: 'failed', error: err.message };

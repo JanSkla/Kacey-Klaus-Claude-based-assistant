@@ -44,7 +44,7 @@ function rec() { return night.morningRec; }
 function onMorningFrame(m) {
   if (!m) return;
   saidDone = false;
-  player.setLines(m.lines || []);
+  player.setLines(m.lines || [], m.audio || []);
   if (KIOSK || m.manual) {
     go('morning');
     if ((m.lines || []).length) {
@@ -239,7 +239,7 @@ export function initMorning() {
     // Opened by hand (the rail, Víc): show today's brief without playing it.
     loadMorning().then(function () {
       var r = rec();
-      if (!player.lines().length && r && r.brief && r.brief.lines) player.setLines(r.brief.lines);
+      if (!player.lines().length && r && r.brief && r.brief.lines) player.setLines(r.brief.lines, r.brief.audio);
       render();
     });
     render();

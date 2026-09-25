@@ -19,6 +19,16 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**Voice on the bedside laptop**
+- XTTS runs on kaceybody's GeForce 940MX in half precision (it has 2 GB). It
+  speaks about 2× slower than real time, so the night run now also renders
+  the morning brief to audio, one clip per line, and the morning plays the
+  finished clips without gaps.
+- Dictation works in the kiosk's browser, which has no speech recognition of
+  its own: the page records what you say and Whisper transcribes it on the
+  laptop (`voicelab/stt_server.py`, `/api/stt`). The audio never leaves the
+  machine.
+
 **The bedside screen, for kaceybody as it really is** (cage + Epiphany on
 Wayland, no desktop)
 - `screen.js` switches the panel at the backlight (`/sys/class/backlight`)

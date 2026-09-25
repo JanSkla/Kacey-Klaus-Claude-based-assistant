@@ -167,6 +167,8 @@ All environment variables, all with working defaults — see `.env.example`.
 | `KACEY_MODEL`             | `claude-opus-5-5`                      |                                           |
 | `KACEY_EFFORT`            | `low`                                  | low · medium · high · xhigh · max         |
 | `KACEY_DREAM_EFFORT`      | = `KACEY_EFFORT`                       | The night run's reasoning pass and brief only |
+| `KACEY_STT_URL`           | `http://127.0.0.1:8791`                | Whisper sidecar (`voicelab/stt_server.py`) for browsers without Web Speech recognition |
+| `KACEY_BRIEF_AUDIO_DIR`   | `./data/brief-audio`                   | The morning brief rendered to audio at night, one WAV per line |
 | `KACEY_PERSONA_PATH`      | `./persona/kacey.md`                   | Missing file → built-in default + warning |
 | `PYTHON_BIN`              | `python`                               | Launches the MCP server                   |
 | `KLAUS_DB`                | `<PYTHONPATH>\klaus.db`                | Passed as `--db`                          |
@@ -281,6 +283,8 @@ HTTP:
 - `GET /api/proposals?status=pending` · `POST /api/proposals/:id { action: accept|edit|reject, label?, due_at? }`
 - `GET /api/proposals/offers` → kinds accepted 3× with a rule draft · `POST /api/proposals/offers/:kind/close { reason: declined|ruled }`
 - `GET /api/morning` · `POST /api/morning/tick { key, done }` · `POST /api/morning/start` (by hand) · `POST /api/morning/idle`
+- `POST /api/stt?lang=cs` (WAV body) → `{ text }`, via the Whisper sidecar · `GET /api/stt/health`
+- `GET /api/brief/audio/:date/:n` → line `n` of the morning brief, rendered at night
 - `GET /api/night/cycle` → the night's timeline · `POST /api/night/sunrise { minutes }` → moves lightsd's "morning" routine
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)

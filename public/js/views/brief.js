@@ -81,7 +81,7 @@ function useDraft() {
   if (madeAt && brief.made_at && new Date(brief.made_at) <= madeAt && player.lines().length) return true;
   madeAt = brief.made_at ? new Date(brief.made_at) : null;
   source = brief.trigger === 'refresh' ? 'refresh' : 'night';
-  player.setLines(brief.lines);
+  player.setLines(brief.lines, brief.audio);
   return true;
 }
 

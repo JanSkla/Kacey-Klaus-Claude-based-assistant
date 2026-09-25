@@ -84,7 +84,7 @@ async function refresh(rec, now, why = 'hash') {
   if (!stale) { log(`brief for ${rec.logical_date} still true`); return null; }
   log(`rewriting the brief for ${rec.logical_date} (${draft ? 'the calendar or tasks changed' : 'no draft from the night'})`);
   refreshing = writeBrief({
-    date: rec.logical_date, runner: deps.runner || makeSdkRunner(), persona: deps.persona,
+    date: rec.logical_date, runner: deps.runner || makeSdkRunner(), persona: deps.persona, synth: deps.synth || null,
     trigger: 'refresh', peakAt: rec.peak_at ? rec.peak_at.slice(11, 16) : null,
   }).then((d) => {
     const r = record();
@@ -116,7 +116,9 @@ export async function startMorning(now = new Date(), { manual = false } = {}) {
   if (refreshing) await refreshing;             // T waits for a rewrite still in flight
 
   const draft = nightstore.briefDraft();
-  const lines = draft && draft.logical_date === rec.logical_date ? draft.lines : [];
+  const ours = draft && draft.logical_date === rec.logical_date;
+  const lines = ours ? draft.lines : [];
+  const audio = ours ? (draft.audio || []) : [];
   rec.items = withProposals(rec.items, pendingCounts(rec.logical_date), now);
   Object.assign(rec, {
     state: 'active', started_at: rec.started_at && manual ? rec.started_at : now.toISOString(),
@@ -126,7 +128,7 @@ export async function startMorning(now = new Date(), { manual = false } = {}) {
   screen.on('morning');
   if (deps.broadcast) {
     deps.broadcast({
-      type: 'morning', logical_date: rec.logical_date, lines, checklist: rec.items,
+      type: 'morning', logical_date: rec.logical_date, lines, audio, checklist: rec.items,
       peak_at: rec.peak_at, rewritten_at: rec.rewritten_at, manual,
     });
   }
@@ -252,7 +254,7 @@ export function morningState() {
   return {
     ...rec,
     brief: draft && draft.logical_date === rec.logical_date
-      ? { lines: draft.lines, made_at: draft.made_at, trigger: draft.trigger } : null,
+      ? { lines: draft.lines, audio: draft.audio || [], made_at: draft.made_at, trigger: draft.trigger } : null,
   };
 }
 

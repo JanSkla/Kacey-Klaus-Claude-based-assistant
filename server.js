@@ -30,6 +30,7 @@ import * as morning from './morning.js';
 import { targetDate } from './sleep.js';
 import { kvGet, kvSet } from './db.js';
 import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
+import { BRIEF_AUDIO_DIR } from './dream.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -1028,6 +1029,39 @@ app.post('/api/stt', express.raw({ type: ['audio/*', 'application/octet-stream']
   }
 });
 
+/**
+ * One sentence through XTTS, as a WAV buffer. Shared by /api/tts and the
+ * night run, which renders the morning brief's lines ahead of time (on
+ * kaceybody's GPU XTTS is slower than real time; a finished file is not).
+ */
+async function synthesize(text, voice = DEFAULT_VOICE) {
+  const spoken = ttsText(text);
+  if (!spoken) throw new Error('nothing to speak');
+  const started = Date.now();
+  const upstream = await fetch(`${XTTS_URL}/speak`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: spoken, speaker: voice, language: 'cs' }),
+    // Synthesis of a sentence can take tens of seconds on a small GPU or a CPU.
+    signal: AbortSignal.timeout(120000),
+  });
+  if (!upstream.ok) throw new Error(`XTTS ${upstream.status}`);
+  const audio = Buffer.from(await upstream.arrayBuffer());
+  const ms = Date.now() - started;
+  log(`tts ${voice}: ${JSON.stringify(spoken)} -> ${audio.length} B in ${ms} ms`);
+  return { audio, ms };
+}
+
+/* The morning brief's pre-rendered clips (see dream.js renderBriefAudio). */
+app.get('/api/brief/audio/:date/:n', (req, res) => {
+  const { date, n } = req.params;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,3}$/.test(n)) return res.status(400).end();
+  const file = path.join(BRIEF_AUDIO_DIR, date, `${n}.wav`);
+  if (!existsSync(file)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(file);
+});
+
 app.post('/api/tts', express.json({ limit: '64kb' }), async (req, res) => {
   const { text, voice } = req.body || {};
   if (!text || !voice) return res.status(400).json({ error: 'text and voice are required' });
@@ -1035,22 +1069,10 @@ app.post('/api/tts', express.json({ limit: '64kb' }), async (req, res) => {
     return res.status(400).json({ error: `unknown voice "${voice}"` });
   }
 
-  const spoken = ttsText(text);
-  if (!spoken) return res.status(400).json({ error: 'nothing to speak' });
+  if (!ttsText(text)) return res.status(400).json({ error: 'nothing to speak' });
 
   try {
-    const started = Date.now();
-    const upstream = await fetch(`${XTTS_URL}/speak`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: spoken, speaker: voice, language: 'cs' }),
-      // CPU synthesis of a sentence can take tens of seconds.
-      signal: AbortSignal.timeout(120000),
-    });
-    if (!upstream.ok) throw new Error(`XTTS ${upstream.status}`);
-    const audio = Buffer.from(await upstream.arrayBuffer());
-    const ms = Date.now() - started;
-    log(`tts ${voice}: ${JSON.stringify(spoken)} -> ${audio.length} B in ${ms} ms`);
+    const { audio, ms } = await synthesize(text, voice);
     res.setHeader('Content-Type', 'audio/wav');
     res.setHeader('X-Tts-Ms', String(ms));
     res.end(audio);
@@ -1251,13 +1273,17 @@ server.listen(PORT, HOST, () => {
     return renderPersona(persona, new Date(y, m - 1, d, 7, 0));
   };
   // Morning first, so the night's first tick already carries it.
+  // The brief's lines are rendered to audio with the default voice at night.
+  const briefSynth = (text) => synthesize(text, DEFAULT_VOICE).then((r) => r.audio);
   extendNight(morning.initMorning({
+    synth: briefSynth,
     broadcast,
     push: pushNight,
     settings: nightSettings,
     persona: briefPersona,
   }));
   startNight({
+    synth: briefSynth,
     broadcast,
     persona: briefPersona,
     onWrite: (section) => broadcast({ type: 'app_changed', section }),

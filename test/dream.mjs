@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 const dir = mkdtempSync(path.join(os.tmpdir(), 'kacey-dream-'));
 process.env.KLAUS_DB = path.join(dir, 'test.db');
 process.env.KACEY_STATE_PATH = path.join(dir, 'no-such-file.json');
+process.env.KACEY_BRIEF_AUDIO_DIR = path.join(dir, 'brief-audio');
 
 // Thursday 10 January 2030 is the planned day; the run happens at 00:40 that night.
 const D = '2030-01-10';
@@ -281,6 +282,26 @@ await test('recent decisions reach the reasoning pass (the learning loop)', asyn
   await runNight({ date: D5, trigger: 'sleep', now: new Date(2030, 1, 7, 0, 40) }, { ...deps, decisions });
   assert.ok(seen, 'the planner was asked');
   assert.deepEqual(seen.prior_decisions, decisions());
+});
+
+await test('with a synthesizer, the brief is rendered to one clip per line', async () => {
+  const { existsSync, readFileSync } = await import('node:fs');
+  const D6 = '2030-02-14';
+  const said = [];
+  const synth = async (text) => { said.push(text); if (text.includes('zubaře')) throw new Error('XTTS 500'); return Buffer.from('RIFF' + text); };
+  const run = await runNight({ date: D6, trigger: 'manual', now: new Date(2030, 1, 14, 0, 40) }, { ...deps, synth });
+  const draft = nightstore.briefDraft();
+  assert.equal(draft.logical_date, D6);
+  assert.equal(draft.audio.length, draft.lines.length);
+  assert.equal(said.length, draft.lines.length);
+  const failed = draft.lines.findIndex((l) => l.includes('zubaře'));
+  assert.equal(draft.audio[failed], null, 'a failed line plays live instead');
+  const ok = draft.audio.findIndex(Boolean);
+  assert.ok(draft.audio[ok].startsWith(`/api/brief/audio/${D6}/${ok}?v=`), draft.audio[ok]);
+  const file = path.join(process.env.KACEY_BRIEF_AUDIO_DIR, D6, `${ok}.wav`);
+  assert.ok(existsSync(file));
+  assert.equal(readFileSync(file, 'utf8'), 'RIFF' + draft.lines[ok]);
+  assert.equal(run.report.brief.audio, draft.lines.length - 1);
 });
 
 cal.close();

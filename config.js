@@ -328,6 +328,10 @@ export const DREAM_STUCK_HOURS = 3;
    talking, it is a planner whose output a program reads. */
 export const DREAM_PLANNER_PATH = path.join(HERE, 'persona', 'dream-planner.md');
 
+/* Where the night run puts the morning brief rendered to audio, one WAV per
+   line (only the last few mornings are kept). */
+export const BRIEF_AUDIO_DIR = process.env.KACEY_BRIEF_AUDIO_DIR || path.join(HERE, 'data', 'brief-audio');
+
 /* The morning checklist (docs/DREAM.md §12): FIXED, the same every day — its
    value is that it is a habit, not a plan. Keys are stable (they are what the
    daily history stores); labels are what the screen says. "Projít návrhy" is

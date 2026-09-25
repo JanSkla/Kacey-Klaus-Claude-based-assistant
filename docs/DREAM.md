@@ -303,6 +303,14 @@ Three of these rows exist because of how lightsd works:
 >
 > The runbook's P2 is rewritten for this. The rest of this section is the
 > original X11 design, kept for a desktop setup.
+>
+> **Voice on kaceybody, as built:** XTTS-v2 in float16 (plus autocast) on the
+> 2 GB GPU, about 2× slower than real time. So `writeBrief()` also renders each
+> brief line to a WAV at night (`renderBriefAudio`, `data/brief-audio/<date>/`),
+> the draft carries `audio` URLs, and the morning plays them through
+> `playClip()` in `voice/tts.js`. The same happens at the T−5 rewrite. A line
+> that failed to render is synthesised live. Dictation in the kiosk goes
+> through `voice/server-stt.js` → `/api/stt` → faster-whisper on the CPU.
 
 **Target state:** the laptop boots into an **X11** session with autologin, and
 that session runs only

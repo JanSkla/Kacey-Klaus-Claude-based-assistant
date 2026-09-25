@@ -139,11 +139,42 @@ page): tap *Allow* once with the touchpad. It remembers it for this address.
 
 To go back to the record: `sudo systemctl revert kiosk && sudo systemctl restart kiosk`.
 
-### 4. XTTS on the GPU (done by Claude, no root)
+### 4. XTTS on the GPU and Whisper on the CPU (done by Claude, no root, 2026-09-25)
 
-After steps 1–3, Claude installs XTTS in a user venv (`~/.venvs/xtts`) and runs
-it as a **user** unit (`systemctl --user`). That needs no sudo. The voices are
-the ones picked in the Voice Lab.
+Both run as **user** units, so they need no sudo. `Linger=yes` keeps them
+running without a login.
+
+| Unit | Venv | What |
+| ---- | ---- | ---- |
+| `xtts` (`voicelab/xtts.service`) | `~/.venvs/xtts`: Python 3.11 via uv, torch 2.6 cu126 (the last builds with `sm_50`), coqui-tts | XTTS-v2 in **float16** on the 940MX: ~950 MiB after load, ~1.1 GB peak. About **2× slower than real time** (a 5 s sentence in ~11 s) |
+| `stt` (`voicelab/stt.service`) | `~/.venvs/stt`: Python 3.11, faster-whisper | Whisper `small`, int8, on the CPU: about real time once warm |
+
+```bash
+systemctl --user status xtts stt
+journalctl --user -u xtts -u stt -f
+nvidia-smi
+```
+
+Because XTTS is slower than real time here, **the night run renders the
+morning brief to audio** (`data/brief-audio/<date>/`, one WAV per line), and the
+morning plays finished files. Live answers during the day still synthesise
+sentence by sentence, with pauses between sentences.
+
+The 1.8 GB model loads on the CPU before moving to the GPU, which pushes about
+1.7 GB into swap on this 7 GB machine. So the first Whisper request after a
+quiet spell can take tens of seconds while its pages come back.
+
+ollama's embedding model (`nomic-embed-text-v2-moe`, ~0.6 GB) still fits on the
+GPU next to XTTS (1.2 GB total seen). If it ever doesn't, ollama falls back to
+the CPU by itself.
+
+**Pending, root:** Epiphany runs incognito, which forgets the wake-word samples
+and the microphone permission on every restart. Install the launcher with
+`KIOSK_INCOGNITO` (lights repo `d5c6dc1`):
+
+```bash
+sudo install -m 755 ~/kacey/tools/kiosk/kiosk-session.sh /usr/local/bin/kiosk-session && printf '[Service]\nEnvironment=KIOSK_URL=http://127.0.0.1:8082/?kiosk=1\nEnvironment=KIOSK_INCOGNITO=0\n' | sudo tee /etc/systemd/system/kiosk.service.d/override.conf && sudo systemctl daemon-reload && sudo systemctl restart kiosk
+```
 
 ### 5. Does the page keep listening in the dark?
 
@@ -182,8 +213,8 @@ it shows `-> awake (interaction)`.
 | Section | Done on | Notes |
 | ------- | ------- | ----- |
 | P1 lightsd (deployed by Claude) | 2026-09-25 | wake_at 06:30, morning_peak_at 07:00 |
-| P2.1 NVIDIA 580 driver |  | send `nvidia-smi` |
-| P2.2 backlight udev rule + reboot |  |  |
-| P2.3 kiosk shows Kacey |  |  |
-| P2.4 XTTS on the GPU (Claude) |  |  |
+| P2.1 NVIDIA 580 driver | 2026-09-25 | 940MX, 2 GB |
+| P2.2 backlight udev rule + reboot | 2026-09-25 | backend: backlight |
+| P2.3 kiosk shows Kacey | 2026-09-25 | incognito still on: see P2.4 |
+| P2.4 XTTS on the GPU, Whisper (Claude) | 2026-09-25 | float16, ~2× slower than real time; brief pre-rendered at night |
 | P2.5 listening in the dark |  |  |

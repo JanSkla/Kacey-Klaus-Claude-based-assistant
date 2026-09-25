@@ -267,6 +267,53 @@ function speakChunk(text) {
   try { synth.speak(u); } catch (e) { finish(); }
 }
 
+/**
+ * Play a clip that was synthesised ahead of time — the morning brief, which
+ * the night run renders line by line (docs/DREAM.md §10). The same primed
+ * audio element, queue, generation token and bookkeeping as live XTTS, so
+ * cancelSpeech(), mute, the orb and the hands-free loop treat it exactly like
+ * speech. On kaceybody live XTTS is slower than real time; a finished file
+ * plays without a gap.
+ */
+export function playClip(url, text) {
+  if (state.muted || !url) return;
+  if (state.listening) { state.ttsSuspendedRec = true; stopRecognition(false); }
+  var token = xttsToken;
+  noteSpoken(text || '');
+  state.ttsPending++;
+  syncOrb();
+
+  var finished = false;
+  function finish() {
+    if (finished) return;
+    finished = true;
+    state.ttsPending = Math.max(0, state.ttsPending - 1);
+    syncOrb();
+    if (state.ttsPending === 0) onAllSpeechDone();
+  }
+
+  xttsChain = xttsChain.then(function () {
+    if (token !== xttsToken) { finish(); return; }
+    return new Promise(function (resolve) {
+      var a = audioEl();
+      xttsAudio = a;
+      a.onended = function () { finish(); resolve(); };
+      a.onerror = function () { finish(); resolve(); };
+      a.src = url;
+      var p = a.play();
+      if (p && p.catch) {
+        p.catch(function (err) {
+          showAlert(err && err.name === 'NotAllowedError'
+            ? 'Prohlížeč zablokoval přehrání zvuku. Klepni kamkoli do stránky a zkus to znovu.'
+            : 'Zvuk se nepodařilo přehrát: ' + (err && err.message ? err.message : '?'));
+          finish();
+          resolve();
+        });
+      }
+    });
+  });
+}
+
 export function cancelSpeech() {
   ttsBuf = '';
   clearSpoken();
