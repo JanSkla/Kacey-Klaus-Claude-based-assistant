@@ -15,6 +15,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -274,3 +275,34 @@ export const TTS_DOTS = process.env.KACEY_TTS_DOTS || 'comma';
  * klaus_memory both use. All-day events opt out of the shift — see isAllDay()
  * in server.js. */
 export const LOGICAL_DAY_START_HOUR = 4;
+
+// ---------------------------------------------------------------------------
+// The night routine — docs/DREAM.md
+// ---------------------------------------------------------------------------
+
+/* lightsd, the separate lights app on the same host. Kacey only reads it: the
+   sleep button, the sunrise, and (from lightsd P1) morning_peak_at. */
+export const LIGHTSD_URL = process.env.LIGHTSD_URL || 'http://127.0.0.1:8080';
+
+/* The kiosk's X display, for `xset dpms` in screen.js. A systemd service
+   inherits neither variable, so they are passed explicitly. Under GDM with
+   X11 the cookie may live in /run/user/<uid>/gdm/Xauthority instead — set
+   KACEY_XAUTHORITY to whatever the runbook found on kaceybody. */
+export const KACEY_DISPLAY = process.env.KACEY_DISPLAY || ':0';
+export const KACEY_XAUTHORITY =
+  process.env.KACEY_XAUTHORITY || path.join(os.homedir(), '.Xauthority');
+
+/* How often night.js re-evaluates the stored sleep state. Everything is
+   computed from stored instants, so this is a resolution, not a timer. */
+export const NIGHT_TICK_MS = 30000;
+
+/* settings.night, key by key. The settings merge in appstate.js is shallow,
+   so readers merge these under whatever is stored. */
+export const NIGHT_DEFAULTS = {
+  enabled: true,
+  sleep_delay_min: 60,
+  fallback: '04:00',
+  morning_end: '09:00',
+  screen_idle_min: 2,
+  lid_check: true,
+};

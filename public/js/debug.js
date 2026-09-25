@@ -47,6 +47,7 @@ export function installDebugSurface() {
     send: submit,
     inject: onServer,
     conn: onConn,
-    orb: orbState
+    orb: orbState,
+    night: function () { return state.night; }   // the last night_state frame
   };
 }

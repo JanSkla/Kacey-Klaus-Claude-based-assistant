@@ -10,7 +10,9 @@
     "voicelab": "node voicelab/server.js",
     "xtts": ".venv-xtts\\Scripts\\python.exe voicelab/xtts_server.py",
     "health": "node -e \"fetch('http://localhost:'+(process.env.PORT||8082)+'/api/health').then(r=>r.json()).then(o=>console.log(JSON.stringify(o,null,2)))\"",
-    "test:wake": "node test/wake-dsp.mjs && node test/wake-pipeline.mjs && node test/closing.mjs"
+    "test:wake": "node test/wake-dsp.mjs && node test/wake-pipeline.mjs && node test/closing.mjs",
+    "test:night": "node test/sleep.mjs && node test/lightsd-diff.mjs",
+    "test": "npm run test:wake && npm run test:night"
   },
   "engines": {
     "node": ">=20"

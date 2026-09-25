@@ -24,6 +24,7 @@ import { flashHint } from '../ui/log.js';
 import { primeTTS } from './tts.js';
 import { playWakeChime, WAKE_CHIME_MS } from './chime.js';
 import { SR, recognitionAvailable, startRecognition } from './recognition.js';
+import { noteInteraction } from '../net/activity.js';
 import {
   voiceWakePriority, voiceWakeSupervise, voiceWakeStop, voiceWakeActive,
   refreshVoiceStateLabel, wakeMode, voiceStatus
@@ -112,6 +113,7 @@ function buildWake() {
     if (!heard.trim() || !isWakePhrase(heard)) return;
 
     wakeHits++;
+    noteInteraction('wake');
     stopWake(true);
     // Hand the microphone over. micDesired keeps the supervisor from
     // immediately restarting the wake listener underneath dictation.
@@ -215,6 +217,7 @@ export function wakeStatus() {
    without a microphone. */
 export function feedWake(text) {
   if (!isWakePhrase(text)) return false;
+  noteInteraction('wake');
   stopWake(true);
   state.micDesired = true;
   playWakeChime();

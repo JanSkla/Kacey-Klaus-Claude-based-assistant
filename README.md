@@ -24,10 +24,11 @@ in. No `ANTHROPIC_API_KEY` is needed if you are logged in. If Claude is not
 authenticated, Kacey says so in the UI instead of failing silently.
 
 Run the tests (no browser needed — they cover the wake-word DSP, the wake
-pipeline and the spoken-command matcher):
+pipeline, the spoken-command matcher, and the night routine's sleep state
+machine and lightsd reading):
 
 ```sh
-npm run test:wake
+npm test
 ```
 
 Check it is alive:
@@ -169,6 +170,9 @@ All environment variables, all with working defaults — see `.env.example`.
 | `KLAUS_MEMORY_PYTHONPATH` | `..\Klaus\Kacey-mvp`                   | Directory *containing* `klaus_memory`     |
 | `KLAUS_CALENDARS`         | `<PYTHONPATH>\calendars.json`          | Passed as `--calendars` when present      |
 | `KLAUS_ENV_FILE`          | `<PYTHONPATH>\.env`                    | Passed as `--env`; OAuth credentials      |
+| `LIGHTSD_URL`             | `http://127.0.0.1:8080`                | lightsd, read for the sleep button ([docs/DREAM.md](docs/DREAM.md)) |
+| `KACEY_DISPLAY`           | `:0`                                   | The kiosk's X display, for `xset dpms`    |
+| `KACEY_XAUTHORITY`        | `~/.Xauthority`                        | Its cookie; GDM may use `/run/user/<uid>/gdm/Xauthority` |
 
 `klaus_memory` is pure standard library (sqlite3/json/urllib) — there is nothing to
 `pip install`.
@@ -223,19 +227,27 @@ Client → server:
 ```jsonc
 { "type": "user_message", "text": "..." }
 { "type": "interrupt" }
+{ "type": "interaction", "kind": "pointer" }        // pointer | key | touch | wake; throttled, only if ready.features has "night"
 ```
 
 Server → client:
 
 ```jsonc
-{ "type": "ready",   "model": "claude-opus-5-5", "mcpServers": ["klaus-memory"] }
+{ "type": "ready",   "model": "claude-opus-5-5", "mcpServers": ["klaus-memory"], "features": ["night"] }
 { "type": "session", "sessionId": "..." }
 { "type": "thinking" }
 { "type": "delta",   "text": "..." }              // assistant speech, verbatim
 { "type": "tool",    "name": "memory_search", "phase": "start" }
 { "type": "done" }
 { "type": "error",   "message": "..." }
+{ "type": "night_state", "sleep": { "state": "winding_down", "since": "…", "until": "…" },
+  "screen": { … }, "lightsd": { "mode": "ws", … }, "run": { "last": …, "next": … } }   // on connect and on every change
 ```
+
+`features` lists the optional client frames the server understands. The server
+answers an unknown client frame with `error`, so the page sends `interaction`
+only when `features` includes `"night"`. The night routine itself, and why an
+interaction matters, is in [docs/DREAM.md](docs/DREAM.md).
 
 `delta` carries assistant **text only**. Thinking blocks, tool-call JSON, status
 events and model errors never reach it — the browser speaks `delta` aloud, so
@@ -251,6 +263,7 @@ HTTP:
 
 - `GET /` → `public/index.html` (static file server over `public/`)
 - `GET /api/health` → `{ "ok": true, "model": "...", "mcpServers": [...] }`
+- `GET /api/night` → the same snapshot as the `night_state` frame
 
 ## Editing the persona
 

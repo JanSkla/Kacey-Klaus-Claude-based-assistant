@@ -17,6 +17,26 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## Unreleased
+
+**The night routine, phase P3: sleep detection** ([docs/DREAM.md §7](docs/DREAM.md#7-sleep-detection))
+- Kacey listens to lightsd (`/ws`, polling `/api/status` every 30 s when the
+  socket is down). The sleep button starts a 60-minute wind-down and turns the
+  bedside screen off. An hour with no interaction means asleep, which starts
+  the night run. Any tap, key, the wake word or a message cancels the
+  wind-down; moving the mouse does not.
+- If nothing has run by 04:00, the night run starts anyway, once per planned
+  day. The run itself is still a stub that only logs.
+- The state (`awake` / `winding_down` / `asleep`) lives in `kacey_kv`, so a
+  restart keeps the night. `GET /api/night` and the new `night_state` frame
+  show it. The page sends throttled `interaction` frames when the server
+  advertises `features: ['night']`.
+- New settings from the environment: `LIGHTSD_URL`, `KACEY_DISPLAY`,
+  `KACEY_XAUTHORITY`. `npm test` now runs everything, and `npm run test:night`
+  runs the new tests.
+
+---
+
 ## KC 1.0.0 — 2026-09-24
 
 The first real release: the version meant to be lived with day to day rather

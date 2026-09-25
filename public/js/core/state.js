@@ -31,6 +31,7 @@ export var state = {
   ttsSuspendedRec: false,  // recognition was stopped by us because TTS started
   errorUntil: 0,
   sessionId: null,
+  night: null,             // the server's last `night_state` (sleep, screen, run) — read-only
   voiceWarned: false,
   voice: 'Nova Hogarth'    // XTTS speaker, or 'browser' for the built-in engine
 };

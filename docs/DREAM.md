@@ -9,9 +9,9 @@ Like [ARCHITECTURE.md](../ARCHITECTURE.md), it explains structure and invariants
 not every line. The reasoning sits next to each decision, so a later session can
 tell a deliberate choice from an accident.
 
-**Status:** nothing here is implemented yet. Phases P1–P7 are in
-[§16](#16-phases). A phase that ships moves its row from *planned* to *done* and
-records the commit.
+**Status:** P3 (sleep detection) has landed, with the night run still a stub.
+The rest is planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
+moves its row from *planned* to *done* and records the commit.
 
 ## Contents
 
@@ -424,10 +424,10 @@ Tests drive the function directly.
 | -------------- | ----------------------------- | ------------------------- | ------- |
 | any            | `sleep_start` (lightsd button) | `winding_down(since, until = since + delay)` | `screen_off` |
 | `winding_down` | `interaction`                 | `awake(reason: interaction)` | the timer is gone with the state |
-| `winding_down` | `tick`, now ≥ `until`         | `asleep(since = until)`   | `start_run(trigger: sleep)` |
+| `winding_down` | `tick`, now ≥ `until`         | `asleep(since = until)`   | `start_run(trigger: sleep, at: until)` |
 | `asleep`       | `interaction`                 | `awake(reason: interaction)` | a run already started keeps going |
 | `asleep` / `winding_down` | `sunrise` (lightsd released at `wake_at`) | `awake(reason: sunrise)` | **not** an interaction |
-| any            | `tick`, now ≥ fallback, no run row for `target(now)` | unchanged | `start_run(trigger: fallback)` |
+| any            | `tick`, fallback ≤ now < fallback + 60 min, no run row for `target(now)` | unchanged | `start_run(trigger: fallback)` |
 
 - **The next button press starts over.** `sleep_start` from any state resets
   `since`/`until`, so pressing again after a wake-word blip gives a fresh 60
@@ -435,10 +435,34 @@ Tests drive the function directly.
 - **`asleep.since = until`, not the tick time.** A tick up to 30 s late does not
   move the recorded bedtime, and a restart across the deadline records the
   deadline.
+- **The run is dated by the deadline** (`at: until`), not by the tick that
+  noticed it. A deadline at 11:59:50 seen by a tick at 12:00:10 still plans the
+  deadline's day under the noon rule of §4.
 - **The fallback does not care about state.** If there is no run for the target
   date at 04:00 (`LOGICAL_DAY_START_HOUR`, as a setting), it starts, even if you
   are still awake. The run is once per target date, so a button press later that
   night does not run it again ([§10](#10-the-night-run)).
+- **The fallback window is one hour** (`FALLBACK_WINDOW_MIN`). A restart at 04:20
+  still counts. A server booting at 11:00 does **not** plan a morning that is
+  over, because a late boot is catch-up's call, and catch-up checks whether the
+  brief is still ahead ([§10](#10-the-night-run)). *Found while building P3:* with
+  the window running to noon, the first boot at 11:56 ran the night for a day
+  half gone.
+
+**As built in P3:** `sleep.js` exports `sleepStep`, `normalizeSleep`,
+`targetDate` and `fallbackDue`, all pure. `night.js` holds the state in kv
+`night.sleep`, ticks every 30 s (`NIGHT_TICK_MS`), and pushes `night_state` on
+every change. Until P5 the run is a stub. It logs, and records
+`{ logical_date, trigger, started_at, status: 'done', stub: true }` in kv
+`night.last_run`, which is what "once per target date" checks for now. P5
+replaces that with `kacey_dream_run` and must also skip a sleep-triggered run
+whose target morning has already passed. A restart many hours after the
+deadline otherwise starts a stale run, the same case catch-up refuses.
+
+`targetDate()` works from the wall clock ("the calendar date, or tomorrow from
+noon") rather than from `logicalToday()`. `due.js`'s `logicalToday()` subtracts
+4 h of milliseconds, which returns the previous date between 04:00 and 04:59 on
+the spring DST day. The test for 2027-03-28 is what caught it.
 
 ### What counts as interaction
 
@@ -1285,7 +1309,7 @@ entry, and this document updated if the build changed the design.
 | ----- | ---- | ---- | ---------- | ------ |
 | **P1** | lightsd `morning_peak_at` (§5): schedule, arbiter, status, pytest | lights | — | planned |
 | **P2** | Kiosk, screen, lid (§6): `screen.js`, the lid, readout rows, the `visibilityState` check, runbook | Kacey | — | planned |
-| **P3** | Sleep detection (§7): `lightsd.js`, `sleep.js`, `night.js` tick, `interaction`/`speaking` frames, `ready.features`, readout rows, tests | Kacey | P1, P2 | planned |
+| **P3** | Sleep detection (§7): `lightsd.js`, `sleep.js`, `night.js` tick, `interaction` frame, `ready.features`, `night_state`, a minimal `screen.js` (on/off), tests. **Not yet:** the `speaking` frame and the idle timeout (with P2's screen work), the readout rows (UI), the real run (P5) | Kacey | P1, P2 | done (see the commit adding it) |
 | **P4** | Rules (§8), the task schema (§9): tables, migration, `writeTasks` carry-over, suppress, `tasks.rev`/409, `routine-cats.js`, `calendar-days.js`, `rules.js`, the agent tools, starters, the persona, tests | Kacey | — | planned |
 | **P5** | The night run (§10), proposals (§11): `dream.js`, `nightstore.js`, runs, catch-up, stuck reset, reasoning, brief draft, report, endpoints, readout rows, tests | Kacey | P3, P4 | planned |
 | **P6** | Morning mode (§12) and the UI from Claude Design: morning screen, proposal review, rules editor, the real cycle in Brief, task origin/reason/note in rows, the settings `srow`s, the report view | Kacey | P5 | planned |

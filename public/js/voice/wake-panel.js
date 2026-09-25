@@ -28,6 +28,7 @@
 import { state, LS_WAKE_MODE } from '../core/state.js';
 import { $ } from '../core/dom.js';
 import { primeTTS } from './tts.js';
+import { noteInteraction } from '../net/activity.js';
 import { playWakeChime, WAKE_CHIME_MS } from './chime.js';
 import { startRecognition } from './recognition.js';
 import {
@@ -120,6 +121,7 @@ export function onVoiceDetect(info) {
   // is the whole point, and starting dictation would fight the tuning.
   if (vwPanelOpen) { flashVwHit(info); return; }
 
+  noteInteraction('wake');
   voiceWakeStop();                    // release the device before recognition
   state.micDesired = true;
   primeTTS();

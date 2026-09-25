@@ -74,6 +74,11 @@ var preambleDone = false;   // has this turn already split off its opening line?
 var info = '';
 export function readyInfo() { return info; }
 
+/* Which optional frames the server understands, from `ready`. A page must not
+   send a frame the server does not know: the server answers with an error. */
+var features = [];
+export function serverHas(name) { return features.indexOf(name) !== -1; }
+
 export function onServer(msg) {
   switch (msg.type) {
     case 'ready':
@@ -88,7 +93,15 @@ export function onServer(msg) {
       var ver = document.getElementById('topVersion');
       if (ver) ver.textContent = typeof msg.version === 'string' ? msg.version : '—';
       setMcp(msg.mcpServers);
+      features = Array.isArray(msg.features) ? msg.features.filter(function (f) { return typeof f === 'string'; }) : [];
       flashHint(info, false, 4200);
+      break;
+
+    case 'night_state':
+      /* Sleep, screen, lightsd and the night run, as the server sees them
+         (docs/DREAM.md). Kept for the readout and the console; nothing on
+         screen draws it yet. */
+      state.night = msg;
       break;
 
     case 'session':

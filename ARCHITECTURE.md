@@ -109,7 +109,7 @@ few enough to name, and each is one idea:
 | --------------- | -------------------------------------------------------------- |
 | `ui/ → voice/`  | `log` feeds text to `feedTTS`; `labels` and `voice-picker` ask what the engines can do |
 | `voice/ → ui/`  | Painting: `log` `orb` `telemetry`                               |
-| `voice/ → net/` | `recognition` calls `submit`; `commands` calls `sendFrame`      |
+| `voice/ → net/` | `recognition` calls `submit`; `commands` calls `sendFrame`; `wake`/`wake-panel` call `noteInteraction` |
 | `net/ → ui/`    | Painting, plus `refreshCalendar` after a calendar tool          |
 | `net/ → voice/` | `protocol` drives speech, dictation and the command handlers    |
 | `ui/ → net/`    | One function: `labels` reads `readyInfo()` to re-label the pill |
@@ -189,6 +189,7 @@ makes it the one piece that can be unit tested directly.
 | `transport-socket.js`                     | The real WebSocket, with backoff and bfcache revival |
 | `transport-mock.js`                       | The same interface, scripted, for `?mock=1` |
 | `protocol.js`                             | The frame pipeline both transports feed |
+| `activity.js`                             | Throttled `interaction` frames for the night routine: taps, keys, the wake word |
 
 Both transports implement `{ start(), send(obj) -> bool, isOpen(), stop(), resume() }`
 and `protocol.js` never knows which one it is holding. That is what makes
@@ -458,9 +459,17 @@ empty — the UI then has nothing to decide.
 
 ### The night routine (D.R.E.A.M.)
 
-**Spec, not built yet: [docs/DREAM.md](docs/DREAM.md).** Read it before touching
-anything to do with sleep, the night run, rules, generated tasks, proposals or
-the morning brief. Every phase of that work (P1–P7) is specced there.
+**Spec: [docs/DREAM.md](docs/DREAM.md).** Read it before touching anything to do
+with sleep, the night run, rules, generated tasks, proposals or the morning
+brief. Every phase of that work (P1–P7) is specced there, with which have landed.
+
+What exists so far is sleep detection. `night.js` holds the one copy of the sleep
+state (in `kacey_kv`) and runs a 30 s tick. `sleep.js` is the pure state machine
+it drives (awake → winding_down → asleep). `lightsd.js` reads lightsd's `/ws`,
+polling `/api/status` when that is down, and `screen.js` turns the kiosk panel
+off. The two pure modules are what `test/sleep.mjs` and `test/lightsd-diff.mjs`
+cover. `server.js` starts `night.js` after it listens, and feeds it every
+`user_message` and `interaction` frame.
 
 In short: lightsd's sleep button starts a wind-down, and an hour with no
 interaction means asleep. Kacey then plans the next day once per logical date.

@@ -99,6 +99,7 @@ import { initController } from './js/views/controller.js';
 import { initRoutine } from './js/views/routine.js';
 import { initLights } from './js/views/lights.js';
 import { installDebugSurface } from './js/debug.js';
+import { initActivity } from './js/net/activity.js';
 
 /* =======================================================================
    1. THE ORB'S FOLLOWERS
@@ -158,6 +159,7 @@ initTimers();
 initController(restartSession);
 initLights();
 initMain();
+initActivity();
 initSheets();
 initRouter();
 

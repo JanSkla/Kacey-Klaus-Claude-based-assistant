@@ -19,6 +19,7 @@ import path from 'node:path';
 
 import * as appstate from './appstate.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
+import { startNight, stopNight, noteInteraction, nightState, INTERACTION_KINDS } from './night.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -488,6 +489,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, version: VERSION, model: MODEL, effort: EFFORT, mcpServers: Object.keys(MCP_SERVERS) });
 });
 
+/* The night routine's state — sleep, screen, lightsd, the last and next run
+   (docs/DREAM.md). The controller readout reads this; open pages also get it
+   pushed as `night_state` whenever it changes. */
+app.get('/api/night', (_req, res) => {
+  res.json(nightState());
+});
+
 app.get('/api/voices', async (_req, res) => {
   let available = false;
   try {
@@ -911,14 +919,19 @@ function sanitiseImages(raw) {
 
 const wss = new WebSocketServer({ server, path: '/ws' });
 
+/** One frame to every open page. */
+function broadcast(frame) {
+  const text = JSON.stringify(frame);
+  for (const client of wss.clients) {
+    if (client.readyState === 1) client.send(text);
+  }
+}
+
 /* Kacey's app tools write straight into appstate, so an open page would sit on
    a stale routine unless it is told. Every write is broadcast to every client,
    carrying the previous value so the browser can offer an undo. */
 setWriteListener((section, undo) => {
-  const frame = JSON.stringify({ type: 'app_changed', section, undo });
-  for (const client of wss.clients) {
-    if (client.readyState === 1) client.send(frame);
-  }
+  broadcast({ type: 'app_changed', section, undo });
   log(`app tool wrote ${section}`);
 });
 
@@ -927,7 +940,14 @@ wss.on('connection', (ws) => {
   const session = new KaceySession(ws, persona);
 
   // Sent immediately, before the SDK has finished booting, so the UI can render.
-  session.send({ type: 'ready', version: VERSION, model: MODEL, mcpServers: Object.keys(MCP_SERVERS) });
+  /* `features` tells the page which of its optional frames this server
+     understands. An unknown client frame is answered with an `error` below,
+     so a newer page must not send `interaction` to an older server. */
+  session.send({
+    type: 'ready', version: VERSION, model: MODEL, mcpServers: Object.keys(MCP_SERVERS),
+    features: ['night'],
+  });
+  session.send({ type: 'night_state', ...nightState() });
 
   try {
     session.start();
@@ -961,9 +981,14 @@ wss.on('connection', (ws) => {
         session.send({ type: 'error', message: images.error });
         return;
       }
+      noteInteraction('message');
       session.onUserMessage(text || 'Podívej se na tohle.', images);
     } else if (frame?.type === 'interrupt') {
       await session.onInterrupt();
+    } else if (frame?.type === 'interaction') {
+      // A tap, a key, the wake word — the page throttles these. Anything else
+      // in `kind` is dropped silently: it is a signal, not a request.
+      if (INTERACTION_KINDS.includes(frame.kind)) noteInteraction(frame.kind);
     } else {
       session.send({ type: 'error', message: `Unknown frame type: ${frame?.type}` });
     }
@@ -999,11 +1024,13 @@ server.listen(PORT, HOST, () => {
         'an event from Google or TimeTree will fail. Set KLAUS_CALENDARS.');
   }
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
+  startNight({ broadcast });
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log(`${sig} — shutting down`);
+    stopNight();
     appstate.flushNow();            // close the database cleanly
     for (const ws of wss.clients) ws.close();
     server.close(() => process.exit(0));
