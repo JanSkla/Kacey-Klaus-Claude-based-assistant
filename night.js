@@ -53,11 +53,29 @@ function describe(s) {
 
 /* ---- the state machine, applied ---------------------------------------- */
 
+/* What happened each night, for the Brief view's timeline (§12): when the
+   button was pressed, when sleep was confirmed, when the sunrise came. Keyed
+   by the target date the night plans; kept for three weeks. */
+const LOG_DAYS = 21;
+function logNight(date, patch) {
+  const all = kvGet('night.log', {}) || {};
+  all[date] = { ...(all[date] || {}), ...patch };
+  const keys = Object.keys(all).sort();
+  while (keys.length > LOG_DAYS) delete all[keys.shift()];
+  kvSet('night.log', all);
+}
+
+export function nightLog(date) { return (kvGet('night.log', {}) || {})[date] || {}; }
+
 function apply(event, now = new Date()) {
   const { state, effects } = sleepStep(sleep, event, now, settings());
   const changed = state !== sleep;       // sleepStep returns the same object for "no change"
   if (changed) {
     log(`${describe(sleep)} -> ${describe(state)} [${event.type}${event.kind ? ':' + event.kind : ''}]`);
+    if (state.state === 'winding_down') logNight(targetDate(new Date(state.since)), { winding_at: state.since, asleep_at: null, cancelled_at: null });
+    else if (state.state === 'asleep') logNight(targetDate(new Date(state.since)), { asleep_at: state.since });
+    else if (sleep.state === 'winding_down' && state.reason === 'interaction') logNight(targetDate(new Date(sleep.since)), { cancelled_at: state.since });
+    if (event.type === 'sunrise') logNight(targetDate(now), { sunrise_at: now.toISOString() });
     sleep = state;
     kvSet('night.sleep', sleep);
   }
@@ -186,7 +204,7 @@ export function noteVisibility(state) {
   log(`page visibility: ${state} (screen ${screen.status().state})`);
 }
 
-function runSummary(r) {
+export function runSummary(r) {
   if (!r) return null;
   const rep = r.report || {};
   return {

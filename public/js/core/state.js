@@ -18,6 +18,10 @@ export var LS_HUE = 'kacey.hue';
 export var LANGS = ['cs-CZ', 'en-US'];
 
 export var MOCK = /(?:^|[?&])mock=1(?:&|$)/.test(location.search);
+/* The bedside kiosk opens Kacey as ?kiosk=1 (docs/RUNBOOK-kaceybody.md). Only
+   that page plays the morning brief by itself — a phone that happens to be
+   open at 07:00 must not start talking too. */
+export var KIOSK = /(?:^|[?&])kiosk=1(?:&|$)/.test(location.search);
 
 export var state = {
   lang: 'cs-CZ',

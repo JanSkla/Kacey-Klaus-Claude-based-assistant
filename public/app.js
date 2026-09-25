@@ -100,6 +100,9 @@ import { initRoutine } from './js/views/routine.js';
 import { initLights } from './js/views/lights.js';
 import { installDebugSurface } from './js/debug.js';
 import { initActivity, followSpeaking } from './js/net/activity.js';
+import { initMorning } from './js/views/morning.js';
+import { initProposals } from './js/views/proposals.js';
+import { initRules } from './js/views/rules.js';
 
 /* =======================================================================
    1. THE ORB'S FOLLOWERS
@@ -160,6 +163,9 @@ initTimers();
 initController(restartSession);
 initLights();
 initMain();
+initMorning();
+initProposals();
+initRules();
 initActivity();
 initSheets();
 initRouter();

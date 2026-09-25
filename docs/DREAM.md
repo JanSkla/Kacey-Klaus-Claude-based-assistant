@@ -9,9 +9,9 @@ Like [ARCHITECTURE.md](../ARCHITECTURE.md), it explains structure and invariants
 not every line. The reasoning sits next to each decision, so a later session can
 tell a deliberate choice from an accident.
 
-**Status:** P1 (lightsd), P2 (screen, lid, runbook), P3 (sleep detection),
-P4 (rules, the task schema, the agent tools) and P5 (the night run, proposals)
-have landed. P6 (morning mode and the UI) and P7 (learning) are planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
+**Status:** P1–P6 have landed: lightsd, the screen and lid, sleep detection,
+rules, the night run and proposals, and morning mode with all its screens. P7
+(learning) is planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
 moves its row from *planned* to *done* and records the commit.
 
 ## Contents
@@ -1191,6 +1191,26 @@ the list, and a morning that runs long should not have its list pulled away at
 09:00. If you never touched it, you were not there, and a list on a lit screen
 all day helps no one.
 
+**As built in P6:**
+- `morningplan.js` (pure; `test/morning.mjs`) holds the decisions and
+  `morning.js` the I/O, driven by the night tick.
+- **Only the kiosk plays by itself.** It is the page opened as `?kiosk=1`
+  (runbook). Any other page gets a toast "Ráno je připravené" instead, because a
+  phone left open at 07:00 must not start talking. "Přehrát brief teď"
+  (`POST /api/morning/start`) is the manual start: no lid check, every page
+  opens it.
+- **The sunrise ±15 in the Brief view stayed** (the design has it). Kacey moves
+  lightsd's `morning` routine on every lamp through lightsd's own schedule API
+  (`POST /api/night/sunrise`). lightsd still knows nothing about Kacey; this is
+  an ordinary client call.
+- A decided proposal re-counts the "Projít návrhy" item at once
+  (`syncProposals`), so the last decision ends the morning without waiting for
+  a tick.
+- The night dim (design 5c) is only the dim layer (`html.is-night` while
+  winding down or asleep). The minimal night layout is not built.
+- A peak more than two hours old is `missed`, not played: the server was down
+  through the morning.
+
 **The Brief view's cycle becomes real.** `brief.js` `renderCycle()` is a mock
 today: four steps computed from `settings.wakeMin`. It is replaced with the real
 cycle from `night_state`: bedtime (sleep since), the night run (status, time),
@@ -1338,7 +1358,7 @@ entry, and this document updated if the build changed the design.
 | **P3** | Sleep detection (§7): `lightsd.js`, `sleep.js`, `night.js` tick, `interaction` frame, `ready.features`, `night_state`, a minimal `screen.js` (on/off), tests. **Not yet:** the `speaking` frame and the idle timeout (with P2's screen work), the readout rows (UI), the real run (P5) | Kacey | P1, P2 | done (see the commit adding it) |
 | **P4** | Rules (§8), the task schema (§9): tables, migration, `writeTasks` carry-over, suppress, `tasks.rev`/409, `routine-cats.js`, `calendar-days.js`, `rules.js`, the agent tools, starters, the persona, tests | Kacey | — | done. Also: the rules HTTP endpoints of §15 (for P6's editor), `nightstore.js` |
 | **P5** | The night run (§10), proposals (§11): `dream.js`, `nightstore.js`, runs, catch-up, stuck reset, reasoning, brief draft, report, endpoints, readout rows, tests | Kacey | P3, P4 | done. Pure decisions in `nightplan.js`; the readout rows moved to P6 |
-| **P6** | Morning mode (§12) and the UI from Claude Design: morning screen, proposal review, rules editor, the real cycle in Brief, task origin/reason/note in rows, the settings `srow`s, the report view | Kacey | P5 | planned |
+| **P6** | Morning mode (§12) and the UI from Claude Design: morning screen, proposal review, rules editor, the real cycle in Brief, task origin/reason/note in rows, the settings `srow`s, the report view | Kacey | P5 | done. The report is shown as the Brief's timeline and the controller's "Stav noci", not as a view of its own |
 | **P7** | The learning loop (§13) | Kacey | P6 | planned |
 
 **What counts as done**, beyond the tests:

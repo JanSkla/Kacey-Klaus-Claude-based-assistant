@@ -19,6 +19,28 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The night routine, phase P6: the morning, and every new screen** (from Claude Design "Kacey DREAM")
+- At the sunrise's brightest point the bedside screen comes on and the kiosk
+  reads the night's brief aloud. The morning screen shows the time, the brief
+  line by line, a fixed checklist (Vyčistit zuby · Sprcha · Kreatin · Purtier ·
+  Snídaně · Obléct se, plus "Projít návrhy" when some are waiting, which ticks
+  itself), and what the rules added for today.
+  - Five minutes before, the brief is rewritten if the day changed.
+  - A closed lid skips the morning.
+  - It ends when everything is ticked ("Hotovo, hezký den."), or at 09:00 if
+    nobody touched it.
+- Proposal review, one card at a time: accept, edit (name and due, in the
+  card), or reject.
+- The rules editor: rulesets, rules, keywords, routine categories, timing, the
+  task and its checklist, with a live 7-day preview. It also works on a phone,
+  one pane at a time.
+- The Brief view shows the real night (button, sleep, night run, sunrise,
+  brief) instead of a mock. Its ±15 moves lightsd's sunrise. `wakeMin` is no
+  longer used.
+- Tasks made by the night carry a PRAVIDLO / KACEY tag and a "?" with the
+  reason. The controller gets "Noc a ráno" settings and a "Stav noci" readout.
+- The kiosk URL is now `http://localhost:8082/?kiosk=1` (runbook).
+
 **The night routine, phase P5: the night run**
 - Once per planned day, while the owner sleeps, Kacey:
   - turns the rules into tasks (merging exact calendar × routine duplicates;

@@ -231,6 +231,7 @@ Client → server:
 { "type": "interaction", "kind": "pointer" }        // pointer | key | touch | wake; throttled, only if ready.features has "night"
 { "type": "speaking", "on": true }                  // TTS started / stopped: keeps the bedside panel lit
 { "type": "visibility", "state": "hidden" }         // logged: does the kiosk page go hidden with the panel off?
+{ "type": "morning_ack", "logical_date": "…" }      // the kiosk started playing the morning brief
 ```
 
 Server → client:
@@ -244,7 +245,8 @@ Server → client:
 { "type": "done" }
 { "type": "error",   "message": "..." }
 { "type": "night_state", "sleep": { "state": "winding_down", "since": "…", "until": "…" },
-  "screen": { … }, "lightsd": { "mode": "ws", … }, "run": { "last": …, "next": … } }   // on connect and on every change
+  "screen": { … }, "lightsd": { "mode": "ws", … }, "run": { "last": …, "next": … }, "morning": { … } }   // on connect and on every change
+{ "type": "morning", "logical_date": "…", "lines": ["…"], "checklist": [ … ], "peak_at": "…", "manual": false }   // the sunrise peaked: open the morning
 ```
 
 `features` lists the optional client frames the server understands. The server
@@ -274,6 +276,8 @@ HTTP:
   (`npm run night:run`, `-- --force` to redo a done day). Not a tool: the persona never gets it.
 - `GET /api/night/runs` → recent runs with their reports
 - `GET /api/proposals?status=pending` · `POST /api/proposals/:id { action: accept|edit|reject, label?, due_at? }`
+- `GET /api/morning` · `POST /api/morning/tick { key, done }` · `POST /api/morning/start` (by hand) · `POST /api/morning/idle`
+- `GET /api/night/cycle` → the night's timeline · `POST /api/night/sunrise { minutes }` → moves lightsd's "morning" routine
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)
 

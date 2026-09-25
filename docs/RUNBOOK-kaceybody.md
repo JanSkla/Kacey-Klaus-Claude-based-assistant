@@ -109,8 +109,11 @@ exec chromium \
   --kiosk --noerrdialogs --disable-infobars \
   --autoplay-policy=no-user-gesture-required \
   --check-for-update-interval=31536000 \
-  http://localhost:8082
+  'http://localhost:8082/?kiosk=1'
 ```
+
+`?kiosk=1` is what makes this page the one that plays the morning brief by
+itself. Any other page (a phone) only gets a toast.
 
 Use `chromium-browser` or `google-chrome` if that's what step 1 found.
 

@@ -301,6 +301,7 @@ export const NIGHT_TICK_MS = 30000;
 export const NIGHT_DEFAULTS = {
   enabled: true,
   sleep_delay_min: 60,
+  fallback_on: true,
   fallback: '04:00',
   morning_end: '09:00',
   screen_idle_min: 2,
@@ -319,3 +320,16 @@ export const DREAM_STUCK_HOURS = 3;
 /* The reasoning pass's system prompt. Not the persona: this is not Kacey
    talking, it is a planner whose output a program reads. */
 export const DREAM_PLANNER_PATH = path.join(HERE, 'persona', 'dream-planner.md');
+
+/* The morning checklist (docs/DREAM.md §12): FIXED, the same every day — its
+   value is that it is a habit, not a plan. Keys are stable (they are what the
+   daily history stores); labels are what the screen says. "Projít návrhy" is
+   added by morning.js only when proposals are waiting, and ticks itself. */
+export const MORNING_ITEMS = [
+  { key: 'teeth', label: 'Vyčistit zuby' },
+  { key: 'shower', label: 'Sprcha' },
+  { key: 'creatine', label: 'Kreatin' },
+  { key: 'purtier', label: 'Purtier' },
+  { key: 'breakfast', label: 'Snídaně' },
+  { key: 'dress', label: 'Obléct se' },
+];

@@ -137,6 +137,8 @@
       <h2 class="card__title card__title--bar">Funkce</h2>
       <div class="fnlist">
         <button type="button" class="btn btn--accent btn--fn" data-go="brief">Ranní brief</button>
+        <button type="button" class="btn btn--fn" data-go="morning">Ráno <span class="btn__meta" id="fnMorningMeta">· checklist</span></button>
+        <button type="button" class="btn btn--fn" data-go="rules">Pravidla <span class="btn__meta" id="fnRulesMeta"></span></button>
         <button type="button" class="btn btn--fn" data-go="journal">Deník</button>
         <button type="button" class="btn btn--fn" data-go="library">Knihovna deníku</button>
         <button type="button" class="btn btn--fn" data-go="calendar">Kalendář</button>
@@ -363,16 +365,21 @@
       <p class="big" id="briefReady">Brief připraven</p>
       <p class="muted" id="briefMade">—</p>
     </section>
-    <section class="card">
-      <h2 class="card__title card__title--bar">Ranní cyklus</h2>
-      <div class="card__body card__body--scroll" id="briefCycle"></div>
-      <div class="card__foot card__foot--block">
-        <p class="muted-3">Čas buzení</p>
-        <span class="row">
-          <b class="num" id="wakeLabel">06:45</b>
-          <button type="button" class="btn btn--sm" id="wakeDown">−15</button>
-          <button type="button" class="btn btn--sm" id="wakeUp">+15</button>
-        </span>
+    <!-- The real night, not a plan (docs/DREAM.md §12; Claude Design 4a–4f). -->
+    <section class="card timeline">
+      <div class="timeline__head">
+        <h2 class="card__title" id="cycleTitle">Noční cyklus</h2>
+        <p class="timeline__sum"><span class="timeline__dot" id="cycleDot" data-st="pend" aria-hidden="true"></span><span id="cycleSum">—</span></p>
+      </div>
+      <div class="card__body card__body--scroll timeline__steps" id="cycleSteps"></div>
+      <div class="timeline__act" id="cycleActWrap" hidden>
+        <button type="button" class="btn btn--accent btn--block" id="cycleAct"></button>
+      </div>
+      <div class="card__foot row timeline__foot">
+        <span class="muted-3">Svítání</span>
+        <b class="num push timeline__sunrise" id="sunriseLabel">—</b>
+        <button type="button" class="btn btn--sm" id="sunriseDown" aria-label="Svítání o 15 minut dřív">−15</button>
+        <button type="button" class="btn btn--sm" id="sunriseUp" aria-label="Svítání o 15 minut později">+15</button>
       </div>
     </section>
   </div>
@@ -541,6 +548,18 @@
         </div>
       </div>
 
+      <!-- docs/DREAM.md §14; Claude Design 5b -->
+      <div>
+        <h3 class="subhead">Noc a ráno</h3>
+        <div id="ctrlNight"></div>
+      </div>
+
+      <div>
+        <h3 class="subhead">Stav noci</h3>
+        <dl class="readout" id="ctrlNightState"></dl>
+        <button type="button" class="btn btn--block ctrl__runnight" id="ctrlRunNight">Spustit noční běh teď</button>
+      </div>
+
       <div>
         <h3 class="subhead">Oprávnění nástrojů</h3>
         <p class="muted narrow">Kacey nemá shell, přístup k souborům ani na web. Klepnutím nástroj povolíš nebo zakážeš. Změna platí od příští relace.</p>
@@ -570,6 +589,231 @@
         <button type="button" class="btn btn--fn" id="testVoice">Test reproduktoru</button>
         <button type="button" class="btn btn--fn btn--danger" id="restartSession">Restartovat relaci</button>
       </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= MORNING =================
+     The bedside kiosk at the sunrise's peak (docs/DREAM.md §12; Claude Design
+     "Kacey DREAM" 1a–1e). Full-bleed: no app header, a thin state bar. -->
+<section class="view view--bleed" data-view="morning" hidden>
+  <div class="bleedbar">
+    <span class="top__mark" aria-hidden="true"></span>
+    <b class="bleedbar__name">Kacey</b>
+    <span class="bleedbar__state"><span class="bleedbar__dot" id="mStateDot" data-st="pend" aria-hidden="true"></span><span id="mState">Ráno</span></span>
+    <span class="muted-3 push desk-only" id="mLights">—</span>
+    <button type="button" class="btn btn--sm" data-go="main">Na hlavní</button>
+  </div>
+
+  <div class="morning" id="mLive">
+    <div class="morning__main">
+      <div>
+        <p class="clockbig num" id="mClock">--:--</p>
+        <p class="morning__date" id="mDate"></p>
+      </div>
+      <p class="morning__note" id="mRewrite" hidden><span class="bleedbar__dot" data-st="acc" aria-hidden="true"></span><span id="mRewriteText"></span></p>
+      <section class="card morning__brief">
+        <div class="card__body card__body--scroll brieflines brieflines--big" id="mLines"></div>
+        <div class="card__foot row morning__player">
+          <button type="button" class="btn btn--lg" id="mPlay">Přehrát</button>
+          <span class="bar bar--grow"><span class="bar__fill" id="mProgress"></span></span>
+          <span class="num muted desk-only" id="mPlayClock">00:00 / 00:00</span>
+          <button type="button" class="btn btn--lg" id="mReplay">Znovu řádek</button>
+        </div>
+      </section>
+    </div>
+    <div class="morning__side">
+      <section class="card morning__check">
+        <div class="card__head">
+          <h2 class="card__title card__title--lg">Ranní checklist</h2>
+          <span class="morning__count num push" id="mCount">0 / 0</span>
+        </div>
+        <div class="segbar" id="mSegs" aria-hidden="true"></div>
+        <div class="checkgrid" id="mCheck"></div>
+      </section>
+      <section class="card morning__rules">
+        <div class="card__head">
+          <h2 class="card__title card__title--lg">Dnes od pravidel</h2>
+          <button type="button" class="link push" data-go="rules">Pravidla</button>
+        </div>
+        <div class="card__body card__body--scroll" id="mRuleTasks"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="morningdone" id="mDone" hidden>
+    <p class="morningdone__time num" id="mDoneClock">--:--</p>
+    <p class="morningdone__title">Hotovo, hezký den.</p>
+    <div class="segbar segbar--wide" id="mDoneSegs" aria-hidden="true"></div>
+    <p class="morningdone__sum" id="mDoneSummary"></p>
+    <div class="row center">
+      <button type="button" class="btn btn--lg btn--accent" id="mIdle">Zpět do klidu</button>
+      <button type="button" class="btn btn--lg desk-only" data-go="main">Na hlavní</button>
+    </div>
+    <p class="muted-3">Obrazovka zhasne za 30 s.</p>
+  </div>
+</section>
+
+<!-- ================= PROPOSALS =================
+     One card at a time (docs/DREAM.md §11; Claude Design 2a–2d). -->
+<section class="view view--bleed" data-view="proposals" hidden>
+  <div class="bleedbar">
+    <span class="top__mark desk-only" aria-hidden="true"></span>
+    <button type="button" class="btn btn--sm phone-only" id="pBackPhone" data-go="morning" aria-label="Zpět na ráno">←</button>
+    <b class="bleedbar__name desk-only">Kacey</b>
+    <span class="bleedbar__state">Návrhy od Kacey</span>
+    <span class="push row bleedbar__progress">
+      <b class="num" id="pCount">0 / 0</b>
+      <span class="segbar segbar--inline" id="pSegs" aria-hidden="true"></span>
+    </span>
+    <button type="button" class="btn btn--sm desk-only" id="pBack">← Zpět na ráno</button>
+  </div>
+
+  <div class="propview" id="pLive">
+    <p class="propview__accepted" id="pAccepted" hidden><span class="bleedbar__dot" data-st="ok" aria-hidden="true"></span><span id="pAcceptedText"></span></p>
+    <article class="propcard">
+      <p class="label">ÚKOL</p>
+      <div id="pView">
+        <p class="propcard__name" id="pName"></p>
+        <p class="propcard__due">termín <b id="pDue"></b></p>
+      </div>
+      <div class="propcard__edit" id="pEdit" hidden>
+        <input class="input propcard__nameinput" type="text" id="pEditName" aria-label="Název úkolu" />
+        <span class="muted-3">Termín</span>
+        <div class="row">
+          <span class="seg" id="pWhen" role="group" aria-label="Den"></span>
+          <input class="input input--when" type="date" id="pWhenDate" aria-label="Jiný den" hidden />
+          <input class="input input--when" type="time" id="pWhenTime" aria-label="Čas" step="300" />
+        </div>
+      </div>
+      <div class="propcard__why">
+        <p class="label">PROČ</p>
+        <p id="pWhy"></p>
+      </div>
+      <div class="propcard__facts">
+        <div><p class="muted-3">Událost</p><p class="propcard__event" id="pEvent"></p></div>
+        <div><p class="muted-3">Jistota</p><p class="row"><span class="confbar" id="pConf" aria-hidden="true"></span><span id="pConfWord"></span></p></div>
+      </div>
+    </article>
+    <div class="propacts" id="pActs">
+      <button type="button" class="btn btn--lg btn--accent" id="pAccept">Přijmout</button>
+      <button type="button" class="btn btn--lg" id="pEditBtn">Upravit</button>
+      <button type="button" class="btn btn--lg btn--quiet" id="pReject">Zamítnout</button>
+    </div>
+    <div class="propacts propacts--two" id="pEditActs" hidden>
+      <button type="button" class="btn btn--lg btn--accent" id="pSave">Uložit a přijmout</button>
+      <button type="button" class="btn btn--lg" id="pCancel">Zrušit úpravu</button>
+    </div>
+  </div>
+
+  <div class="propview propview--final" id="pFinal" hidden>
+    <p class="propview__title">Všechny návrhy vyřízeny.</p>
+    <p class="propview__sum" id="pFinalSum"></p>
+    <div class="propresults" id="pResults"></div>
+    <div class="row">
+      <button type="button" class="btn btn--lg btn--accent" data-go="morning">Zpět na ráno</button>
+      <span class="muted-3">automaticky za 3 s</span>
+    </div>
+  </div>
+
+  <div class="propview propview--final" id="pEmpty" hidden>
+    <p class="propview__title">Žádné návrhy nečekají.</p>
+    <p class="propview__sum">Kacey navrhuje jen k neobvyklým událostem — a dnes žádné nenašla.</p>
+    <div class="row"><button type="button" class="btn btn--lg btn--accent" data-go="morning">Zpět na ráno</button></div>
+  </div>
+</section>
+
+<!-- ================= RULES =================
+     The night routine's rules (docs/DREAM.md §8; Claude Design 3a–3j). A phone
+     walks the three panes one at a time, keyed off data-step. -->
+<section class="view view--rules" data-view="rules" data-step="sets" hidden>
+  <div class="col rules__nav">
+    <section class="card rules__sets">
+      <div class="card__head">
+        <h2 class="card__title">Sady pravidel</h2>
+        <button type="button" class="link push" id="rNewSet">+ Nová sada</button>
+      </div>
+      <form class="card__sub row" id="rNewSetForm" hidden>
+        <input class="input" type="text" id="rNewSetName" placeholder="Název sady" aria-label="Název nové sady" />
+        <button type="submit" class="btn btn--sm btn--accent">Vytvořit</button>
+      </form>
+      <div class="card__body card__body--scroll" id="rSets"></div>
+      <p class="muted-3 rules__voicehint phone-only">Pravidla můžeš vytvořit i hlasem — řekni Kacey třeba „Když mám zubaře, připomeň mi večer předem kartičku.“</p>
+    </section>
+    <section class="card rules__list">
+      <div class="card__head">
+        <button type="button" class="btn btn--sm phone-only" id="rBackSets" aria-label="Zpět na sady">←</button>
+        <h2 class="card__title" id="rSetTitle">Pravidla</h2>
+        <span class="push phone-only" id="rSetSwitch"></span>
+      </div>
+      <div class="card__body card__body--scroll" id="rRules"></div>
+      <div class="card__foot"><button type="button" class="btn btn--block" id="rAddRule">+ Přidat pravidlo</button></div>
+    </section>
+  </div>
+
+  <section class="card rules__editor">
+    <div class="card__head" id="rNameRow">
+      <button type="button" class="btn btn--sm phone-only" id="rBackSet" aria-label="Zpět na pravidla">←</button>
+      <input class="rules__name" type="text" id="rName" aria-label="Název pravidla" />
+      <span class="muted-3 push" id="rSaved">—</span>
+    </div>
+    <p class="empty" id="rNone">Vyber pravidlo vlevo, nebo přidej nové.</p>
+    <div class="card__body card__body--scroll rules__form" id="rForm" hidden>
+      <div class="rules__col">
+        <p class="label">Kdy</p>
+        <div class="field"><span class="muted-3">Zdroj</span><span class="seg seg--fill" id="rSource" role="group" aria-label="Zdroj"></span></div>
+        <div class="field" id="rKwBox"><span class="muted-3">Klíčová slova v kalendáři</span><div class="tagstrip tagstrip--field" id="rKw"></div></div>
+        <div class="field" id="rCatBox">
+          <span class="muted-3">Kategorie rutiny</span>
+          <div class="catpick" id="rCats" role="group" aria-label="Kategorie rutiny"></div>
+          <span class="muted-3">Klíčová slova v poznámce · volitelné</span>
+          <div class="tagstrip tagstrip--field" id="rNoteKw"></div>
+        </div>
+        <label class="field field--inline">
+          <input type="checkbox" id="rBeforeOn" />
+          <span>Jen když začíná před</span>
+          <input class="input input--when push" type="time" id="rBefore" step="300" aria-label="Čas" />
+        </label>
+        <div class="field">
+          <span class="muted-3">Načasování</span>
+          <span class="seg seg--fill seg--wrap" id="rTiming" role="group" aria-label="Načasování"></span>
+          <span class="row">
+            <span class="muted" id="rTimingLabel">v</span>
+            <input class="input input--when" type="time" id="rAt" step="300" aria-label="Čas" />
+            <input class="input input--when" type="number" id="rOffset" min="0" max="1440" step="5" aria-label="Minut před začátkem" hidden />
+          </span>
+        </div>
+      </div>
+      <div class="rules__col">
+        <p class="label">Úkol</p>
+        <div class="field"><span class="muted-3">Název</span><input class="input" type="text" id="rTask" placeholder="Co má vzniknout…" /></div>
+        <div class="field"><span class="muted-3">Poznámka</span><input class="input" type="text" id="rMeta" placeholder="volitelné" /></div>
+        <div class="field"><span class="muted-3">Délka</span><span class="seg seg--fill" id="rLen" role="group" aria-label="Délka"></span></div>
+        <div class="field">
+          <span class="muted-3">Checklist · volitelné</span>
+          <div class="ruleitems" id="rItems"></div>
+          <input class="input" type="text" id="rItemAdd" placeholder="Přidat položku…" aria-label="Přidat položku checklistu" />
+        </div>
+      </div>
+    </div>
+    <div class="card__foot row" id="rFoot" hidden>
+      <button type="button" class="btn btn--accent" id="rSave">Uložit</button>
+      <button type="button" class="btn" id="rCancel">Zrušit</button>
+      <button type="button" class="btn btn--danger push" id="rDelete">Smazat pravidlo</button>
+    </div>
+  </section>
+
+  <div class="col col--rail rules__side">
+    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
+    <section class="card rules__preview">
+      <h2 class="card__title card__title--bar">Náhled · 7 dní</h2>
+      <p class="muted rules__pvlede">V příštích 7 dnech by vytvořilo:</p>
+      <div class="card__body card__body--scroll preview7" id="rPreview"></div>
+    </section>
+    <section class="card card--pad desk-only">
+      <h2 class="card__title">Hlasem</h2>
+      <p class="muted">Pravidlo můžeš i říct: „Když mám zubaře, připomeň mi večer předem kartičku.“ Kacey ho sem zapíše a ukáže náhled.</p>
+      <button type="button" class="btn btn--block rules__say" id="rSay">Říct pravidlo</button>
     </section>
   </div>
 </section>
@@ -655,6 +899,8 @@
     </div>
     <div class="fnlist">
       <button type="button" class="btn btn--fn btn--accent" data-go="brief" data-tab="brief">Ranní brief</button>
+      <button type="button" class="btn btn--fn" data-go="morning" data-tab="morning">Ráno <span class="btn__meta" id="moreMorningMeta">checklist</span></button>
+      <button type="button" class="btn btn--fn" data-go="rules" data-tab="rules">Pravidla <span class="btn__meta" id="moreRulesMeta"></span></button>
       <button type="button" class="btn btn--fn" data-go="library" data-tab="library">Knihovna deníku</button>
       <button type="button" class="btn btn--fn" data-go="lights" data-tab="lights">Světla</button>
       <button type="button" class="btn btn--fn" data-go="timer" data-tab="timer">Časovače</button>

@@ -20,6 +20,7 @@ import * as store from '../core/store.js';
 import { onEnter, currentView } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { primeTTS, cancelSpeech, feedTTS, flushTTS } from '../voice/tts.js';
+import { night, onNight, runNightNow } from '../net/nightapi.js';
 
 var SOURCES = [
   { key: 'cal_osobni', name: 'Kalendář · osobní', meta: 'čte se z klaus_memory' },
@@ -98,11 +99,118 @@ function renderTools() {
     : null);
 }
 
+/* ---- the night and the morning (docs/DREAM.md §14) -------------------------
+   settings.night, key by key. The server merges the same defaults under what
+   is stored (config.js NIGHT_DEFAULTS); these are kept in step by hand. */
+
+var NIGHT_DEFAULTS = {
+  enabled: true, sleep_delay_min: 60, fallback_on: true, fallback: '04:00',
+  morning_end: '09:00', screen_idle_min: 2, lid_check: true
+};
+
+function nightSettings() { return Object.assign({}, NIGHT_DEFAULTS, store.data.settings.night || {}); }
+
+function setNight(key, value) {
+  var next = nightSettings();
+  next[key] = value;
+  store.patchSettings({ night: next });
+}
+
+function hhmmPlus(hhmm, delta) {
+  var p = String(hhmm).split(':').map(Number);
+  var m = Math.max(6 * 60, Math.min(12 * 60, p[0] * 60 + p[1] + delta));
+  return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
+}
+
+var NIGHT_ROWS = [
+  { key: 'enabled', type: 'switch', name: 'Noční běh', meta: 'po usnutí · kalendář 48 h + rutina' },
+  { key: 'sleep_delay_min', type: 'step', name: 'Zpoždění po usnutí', meta: 'klid bez dotyku a hlasu',
+    show: function (v) { return v + ' min'; }, step: function (v, d) { return Math.max(15, Math.min(180, v + d * 15)); } },
+  { key: 'fallback_on', type: 'switch', name: 'Záložní běh 04:00', meta: 'když spánek nepřijde' },
+  { key: 'morning_end', type: 'step', name: 'Konec rána bez interakce', meta: 'ranní obrazovka zhasne',
+    show: function (v) { return v; }, step: function (v, d) { return hhmmPlus(v, d * 30); } },
+  { key: 'screen_idle_min', type: 'step', name: 'Uspání obrazovky', meta: 'mimo ráno, bez dotyku',
+    show: function (v) { return v + ' min'; }, step: function (v, d) { return Math.max(1, Math.min(15, v + d)); } },
+  { key: 'lid_check', type: 'switch', name: 'Kontrola víka', meta: 'zavřené víko = brief nepřehrát, jen uložit' }
+];
+
+function nightRow(row) {
+  var s = nightSettings();
+  var v = s[row.key];
+  var control = row.type === 'switch'
+    ? [
+        el('span.srow__state' + (v ? '.is-on' : ''), v ? 'zapnuto' : 'vypnuto'),
+        el('button.switch', {
+          type: 'button', 'aria-pressed': String(!!v), 'aria-label': 'Přepnout ' + row.name,
+          onclick: function () { setNight(row.key, !v); }
+        }, el('span.switch__knob'))
+      ]
+    : [el('span.srow__step', [
+        el('button.btn.btn--sm', { type: 'button', 'aria-label': 'Méně', onclick: function () { setNight(row.key, row.step(v, -1)); } }, '−'),
+        el('span.srow__value.num', row.show(v)),
+        el('button.btn.btn--sm', { type: 'button', 'aria-label': 'Více', onclick: function () { setNight(row.key, row.step(v, 1)); } }, '+')
+      ])];
+  return el('div.srow', [el('span.srow__text', [el('b', row.name), el('em', row.meta)])].concat(control));
+}
+
+function hm(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+}
+
+function renderNightState() {
+  var n = night.state;
+  var rows;
+  if (!n) rows = [['STAV', 'server nehlásí noc', 'warn']];
+  else {
+    var sc = n.screen || {}, sl = n.sleep || {}, run = n.run || {}, last = run.last, ls = n.lightsd || {};
+    var sleepText = sl.state === 'asleep' ? 'spí od ' + hm(sl.since)
+      : sl.state === 'winding_down' ? 'usíná do ' + hm(sl.until)
+      : 'vzhůru' + (sl.reason === 'sunrise' ? ' · svítání' : '');
+    var lastText = last
+      ? last.logical_date.split('-').slice(1).reverse().map(Number).join('. ') + '. ' + hm(last.started_at) + ' · ' +
+        (last.status === 'done' ? 'ok · ' + last.tasks + ' úk., ' + last.proposals + ' návr.' : last.status === 'failed' ? 'selhal' : 'běží')
+      : 'zatím žádný';
+    rows = [
+      ['SCREEN', (sc.state || 'unknown') + (sc.reason ? ' · ' + sc.reason : '') + (sc.available === false ? ' · bez X' : '')],
+      ['LID', { open: 'otevřené', closed: 'zavřené', unknown: 'neznámé' }[sc.lid] || '—', sc.lid === 'closed' ? 'warn' : sc.lid === 'open' ? 'ok' : null],
+      ['SLEEP', sleepText],
+      ['LAST RUN', lastText, last ? (last.status === 'done' ? 'ok' : last.status === 'failed' ? 'bad' : null) : null],
+      ['NEXT RUN', run.running ? 'běží pro ' + run.running : 'po usnutí' + (nightSettings().fallback_on ? ' · záloha ' + ((run.next && run.next.fallback) || '04:00') : '')],
+      ['SVÍTÁNÍ', ls.wake_at ? ls.wake_at + (ls.morning_peak_at ? ' · brief ' + ls.morning_peak_at : '') + ' · lightsd' : 'lightsd ' + (ls.mode === 'down' ? 'nedostupné' : '—'), ls.mode === 'down' ? 'warn' : null]
+    ];
+  }
+  fill($('ctrlNightState'), rows.map(function (r) {
+    var attrs = {};
+    if (r[2] === 'warn') attrs['data-warn'] = '';
+    if (r[2] === 'bad') attrs['data-bad'] = '';
+    if (r[2] === 'ok') attrs['data-ok'] = '';
+    return el('div.readout__row', [el('dt', r[0]), el('dd', attrs, r[1])]);
+  }));
+}
+
+function renderNight() {
+  if (!$('ctrlNight')) return;
+  fill($('ctrlNight'), NIGHT_ROWS.map(nightRow));
+  renderNightState();
+}
+
+function runNow(force) {
+  runNightNow(force).then(function () {
+    say('Noční běh spuštěn. Výsledek uvidíš ve Stavu noci a v Ranním briefu.');
+  }).catch(function (e) {
+    if (!force) say('Pro tento den už běh proběhl nebo běží.', { label: 'Spustit znovu', run: function () { runNow(true); } });
+    else say('Běh nejde spustit: ' + e.message);
+  });
+}
+
 function render() {
   if (!$('ctrlSources')) return;
   fill($('ctrlSources'), SOURCES.map(function (r) { return toggleRow('sources', r); }));
   fill($('ctrlMemory'), MEMORY.map(function (r) { return toggleRow('memory', r); }));
   renderTools();
+  renderNight();
 }
 
 export function initController(restartSession) {
@@ -121,6 +229,9 @@ export function initController(restartSession) {
     say('Relace restartována — otevírá se nová.');
   });
 
+  $('ctrlRunNight').addEventListener('click', function () { runNow(false); });
+
   onEnter('controller', render);
   store.onChange(function () { if (currentView() === 'controller') render(); });
+  onNight(function (what) { if (what === 'state' && currentView() === 'controller') renderNightState(); });
 }

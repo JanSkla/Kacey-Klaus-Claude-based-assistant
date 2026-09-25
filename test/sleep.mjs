@@ -240,6 +240,7 @@ test('the fallback time is a setting, and the night run can be switched off', ()
   assert.equal(fallbackDue(at(2026, 9, 26, 3, 0), { fallback: '03:00' }, null), true);
   assert.equal(fallbackDue(at(2026, 9, 26, 2, 59), { fallback: '03:00' }, null), false);
   assert.equal(fallbackDue(at(2026, 9, 26, 4, 0), { ...SETTINGS, enabled: false }, null), false);
+  assert.equal(fallbackDue(at(2026, 9, 26, 4, 0), { ...SETTINGS, fallback_on: false }, null), false, 'the fallback switched off');
   assert.equal(fallbackDue(at(2026, 9, 26, 4, 0), { fallback: 'garbage' }, null), true, 'bad setting falls back to 04:00');
 });
 

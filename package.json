@@ -11,7 +11,7 @@
     "xtts": ".venv-xtts\\Scripts\\python.exe voicelab/xtts_server.py",
     "health": "node -e \"fetch('http://localhost:'+(process.env.PORT||8082)+'/api/health').then(r=>r.json()).then(o=>console.log(JSON.stringify(o,null,2)))\"",
     "test:wake": "node test/wake-dsp.mjs && node test/wake-pipeline.mjs && node test/closing.mjs",
-    "test:night": "node test/sleep.mjs && node test/lightsd-diff.mjs && node test/rules.mjs && node test/tasks-write.mjs && node test/nightstore.mjs && node test/nightplan.mjs && node test/dream.mjs",
+    "test:night": "node test/sleep.mjs && node test/lightsd-diff.mjs && node test/rules.mjs && node test/tasks-write.mjs && node test/nightstore.mjs && node test/nightplan.mjs && node test/dream.mjs && node test/morning.mjs",
     "test": "npm run test:wake && npm run test:night",
     "night:run": "node -e \"fetch('http://localhost:'+(process.env.PORT||8082)+'/api/night/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({wait:true,force:process.argv.includes('--force')})}).then(r=>r.json()).then(o=>console.log(JSON.stringify(o,null,2)))\" --"
   },

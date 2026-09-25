@@ -145,7 +145,7 @@ export const FALLBACK_WINDOW_MIN = 60;
  * checks whether the brief is still ahead (docs/DREAM.md §10, phase P5).
  */
 export function fallbackDue(now, settings = {}, lastRunDate = null, startHour = 4) {
-  if (settings.enabled === false) return false;
+  if (settings.enabled === false || settings.fallback_on === false) return false;
   const from = clockMinutes(settings.fallback);
   const start = from === null ? startHour * 60 : from;
   const mins = minutesOf(now);

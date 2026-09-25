@@ -190,6 +190,7 @@ makes it the one piece that can be unit tested directly.
 | `transport-mock.js`                       | The same interface, scripted, for `?mock=1` |
 | `protocol.js`                             | The frame pipeline both transports feed |
 | `activity.js`                             | Throttled `interaction` frames for the night routine: taps, keys, the wake word |
+| `nightapi.js`                             | The night routine's data (night_state, the morning, proposals, rules) and its HTTP calls; views subscribe with `onNight()` |
 
 Both transports implement `{ start(), send(obj) -> bool, isOpen(), stop(), resume() }`
 and `protocol.js` never knows which one it is holding. That is what makes
@@ -490,6 +491,15 @@ stores a report. The model is reached through an injected runner, so
 `test/dream.mjs` runs a whole night with a scripted one. `nightplan.js` is its
 pure half. `night.js`'s tick starts runs (sleep, fallback, catch-up, the one
 automatic retry) and expires proposals.
+
+`morning.js` is morning mode: at the sunrise peak it checks the lid, lights the
+panel and broadcasts `morning`, which the kiosk page (`?kiosk=1`) plays and
+acknowledges. Five minutes before, it rewrites the brief if the day changed. It
+keeps the fixed checklist and its history. Its decisions are in
+`morningplan.js`. In the browser, `net/nightapi.js` holds the night's data, and
+the views `morning.js`, `proposals.js`, `rules.js` and the Brief's timeline draw
+it. `views/lineplayer.js` is the line-by-line reader the Brief and the morning
+share.
 
 In short: lightsd's sleep button starts a wind-down, and an hour with no
 interaction means asleep. Kacey then plans the next day once per logical date.

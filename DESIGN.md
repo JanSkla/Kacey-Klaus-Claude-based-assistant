@@ -7,7 +7,7 @@ code as it is. Where the code disagrees with itself, the disagreement is listed 
 **Before a UI change:** read this file. **After it:** update the tokens, components,
 screens and changelog sections in the same commit.
 
-> **Claude Design sync:** synced through `2026-09-24` (Kacey Redesign.dc.html) — see [§0](#0-design-implementation-loop).
+> **Claude Design sync:** synced through `2026-09-25` (Kacey DREAM.dc.html — the night routine's screens) — see [§0](#0-design-implementation-loop). The two `[design: pending]` entries of 2026-09-24 were meant to be applied in that session first; this repo cannot confirm it, so they stay marked pending until the next sync says otherwise.
 
 ---
 
@@ -274,8 +274,20 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.subhead` | tasks, controller | Group heading with rule | `--err` |
 | `.entry` / `.cards` | [library.js](public/js/views/library.js) | Journal entry card: `__head`, `__when`, `__diag`, `__foot` | `.is-unfinished` |
 | `.tile` / `.tiles` | [brief.js](public/js/views/brief.js) | Stat tile (`b` label, `strong` value, `em` note) | `em.is-err` |
-| `.briefline` | brief.js | Spoken brief line (button) | `.is-said`, `.is-current` |
-| `.cyclestep` | brief.js | Morning cycle step (`.when`, `.what`) | `.is-done`, `.is-now` |
+| `.briefline` | brief.js, morning.js | Spoken brief line (button). `--big` on the morning screen: 22px, `__text` + `__tag` ("teď"/"znovu"), current line washed in `--acc-dim` instead of the left border | `.is-said`, `.is-current` |
+| `.timeline` | brief.js | The real night (replaces `.cyclestep`): `__head` (title, `__sum` with `__dot`), `__steps` of `__step` (`__rail` line + `__dot`, `__time`, `__text` b/em), `__act`, `__foot` (sunrise ±15) | `__step[data-st]` = done · ok · warn · err · pend (hollow dot); `.is-last` |
+| `.bleedbar` | index.html | Thin state bar of a full-bleed view (morning, proposals): mark, `__name`, `__state` + `__dot`, `__progress` | `__dot[data-st]` = acc · ok · warn · err · pend |
+| `.clockbig` | morning.js | 112px clock (60px phone) | — |
+| `.checkitem` / `.checkgrid` | morning.js | Morning checklist target, 64px (56 phone): `__box` 30px, `__text` (`__label` 20px, `__sub`), `__go` arrow; `--wide` spans the grid | `.is-done` (acc box + strike), `.is-open` (acc border — "Projít návrhy") |
+| `.segbar` | morning.js, proposals.js | Progress as segments, 8px: `__seg`; `--wide` (420px), `--inline` (180px, 72 phone) | `__seg.is-done` acc, `.is-current` ink |
+| `.ruletask` | morning.js | Today's rule task: `.check`, `__label`, `__origin`, `__warn` (warn dot), `__when` | `.is-done` |
+| `.propcard` / `.propacts` / `.propview` | proposals.js | One proposal: `__name` 42px, `__due`, `__edit` (`__nameinput`, when `.seg`, time), `__why` box, `__facts` (event, confidence); actions 68px (1.5fr/1fr/1fr); `.propview--final` summary with `.propresult` rows | edit mode swaps `#pView`/`#pEdit` |
+| `.confbar` | proposals.js | 5-bar confidence, 22×12 | `__bar.is-on` |
+| `.ruleset` | rules.js | Rulesets and rules list row: `__text` (b name, em meta/summary), `.switch`, `__go` (phone) | `.is-current` (acc name, `--l2`), `.is-invalid` (warn meta) |
+| `.catpick` | rules.js | Routine category picker, 3 cols (2 phone): `__opt` with `__sw` swatch, `--cat` from core/routine-cats.js | `aria-pressed` (2px border in the category colour) |
+| `.preview7` | rules.js | Live 7-day preview rows: b when, span task, em reason | `__row.is-muted` (suppressed) |
+| `.field` | rules.js | Labelled form field (column); `--inline` (checkbox row) | — |
+| `.origin` / `.task__origin` / `.task__why` | tasks.js | Task made by the night: PRAVIDLO (grey) or KACEY (`--kacey`, acc) tag and a "?" (`.origin__why`) that opens the reason under the row (`.task__warn` for the overlap note) | `.origin__why[aria-expanded]` |
 | `.injected` | brief.js | Toggleable injected-data row | `aria-pressed` |
 | `.monthgrid` | calendar.js | 7-col month | — |
 | `.lane` / `.tick` / `.eblock` / `.rblock` / `.sleepband` / `.nowline` / `.allday` / `.legend` | calendar.js | Day timeline: hour ticks, events, routine blocks, sleep hatch | `.eblock.is-short`/`.is-past`, `.rblock.is-short` |
@@ -287,7 +299,7 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.timercard` / `.presetgrid` / `.savedgrid` / `.customtimer` | [timers.js](public/js/views/timers.js) | Timers | `.timercard.is-done` |
 | `.runitem` | tasks.js | Big checklist item in runner | `.is-done` |
 | `.readout` | [telemetry.js](public/js/ui/telemetry.js) | `dl` key/value rows | `dd[data-warn]`, `dd[data-bad]` |
-| `.srow` | controller.js | Setting row: text, state, switch | `__state.is-planned` |
+| `.srow` | controller.js | Setting row: text, state, switch — or `__step` (− `__value` +) | `__state.is-planned`, `__state.is-on` (ok) |
 | `.attach` / `.attachstrip` | [attachments.js](public/js/ui/attachments.js) | Image attachment chip with thumb and × | `:hover` on × |
 | `.vw__*` | [wake-panel.js](public/js/voice/wake-panel.js) | Voiceprint sheet: list items, play/delete, score bar, sensitivity | `data-playing`, `data-match`, `data-outlier`, `data-hit` |
 | Text helpers | styles.css | `.big` (20 acc), `.strong`, `.muted`, `.muted-3`, `.label`, `.rule`, `.clock` (`--sm`), `.num`, `.is-acc` | — |
@@ -317,7 +329,8 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 - **Modal flow**: `.sheet` > `.sheet__box[role=dialog]` with head (title + `.sheet__close.push`), optional `.sheet__bar`s, scrollable `__body`, `__foot` with primary `.btn--accent.push`. Backdrop click and Escape (capture phase) close. Phone: full-screen, except `--sheetbottom`.
 - **Destructive confirm**: never a browser `confirm()`. Either an inline `.confirm` strip with `.btn` cancel + `.btn--dangerfill`, or a two-tap `.btn--dangerghost` that relabels to "Opravdu smazat?" for 4s.
 - **Forms**: `<form class="… row">`, `.input` flex-grows, submit is the rightmost `.btn` (`--accent` when it's the view's main action).
-- **Current-item highlight**: `--l2` bg + 4px `--acc` left border (`.rowbtn.is-now`, `.cyclestep.is-now`, `.briefline.is-current`).
+- **Current-item highlight**: `--l2` bg + 4px `--acc` left border (`.rowbtn.is-now`, `.briefline.is-current`); read from a metre away it is an `--acc-dim` wash instead (`.briefline--big.is-current`).
+- **Full-bleed**: `.view--bleed` hides the app header (`body[data-view]`) and puts a 52px `.bleedbar` on top; on a phone the tab bar goes too.
 
 ---
 
@@ -362,10 +375,13 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 | `journal` | triple | [index.html:176](public/index.html:176) | [views/journal.js](public/js/views/journal.js) | clock, bubbles/msg, tagstrip/tag, prose__area, btn .dot, fnlist |
 | `library` | wide | [index.html:228](public/index.html:228) | [views/library.js](public/js/views/library.js) | card__sub input, chips/chip--filter, cards/entry |
 | `calendar` | triple | [index.html](public/index.html) `data-view="calendar"` | [ui/calendar.js](public/js/ui/calendar.js) | monthgrid/day (drag range), seg (Den · 3 dny · Po–Pá · Týden), ‹ › range step, legend/swatch, lane/tick/eblock/rblock/sleepband/nowline/allday, eblock--task/allday--task (tasks with a due date; "úkoly" in Zdroje), colheads/lanecols (multi-day), eventedit, chip--filter month jump, fnlist |
-| `brief` | triple | [index.html:308](public/index.html:308) | [views/brief.js](public/js/views/brief.js) | tiles/tile, brieflines/briefline, cyclestep, injected, prompt, bar |
+| `brief` | triple | [index.html](public/index.html) `data-view="brief"` | [views/brief.js](public/js/views/brief.js), [views/lineplayer.js](public/js/views/lineplayer.js) | tiles/tile, brieflines/briefline, timeline (the real night + sunrise ±15), injected, prompt, bar |
+| `morning` | bleed | [index.html](public/index.html) `data-view="morning"` | [views/morning.js](public/js/views/morning.js) | bleedbar, clockbig, briefline--big, segbar, checkgrid/checkitem, ruletask, morningdone |
+| `proposals` | bleed | [index.html](public/index.html) `data-view="proposals"` | [views/proposals.js](public/js/views/proposals.js) | bleedbar, segbar--inline, propcard, confbar, seg (when), propacts, propview--final/propresult |
+| `rules` | rules (3 cols; phone: one pane by `data-step`) | [index.html](public/index.html) `data-view="rules"` | [views/rules.js](public/js/views/rules.js) | ruleset + switch, field, seg--fill, tagstrip--field/tag, catpick, ruleitems, preview7, btn--danger (two-tap) |
 | `lights` | full | [index.html](public/index.html) `data-view="lights"` | [views/lights.js](public/js/views/lights.js) | viewbar, embed (iframe of lightsd on this host :8080), embed__off (switched off in controller / lightsd unreachable), link |
 | `timer` | split | [index.html:363](public/index.html:363) | [views/timers.js](public/js/views/timers.js) | label, presetgrid, customtimer, btn--step, clock--sm, savedgrid, timercard, bar |
-| `controller` | wide | [index.html:402](public/index.html:402) | [views/controller.js](public/js/views/controller.js), [ui/telemetry.js](public/js/ui/telemetry.js), [ui/theme.js](public/js/ui/theme.js), [ui/voice-picker.js](public/js/ui/voice-picker.js) | groups--wide, subhead, srow/switch, readout, select, meter, chip--tool, presets |
+| `controller` | wide | [index.html:402](public/index.html:402) | [views/controller.js](public/js/views/controller.js), [ui/telemetry.js](public/js/ui/telemetry.js), [ui/theme.js](public/js/ui/theme.js), [ui/voice-picker.js](public/js/ui/voice-picker.js) | groups--wide, subhead, srow/switch, srow__step ("Noc a ráno"), readout ("Stav noci"), select, meter, chip--tool, presets |
 | `task` | full | [index.html:502](public/index.html:502) | [views/tasks.js](public/js/views/tasks.js) | runner, runitem, bar |
 | `focus` | full | [index.html:526](public/index.html:526) | [views/tasks.js](public/js/views/tasks.js) | focus, label, btn--lg |
 | Sheet: Víc (phone) | sheet--bottom | [index.html](public/index.html) `#moreSheet` | [ui/router.js](public/js/ui/router.js) | fnlist (56px; Ranní brief accent · Knihovna · Světla · Časovače · Controller) |
@@ -403,7 +419,10 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 - Many `…[hidden] { display:none }` rules are redundant with the global `[hidden]` rule.
 
 **Duplicate / near-duplicate components**
-- "Current item" highlight is implemented three times with different state names: `.rowbtn.is-now`, `.cyclestep.is-now`, `.briefline.is-current`.
+- "Current item" highlight is implemented twice with different state names: `.rowbtn.is-now`, `.briefline.is-current` (`.cyclestep` is gone, replaced by `.timeline`).
+- Two state-dot implementations: `.bleedbar__dot` / `.timeline__dot` (share `[data-st]` colours) and `.conn__dot` (orb-driven).
+- The rules editor's `summary()` and the server's `describeRule()` say the same words in two places (the server one is Node-only: zod, crypto).
+- Controller's `NIGHT_DEFAULTS` mirrors `config.js` by hand.
 - Pill-like buttons: `.chip`, `.chip--filter`, `.allday`, `.vw__mode`, `.preset` all differ slightly in padding and border.
 - Close/remove buttons: `.sheet__close`, `.toast__x`, `.attach__x`, `.vw__del`, `.tag__x` — five variants.
 - Segmented choices: `.seg__opt` (calendar range) and `.vw__mode` (voiceprint) do the same job with different sizes.
@@ -434,6 +453,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 One line per feature that changes the UI. Newest first. Format: `YYYY-MM-DD — what changed (tokens / components / screens touched) [design: pending|synced]`.
 `pending` means Claude Design hasn't picked the change up yet; see [§0](#0-design-implementation-loop).
 
+- 2026-09-25 — Implemented Claude Design "Kacey DREAM" (the night routine, docs/DREAM.md P6): new full-bleed views **morning** (1a–1e: `.bleedbar`, `.clockbig`, `.briefline--big`, `.segbar`, `.checkitem`, `.ruletask`, `.morningdone`) and **proposals** (2a, 2b, 2d: `.propcard`, `.confbar`, `.propacts`, `.propview--final`); new view **rules** (3a–3h: `.ruleset`, `.field`, `.catpick`, `.preview7`, phone panes by `data-step`); Brief's cycle card replaced by the real night `.timeline` (4a–4f) with sunrise ±15 moving lightsd's morning routine; task rows get `.origin` PRAVIDLO/KACEY + "?" reason (5a, placed under the meta line so it never squeezes the label); Controller gets "Noc a ráno" `.srow`s (switch and `.srow__step`) and a "Stav noci" readout (5b); night dim `html.is-night` (5c, the dim layer only — the minimal night layout is not built); Funkce rail and Víc gain Ráno and Pravidla. Not built: 2c (the "make it a rule" offer — P7). `.cyclestep` removed. [design: synced]
 - 2026-09-24 — **KC 1.0.0**, the first release ([CHANGELOG.md](CHANGELOG.md)). Header stats lead with the release (`KC 1.0.0`, from the server's `ready` frame). [design: pending]
 - 2026-09-24 — Tasks are due by timestamp, not by a stored group: `due_at` is a date or a date + time (+ `duration`), and the groups are worked out from it and the clock ([core/due.js](public/js/core/due.js)). Task rows lead with the due date (`.task__due`, opens `.taskwhen`); the add form gets date and time fields (`.input--when`; on a phone they share the second line with Přidat); new groups Později, Bez termínu, Hotové dřív. Timed tasks are drawn in the calendar lane and dated ones in the all-day strip (`.eblock--task`, `.allday--task`, `.eblock__check`), with "úkoly" as a switchable source in Zdroje; "Další na řadě" counts timed tasks. [design: pending]
 - 2026-09-24 — Implemented Claude Design "Kacey Mobile" (phone ≤760px): header names the view + short state (`.top__title`, `.conn__short`); chat gets a folding "Další na řadě" (`.nextcard`) and a full-width talk button under the composer; calendar folds the month into its name, adds `.weekstrip`, week/3-day stepping, Zdroje and the event editor as bottom sheets (`.psheet`, `.scrim`, new [psheet.js](public/js/ui/psheet.js)), 3-option range; tasks get a summary card with the list controls and a docked add field, groups as cards; journal dictates from the top card, KC chat as a sheet, 2×2 actions; library search-first; brief/timers/controller re-ordered into cards; routine planner paints one day as a vertical column (`.daypick`, `.daypaint`, `.cell--v`); sheets slide up 70px short of the top. Timer empty-state copy no longer says "vlevo". [design: synced]

@@ -29,6 +29,7 @@ import { pauseReply, stopAndEnd, endListening } from '../voice/commands.js';
 import { refreshCalendar } from '../ui/calendar.js';
 import { attachments, hasAttachments, clearAttachments } from '../ui/attachments.js';
 import { applyRemoteChange } from '../core/store.js';
+import { receiveNightState, receiveMorning, refresh as refreshNight } from './nightapi.js';
 import { makeSocketTransport } from './transport-socket.js';
 import { makeMockTransport } from './transport-mock.js';
 
@@ -98,10 +99,15 @@ export function onServer(msg) {
       break;
 
     case 'night_state':
-      /* Sleep, screen, lightsd and the night run, as the server sees them
-         (docs/DREAM.md). Kept for the readout and the console; nothing on
-         screen draws it yet. */
-      state.night = msg;
+      /* Sleep, screen, lightsd, the night run and the morning, as the server
+         sees them (docs/DREAM.md). The night's views subscribe in nightapi.js. */
+      receiveNightState(msg);
+      break;
+
+    case 'morning':
+      /* The sunrise peaked: the morning screen opens (views/morning.js
+         decides whether this page plays the brief — only the kiosk does). */
+      receiveMorning(msg);
       break;
 
     case 'session':
@@ -181,7 +187,11 @@ export function onServer(msg) {
          touched and offer to put it back — a routine imported from a
          screenshot is the case this exists for, and a wrong one is expensive
          to repaint by hand. */
-      applyRemoteChange(typeof msg.section === 'string' ? msg.section : null, msg.undo);
+      /* The night's own sections are not in the app document: reload them
+         where they live. Proposals change at night and when they expire —
+         nobody needs a toast for that; a rule Kacey wrote does get one. */
+      if (msg.section === 'rules' || msg.section === 'proposals') refreshNight(msg.section);
+      if (msg.section !== 'proposals') applyRemoteChange(typeof msg.section === 'string' ? msg.section : null, msg.undo);
       break;
 
     default:

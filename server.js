@@ -24,8 +24,11 @@ import { RuleSchema, explainIssues } from './rules.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 import {
   startNight, stopNight, noteInteraction, noteSpeaking, noteVisibility, nightState, INTERACTION_KINDS,
-  startRun as startNight_run, push as pushNight,
+  startRun as startNight_run, push as pushNight, extendNight, nightLog, runSummary, settings as nightSettings,
 } from './night.js';
+import * as morning from './morning.js';
+import { targetDate } from './sleep.js';
+import { kvGet } from './db.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -33,7 +36,7 @@ import {
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
   XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS,
-  LOGICAL_DAY_START_HOUR,
+  LOGICAL_DAY_START_HOUR, LIGHTSD_URL,
 } from './config.js';
 
 // ---------------------------------------------------------------------------
@@ -531,6 +534,7 @@ app.get('/api/proposals', (req, res) => {
 app.post('/api/proposals/:id', express.json({ limit: '8kb' }), (req, res) => {
   try {
     const out = nightstore.decideProposal(req.params.id, req.body || {});
+    morning.syncProposals();
     if (out.task) broadcast({ type: 'app_changed', section: 'tasks' });
     broadcast({ type: 'app_changed', section: 'proposals' });
     pushNight();
@@ -652,6 +656,75 @@ app.post('/api/rules/preview', express.json({ limit: '64kb' }), (req, res) => {
     res.json({ items: nightstore.previewWindow({ from, to: new Date(from.getTime() + days * 86400000), now: from, rules }) });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * Morning mode (docs/DREAM.md §12) and the night's timeline.
+ * ------------------------------------------------------------------------- */
+
+app.get('/api/morning', (_req, res) => {
+  const hist = morning.morningHistory();
+  const recent = Object.fromEntries(Object.keys(hist).sort().slice(-14).map((k) => [k, hist[k]]));
+  res.json({ morning: morning.morningState(), history: recent });
+});
+
+app.post('/api/morning/tick', express.json({ limit: '2kb' }), (req, res) => {
+  try {
+    res.json({ ok: true, morning: morning.tick(String(req.body?.key || ''), !!req.body?.done) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/* "Přehrát brief teď": start the morning by hand — no lid check, no clock. */
+app.post('/api/morning/start', async (_req, res) => {
+  res.json({ ok: true, morning: await morning.startMorning(new Date(), { manual: true }) });
+});
+
+/* "Zpět do klidu": the screen goes dark now. */
+app.post('/api/morning/idle', (_req, res) => {
+  res.json({ ok: true, morning: morning.idle() });
+});
+
+/* Everything the Brief view's night timeline draws, for the night that plans `date`. */
+app.get('/api/night/cycle', (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : targetDate(new Date());
+  const rec = morning.morningState();
+  const seen = kvGet('lightsd.last', null) || {};
+  res.json({
+    date,
+    log: nightLog(date),
+    run: runSummary(nightstore.getRun(date)),
+    morning: rec && rec.logical_date === date ? rec : (morning.morningHistory()[date] || null),
+    wake_at: seen.wake_at || null,
+    morning_peak_at: seen.morning_peak_at || null,
+    settings: nightSettings(),
+  });
+});
+
+/* The sunrise's −15 / +15 in the Brief view: move lightsd's "morning" routine
+   on every lamp. lightsd stays ignorant of Kacey — this is an ordinary client
+   of its schedule API, the same call its own page makes. */
+app.post('/api/night/sunrise', express.json({ limit: '1kb' }), async (req, res) => {
+  const minutes = Math.round(Number(req.body?.minutes));
+  if (!Number.isFinite(minutes) || !minutes || Math.abs(minutes) > 180) return res.status(400).json({ error: 'minutes: ±1…180' });
+  try {
+    const list = await fetch(`${LIGHTSD_URL}/api/lights`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json());
+    let moved = 0;
+    for (const l of list.lights || []) {
+      const r = await fetch(`${LIGHTSD_URL}/api/lights/${encodeURIComponent(l.id)}/schedule/shift`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: 'morning', minutes }), signal: AbortSignal.timeout(5000),
+      });
+      if (r.ok) moved++;
+    }
+    if (!moved) return res.status(409).json({ error: 'žádná lampa nemá ranní rutinu (skupinu "morning")' });
+    const status = await fetch(`${LIGHTSD_URL}/api/status`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => ({}));
+    log(`sunrise moved ${minutes > 0 ? '+' : ''}${minutes} min on ${moved} lamp(s)`);
+    res.json({ ok: true, moved, wake_at: status.wake_at || null, morning_peak_at: status.morning_peak_at || null });
+  } catch (err) {
+    res.status(502).json({ error: `lightsd neodpovídá (${err.message})` });
   }
 });
 
@@ -1050,6 +1123,8 @@ wss.on('connection', (ws) => {
       if (INTERACTION_KINDS.includes(frame.kind)) noteInteraction(frame.kind);
     } else if (frame?.type === 'speaking') {
       noteSpeaking(frame.on === true);
+    } else if (frame?.type === 'morning_ack') {
+      if (typeof frame.logical_date === 'string') morning.ackMorning(frame.logical_date);
     } else if (frame?.type === 'visibility') {
       if (frame.state === 'visible' || frame.state === 'hidden') noteVisibility(frame.state);
     } else {
@@ -1088,13 +1163,22 @@ server.listen(PORT, HOST, () => {
   }
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
   try { nightstore.seedStarterRules(); } catch (err) { log(`starter rules not seeded: ${err.message}`); }
+  /* The brief is in Kacey's voice, rendered for the morning it is read in,
+     so {{TODAY}} is the day being planned. */
+  const briefPersona = (date) => {
+    const [y, m, d] = date.split('-').map(Number);
+    return renderPersona(persona, new Date(y, m - 1, d, 7, 0));
+  };
+  // Morning first, so the night's first tick already carries it.
+  extendNight(morning.initMorning({
+    broadcast,
+    push: pushNight,
+    settings: nightSettings,
+    persona: briefPersona,
+  }));
   startNight({
     broadcast,
-    // The brief is in Kacey's voice, rendered for the morning it is read in.
-    persona: (date) => {
-      const [y, m, d] = date.split('-').map(Number);
-      return renderPersona(persona, new Date(y, m - 1, d, 7, 0));
-    },
+    persona: briefPersona,
     onWrite: (section) => broadcast({ type: 'app_changed', section }),
   });
 });
