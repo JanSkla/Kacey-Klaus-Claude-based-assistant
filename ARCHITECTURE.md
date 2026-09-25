@@ -22,6 +22,7 @@ the file you actually need.
 - [The two import cycles](#the-two-import-cycles)
 - [Backend](#backend)
   - [The calendar day model](#the-calendar-day-model)
+  - [The night routine (D.R.E.A.M.)](#the-night-routine-dream)
 - [Invariants](#invariants)
 - [Adding things](#adding-things)
 - [Verifying a change](#verifying-a-change)
@@ -454,6 +455,22 @@ happening rather than only to months where something *starts*.
 event came from; `source_meta` is free-form JSON from whatever produced it, so it
 is parsed defensively and sent as `null` when it is absent, unparseable, or
 empty — the UI then has nothing to decide.
+
+### The night routine (D.R.E.A.M.)
+
+**Spec, not built yet: [docs/DREAM.md](docs/DREAM.md).** Read it before touching
+anything to do with sleep, the night run, rules, generated tasks, proposals or
+the morning brief. Every phase of that work (P1–P7) is specced there.
+
+In short: lightsd's sleep button starts a wind-down, and an hour with no
+interaction means asleep. Kacey then plans the next day once per logical date.
+Deterministic rules turn the calendar and routine into tasks, and a read-only
+reasoning pass proposes what the rules missed and writes the brief. At the
+sunrise lamp's brightest point she reads the brief on the bedside kiosk and
+shows a fixed morning checklist. It is **not** klaus_memory's consolidation
+`dream_run`, which it neither calls nor changes. It does change two things
+described above: the tasks section gains generated rows and optimistic
+concurrency, and new server modules join `server.js`.
 
 ## Invariants
 
