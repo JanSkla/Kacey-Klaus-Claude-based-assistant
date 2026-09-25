@@ -22,10 +22,12 @@ var END_SILENCE_MS = 1200;      // this much quiet after speech -> the utterance
 var MAX_MS = 20000;             // a request, not a dictation session
 var MIN_SPEECH_MS = 250;        // shorter than this is a cough, not a word
 
-/** Is the server's Whisper there? Asked once; the answer is cached. */
+/** Is the server's Whisper there? A yes is cached; a no is not — the sidecar
+    may simply be starting, or slow to answer on a machine that is swapping,
+    and a page that remembered "no" would never dictate until reloaded. */
 var healthy = null;
 export function serverSttAvailable() {
-  if (healthy !== null) return Promise.resolve(healthy);
+  if (healthy === true) return Promise.resolve(true);
   return fetch('/api/stt/health', { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (j) { healthy = !!(j && j.ok); return healthy; })

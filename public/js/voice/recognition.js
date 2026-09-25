@@ -36,14 +36,19 @@ function engine() {
 }
 /* Whether Whisper is there is only known after one request; when it is, the
    mic becomes usable on a page that had no engine at load. */
-serverSttAvailable().then(function (ok) {
-  if (!ok || !dom.micBtn) return;
-  if (!SR) {
-    dom.micBtn.disabled = false;
-    dom.micBtn.removeAttribute('data-unavailable');
-  }
-  if (!recBlocked) dom.micNote.textContent = t().micHint;
-});
+function askServerStt(tries) {
+  serverSttAvailable().then(function (ok) {
+    // Not there yet (starting, or slow): ask again for the next ten minutes.
+    if (!ok) { if (tries < 20) setTimeout(function () { askServerStt(tries + 1); }, 30000); return; }
+    if (!dom.micBtn) return;
+    if (!SR) {
+      dom.micBtn.disabled = false;
+      dom.micBtn.removeAttribute('data-unavailable');
+    }
+    if (!recBlocked) dom.micNote.textContent = t().micHint;
+  });
+}
+askServerStt(0);
 
 var rec = null;
 var recBlocked = false;    // permission denied / hardware missing -> stop offering it

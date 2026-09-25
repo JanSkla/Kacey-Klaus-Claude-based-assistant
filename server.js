@@ -1003,7 +1003,8 @@ function ttsText(input) {
 
 app.get('/api/stt/health', async (_req, res) => {
   try {
-    const r = await fetch(`${STT_URL}/health`, { signal: AbortSignal.timeout(3000) });
+    // Generous: on a machine that is swapping the sidecar answers late, not never.
+    const r = await fetch(`${STT_URL}/health`, { signal: AbortSignal.timeout(10000) });
     res.json(await r.json());
   } catch {
     res.json({ ok: false });
