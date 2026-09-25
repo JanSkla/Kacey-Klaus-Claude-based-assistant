@@ -73,6 +73,16 @@ export function decideProposal(id, body) {
   return send('/api/proposals/' + encodeURIComponent(id), 'POST', body).then(function (b) { return loadProposals().then(function () { return b; }); });
 }
 
+/* The learning loop (docs/DREAM.md §13): kinds accepted three times, with a rule draft each. */
+export function loadOffers() {
+  return json('/api/proposals/offers').then(function (b) { return b.offers || []; }).catch(function () { return []; });
+}
+
+/** Never offer this kind again: declined ('declined') or made into a rule ('ruled'). */
+export function closeOffer(kind, reason) {
+  return send('/api/proposals/offers/' + encodeURIComponent(kind) + '/close', 'POST', { reason: reason }).catch(function () { return null; });
+}
+
 export function loadRules() {
   return json('/api/rules').then(function (b) { night.rulesets = b.rulesets || []; emit('rules'); return night.rulesets; })
     .catch(function (e) { console.warn('[kacey] rules unavailable: ' + e.message); return night.rulesets; });

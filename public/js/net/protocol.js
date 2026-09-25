@@ -191,7 +191,7 @@ export function onServer(msg) {
          where they live. Proposals change at night and when they expire —
          nobody needs a toast for that; a rule Kacey wrote does get one. */
       if (msg.section === 'rules' || msg.section === 'proposals') refreshNight(msg.section);
-      if (msg.section !== 'proposals') applyRemoteChange(typeof msg.section === 'string' ? msg.section : null, msg.undo);
+      if (msg.section !== 'proposals') applyRemoteChange(typeof msg.section === 'string' ? msg.section : null, msg.undo, msg.quiet === true);
       break;
 
     default:

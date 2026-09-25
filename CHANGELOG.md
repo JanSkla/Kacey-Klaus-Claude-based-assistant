@@ -19,6 +19,15 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The night routine, phase P7: learning**
+- The night's reasoning pass now sees the last 30 decisions about its
+  proposals, so what was rejected doesn't come back.
+- When the same kind of proposal has been accepted three times in 30 days,
+  accepting it asks "Tohle přijímáš pravidelně — udělat z toho pravidlo?".
+  Yes opens the rules editor with a rule drafted from those examples
+  (keywords, timing, task); no means it isn't offered again.
+- Accepting a proposal no longer shows "Úkoly — změnila Kacey".
+
 **The night routine, phase P6: the morning, and every new screen** (from Claude Design "Kacey DREAM")
 - At the sunrise's brightest point the bedside screen comes on and the kiosk
   reads the night's brief aloud. The morning screen shows the time, the brief

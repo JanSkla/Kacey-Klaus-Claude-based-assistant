@@ -9,9 +9,10 @@ Like [ARCHITECTURE.md](../ARCHITECTURE.md), it explains structure and invariants
 not every line. The reasoning sits next to each decision, so a later session can
 tell a deliberate choice from an accident.
 
-**Status:** P1–P6 have landed: lightsd, the screen and lid, sleep detection,
-rules, the night run and proposals, and morning mode with all its screens. P7
-(learning) is planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
+**Status:** all seven phases have landed in code: lightsd, the screen and lid,
+sleep detection, rules, the night run and proposals, morning mode with its
+screens, and the learning loop. What remains is on kaceybody: the runbook
+steps, the restarts, and the first real night and morning. Phases P1–P7 are in [§16](#16-phases). A phase that ships
 moves its row from *planned* to *done* and records the commit.
 
 ## Contents
@@ -1243,6 +1244,26 @@ exists.
   schema, preview and `onWrite`). The offer is made once per kind. Declining is
   recorded (kv `learning.declined_kinds`).
 
+**As built in P7:**
+- `nightplan.js` holds `decisionsForModel`, `ruleOffers` (≥ 3 accepted or
+  edited in 30 days, most accepted first) and `draftRuleFromExamples`, all
+  covered by `test/learning.mjs`. `night.js` hands the last 30 decisions to
+  every run by default.
+- **The offer is in proposal review, right after the accept that made the kind
+  regular** (Claude Design 2c), not on the morning screen itself. That is where
+  the decision is being made.
+- The draft's keywords are the title words all examples share (else those in
+  at least two). Its timing is "evening before" / "morning of" / "N min before
+  start", from where the accepted tasks sat relative to the event. To tell
+  those apart, `kacey_proposal` gained `about_start` (added by the migration on
+  an older table).
+- Declined and ruled kinds share one list, kv `learning.closed_kinds` (not
+  `declined_kinds`). A kind is marked "ruled" only when the prefilled rule is
+  actually saved. Endpoints: `GET /api/proposals/offers` and
+  `POST /api/proposals/offers/:kind/close { reason }`.
+- Accepting a proposal reloads the task lists quietly (`app_changed` with
+  `quiet: true`). The owner did it, so there is no "změnila Kacey" toast.
+
 ---
 
 ## 14. Settings
@@ -1359,7 +1380,7 @@ entry, and this document updated if the build changed the design.
 | **P4** | Rules (§8), the task schema (§9): tables, migration, `writeTasks` carry-over, suppress, `tasks.rev`/409, `routine-cats.js`, `calendar-days.js`, `rules.js`, the agent tools, starters, the persona, tests | Kacey | — | done. Also: the rules HTTP endpoints of §15 (for P6's editor), `nightstore.js` |
 | **P5** | The night run (§10), proposals (§11): `dream.js`, `nightstore.js`, runs, catch-up, stuck reset, reasoning, brief draft, report, endpoints, readout rows, tests | Kacey | P3, P4 | done. Pure decisions in `nightplan.js`; the readout rows moved to P6 |
 | **P6** | Morning mode (§12) and the UI from Claude Design: morning screen, proposal review, rules editor, the real cycle in Brief, task origin/reason/note in rows, the settings `srow`s, the report view | Kacey | P5 | done. The report is shown as the Brief's timeline and the controller's "Stav noci", not as a view of its own |
-| **P7** | The learning loop (§13) | Kacey | P6 | planned |
+| **P7** | The learning loop (§13) | Kacey | P6 | done |
 
 **What counts as done**, beyond the tests:
 

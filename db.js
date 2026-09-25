@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS kacey_proposal (
   reason        TEXT NOT NULL DEFAULT '',
   about_event   TEXT,
   about_title   TEXT NOT NULL DEFAULT '',
+  about_start   TEXT,
   about_end     TEXT,
   kind          TEXT NOT NULL DEFAULT '',
   confidence    REAL NOT NULL DEFAULT 0,
@@ -217,6 +218,11 @@ function migrate(h) {
      before this, when there is no source_key yet to index. */
   h.exec(`CREATE UNIQUE INDEX IF NOT EXISTS kacey_task_source_idx
             ON kacey_task (source_key) WHERE source_key IS NOT NULL`);
+
+  /* The learning loop (docs/DREAM.md §13) needs when the event started, to
+     tell "the evening before" from "an hour before". */
+  const propCols = h.prepare('PRAGMA table_info(kacey_proposal)').all().map((c) => c.name);
+  if (propCols.length && !propCols.includes('about_start')) h.exec('ALTER TABLE kacey_proposal ADD COLUMN about_start TEXT');
 }
 
 /* The night routine's columns on an existing task table. ADD COLUMN, not a

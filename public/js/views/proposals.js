@@ -13,7 +13,8 @@ import { $ } from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import { go, onEnter, currentView } from '../ui/router.js';
 import { say } from '../ui/toast.js';
-import { night, onNight, loadProposals, decideProposal } from '../net/nightapi.js';
+import { night, onNight, loadProposals, decideProposal, loadOffers, closeOffer } from '../net/nightapi.js';
+import { editRuleDraft } from './rules.js';
 import { addDays, logicalToday, dueLabel } from '../core/due.js';
 
 var session = [];          // this sitting's proposals, in order, with what was decided
@@ -22,6 +23,8 @@ var editing = false;
 var draft = { label: '', date: '', time: '' };
 var backTimer = 0;
 var busy = false;
+var offer = null;          // { kind, count, draft, decided } after an accept that made a kind "regular"
+var offered = [];          // kinds already offered in this sitting
 
 function pending() { return night.proposals.filter(function (p) { return p.status === 'pending'; }); }
 
@@ -36,7 +39,7 @@ function startSession() {
   if (cursor < 0) cursor = session.length;
 }
 
-function current() { return session[cursor] || null; }
+function current() { return offer ? offer.decided : (session[cursor] || null); }
 
 function confidence(c) {
   var n = Math.max(1, Math.min(5, Math.round(c * 5)));
@@ -84,14 +87,16 @@ function renderCard() {
   if (!live) { renderFinal(); return; }
 
   var p = s.p;
-  var last = session.slice(0, cursor).reverse().find(function (x) { return x.result && x.result !== 'rejected'; });
-  $('pAccepted').hidden = !last || session.indexOf(last) !== cursor - 1;
+  var last = offer ? offer.decided : session.slice(0, cursor).reverse().find(function (x) { return x.result && x.result !== 'rejected'; });
+  $('pAccepted').hidden = !last || (!offer && session.indexOf(last) !== cursor - 1);
   if (last) $('pAcceptedText').textContent = 'Přijato · ' + last.p.label + (last.p.due_at ? ', ' + dueLabel(last.p.due_at) : '');
 
   $('pView').hidden = editing;
   $('pEdit').hidden = !editing;
-  $('pActs').hidden = editing;
+  $('pActs').hidden = editing || !!offer;
   $('pEditActs').hidden = !editing;
+  $('pOffer').hidden = !offer;
+  if (offer) $('pOfferSum').textContent = offerSummary(offer);
 
   $('pName').textContent = p.label;
   $('pDue').textContent = p.due_at ? dueLabel(p.due_at) : 'bez termínu';
@@ -138,6 +143,37 @@ function render() {
   renderHead(); renderCard();
 }
 
+/* ---- the offer (docs/DREAM.md §13; Claude Design 2c) ------------------------------ */
+
+function offerSummary(o) {
+  var d = o.draft, t = d.timing;
+  var when = t.anchor === 'evening_before' ? 'večer předem ' + t.at : t.anchor === 'morning_of' ? 'ráno v den ' + t.at : t.offset_min + ' min před';
+  return d.name + ' → ' + when + ' → ' + d.task.label + ' · přijato ' + o.count + '× za 30 dní';
+}
+
+/* After an accept: is this kind now "regular"? Then the card stays up with
+   the offer instead of moving on. */
+function maybeOffer(s) {
+  var kind = s.p.kind;
+  if (!kind || offered.indexOf(kind) !== -1) return Promise.resolve(false);
+  return loadOffers().then(function (list) {
+    var o = list.find(function (x) { return x.kind === kind; });
+    if (!o) return false;
+    offered.push(kind);
+    offer = { kind: o.kind, count: o.count, draft: o.draft, decided: s };
+    return true;
+  });
+}
+
+function endOffer(reason) {
+  var o = offer;
+  offer = null;
+  if (!o) return;
+  if (reason === 'declined') closeOffer(o.kind, 'declined');
+  render();
+  if (reason === 'rule') editRuleDraft(o.draft, o.kind);
+}
+
 /* ---- deciding -------------------------------------------------------------------- */
 
 function decide(action) {
@@ -157,8 +193,9 @@ function decide(action) {
     if (out && out.proposal) s.p = out.proposal;
     editing = false;
     cursor++;
-    render();
-  }).catch(function (e) { say('Nepovedlo se: ' + e.message); })
+    return s.result === 'rejected' ? false : maybeOffer(s);
+  }).then(function () { render(); })
+    .catch(function (e) { say('Nepovedlo se: ' + e.message); })
     .finally(function () { busy = false; });
 }
 
@@ -182,9 +219,11 @@ export function initProposals() {
   $('pWhenDate').addEventListener('change', function () { draft.date = $('pWhenDate').value; draft.label = $('pEditName').value; });
   $('pWhenTime').addEventListener('change', function () { draft.time = $('pWhenTime').value; });
   $('pBack').addEventListener('click', function () { go('morning'); });
+  $('pOfferYes').addEventListener('click', function () { endOffer('rule'); });
+  $('pOfferNo').addEventListener('click', function () { endOffer('declined'); });
 
   onEnter('proposals', function () {
-    session = []; cursor = 0; editing = false;
+    session = []; cursor = 0; editing = false; offer = null; offered = [];
     loadProposals().then(function () { startSession(); render(); });
     render();
   });

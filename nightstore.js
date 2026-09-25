@@ -387,12 +387,12 @@ export function taskBySourceKey(sourceKey) {
 export function insertProposals(date, list) {
   const stamp = now();
   const ins = open().prepare(`INSERT INTO kacey_proposal
-      (proposal_id, logical_date, label, due_at, reason, about_event, about_title, about_end, kind, confidence, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`);
+      (proposal_id, logical_date, label, due_at, reason, about_event, about_title, about_start, about_end, kind, confidence, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`);
   const ids = [];
   for (const p of list) {
     const id = newId('pr_');
-    ins.run(id, date, p.label, p.due_at, p.reason || '', p.about_event, p.about_title || '', p.about_end || null,
+    ins.run(id, date, p.label, p.due_at, p.reason || '', p.about_event, p.about_title || '', p.about_start || null, p.about_end || null,
       p.kind || '', Number(p.confidence) || 0, stamp);
     ids.push(id);
   }
@@ -421,7 +421,7 @@ export function proposalsForEvents(eventIds) {
 
 /** The last `limit` decided proposals — the learning loop's input (§13). */
 export function recentDecisions(limit = 30) {
-  return open().prepare(`SELECT proposal_id, label, kind, about_title, status, due_at, final_task_id, decided_at
+  return open().prepare(`SELECT proposal_id, label, kind, about_title, about_start, status, due_at, final_task_id, decided_at
                          FROM kacey_proposal WHERE status IN ('accepted','rejected','edited')
                          ORDER BY decided_at DESC LIMIT ?`).all(limit);
 }

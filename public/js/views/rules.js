@@ -20,7 +20,7 @@ import { CATS, CATEGORY_KEYS } from '../core/routine-cats.js';
 import { go, onEnter, currentView } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import {
-  night, onNight, loadRules, saveRule, deleteRule, saveRuleset, previewRule
+  night, onNight, loadRules, saveRule, deleteRule, saveRuleset, previewRule, closeOffer
 } from '../net/nightapi.js';
 
 var setId = null;          // the ruleset open on the left
@@ -30,6 +30,7 @@ var saved = null;          // JSON of what is stored, to tell "uloženo" from "n
 var previewTimer = 0;
 var previewSeq = 0;
 var deleteArmed = 0;
+var offerKind = null;      // the rule being written came from a learning-loop offer (§13)
 
 var TIMING = [
   { key: 'evening_before', label: 'Večer předem', at: '20:00' },
@@ -340,6 +341,8 @@ function save() {
   if (ruleId === 'new') body.ruleset_id = setId;
   saveRule(ruleId === 'new' ? null : ruleId, body).then(function (b) {
     if (b.rule) { ruleId = b.rule.id; draft = toDraft(b.rule); saved = JSON.stringify(payload(draft)); }
+    // Made from an offer: that kind is a rule now, and is not offered again.
+    if (offerKind) { closeOffer(offerKind, 'ruled'); offerKind = null; }
     say('Pravidlo uloženo.');
     renderAll();
     schedulePreview();
@@ -427,6 +430,24 @@ export function initRules() {
     if (ruleId && ruleId !== 'new' && !findRule(ruleId)) { ruleId = null; draft = null; saved = null; }
     else if (ruleId && ruleId !== 'new' && !isDirty()) { draft = toDraft(findRule(ruleId)); saved = JSON.stringify(payload(draft)); }
     renderAll();
+  });
+}
+
+/**
+ * Open the editor on a new rule, prefilled — the learning loop's "Vytvořit
+ * pravidlo" (§13). Saved through the same endpoint and schema as every rule.
+ */
+export function editRuleDraft(rule, kind) {
+  go('rules');
+  loadRules().then(function () {
+    if (!setId && sets().length) setId = sets()[0].id;
+    ruleId = 'new';
+    draft = toDraft(Object.assign({ enabled: true }, rule));
+    saved = null;
+    offerKind = kind || null;
+    setStep('edit');
+    renderAll();
+    schedulePreview();
   });
 }
 

@@ -22,7 +22,7 @@ import { diffLightsd, makeLightsdClient } from './lightsd.js';
 import * as screen from './screen.js';
 import * as nightstore from './nightstore.js';
 import { runNight } from './dream.js';
-import { expiredProposals } from './nightplan.js';
+import { expiredProposals, decisionsForModel } from './nightplan.js';
 
 const log = (...a) => console.log('[night]', ...a);
 
@@ -248,7 +248,9 @@ export function push() {
  */
 export function startNight(options = {}) {
   if (typeof options.broadcast === 'function') broadcast = options.broadcast;
-  deps = { ...deps, ...options };
+  /* The learning loop (§13): the last ~30 decisions go into every reasoning
+     pass, so what was rejected does not come back. */
+  deps = { decisions: () => decisionsForModel(nightstore.recentDecisions(30)), ...deps, ...options };
   sleep = normalizeSleep(kvGet('night.sleep', null), new Date());
   log(`starting: ${describe(sleep)}; lightsd at ${LIGHTSD_URL}`);
 

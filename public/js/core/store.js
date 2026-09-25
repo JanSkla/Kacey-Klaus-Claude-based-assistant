@@ -132,8 +132,10 @@ export function flip(group, key) {
  * user gets one click to put it back — a routine imported from a screenshot is
  * the case this exists for.
  */
-export async function applyRemoteChange(section, undo) {
+export async function applyRemoteChange(section, undo, quiet) {
   await load();
+  // The owner's own action on another screen (a proposal accepted): reload, say nothing.
+  if (quiet) return;
 
   var names = {
     routine: 'Rutina', tasks: 'Úkoly', journal: 'Deník',

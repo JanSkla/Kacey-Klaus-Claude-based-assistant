@@ -276,6 +276,7 @@ HTTP:
   (`npm run night:run`, `-- --force` to redo a done day). Not a tool: the persona never gets it.
 - `GET /api/night/runs` → recent runs with their reports
 - `GET /api/proposals?status=pending` · `POST /api/proposals/:id { action: accept|edit|reject, label?, due_at? }`
+- `GET /api/proposals/offers` → kinds accepted 3× with a rule draft · `POST /api/proposals/offers/:kind/close { reason: declined|ruled }`
 - `GET /api/morning` · `POST /api/morning/tick { key, done }` · `POST /api/morning/start` (by hand) · `POST /api/morning/idle`
 - `GET /api/night/cycle` → the night's timeline · `POST /api/night/sunrise { minutes }` → moves lightsd's "morning" routine
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when

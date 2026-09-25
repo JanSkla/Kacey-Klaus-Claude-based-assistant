@@ -272,6 +272,17 @@ await test('editing changes label and due; rejecting makes no task', () => {
   assert.equal(rejected.proposal.status, 'rejected');
 });
 
+await test('recent decisions reach the reasoning pass (the learning loop)', async () => {
+  const D5 = '2030-02-07';
+  addEvent.run('ev_opera', 'Opera', at(38, 19), at(38, 22), 'cloud_safe', 'osobní', '{}', null);
+  let seen = null;
+  planner = (input) => { seen = input; return { duplicates: [], proposals: [] }; };
+  const decisions = () => [{ label: 'Koupit dárek', kind: 'buy_gift', about: 'Oslava', decision: 'zamítnuto' }];
+  await runNight({ date: D5, trigger: 'sleep', now: new Date(2030, 1, 7, 0, 40) }, { ...deps, decisions });
+  assert.ok(seen, 'the planner was asked');
+  assert.deepEqual(seen.prior_decisions, decisions());
+});
+
 cal.close();
 db.close();
 rmSync(dir, { recursive: true, force: true });

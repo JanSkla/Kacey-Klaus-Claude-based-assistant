@@ -28,7 +28,8 @@ import {
 } from './night.js';
 import * as morning from './morning.js';
 import { targetDate } from './sleep.js';
-import { kvGet } from './db.js';
+import { kvGet, kvSet } from './db.js';
+import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -531,11 +532,33 @@ app.get('/api/proposals', (req, res) => {
   res.json({ proposals: nightstore.listProposals({ status, limit: Number(req.query.limit) || 50 }) });
 });
 
+/* The learning loop (§13): kinds of proposal accepted three times, each
+   with a rule draft built from the examples. Declined or made into a rule,
+   a kind is not offered again. */
+function closedKinds() { return kvGet('learning.closed_kinds', []) || []; }
+
+app.get('/api/proposals/offers', (_req, res) => {
+  const offers = ruleOffers(nightstore.recentDecisions(100), { closed: closedKinds() })
+    .map((o) => ({ kind: o.kind, count: o.count, draft: draftRuleFromExamples(o.examples), labels: o.examples.map((e) => e.label) }));
+  res.json({ offers });
+});
+
+app.post('/api/proposals/offers/:kind/close', express.json({ limit: '1kb' }), (req, res) => {
+  const kind = String(req.params.kind || '');
+  if (!/^[a-z0-9_]{3,40}$/.test(kind)) return res.status(400).json({ error: 'neplatný druh' });
+  const closed = closedKinds();
+  if (!closed.includes(kind)) closed.push(kind);
+  kvSet('learning.closed_kinds', closed);
+  log(`rule offer for "${kind}" closed (${req.body?.reason === 'ruled' ? 'made into a rule' : 'declined'})`);
+  res.json({ ok: true });
+});
+
 app.post('/api/proposals/:id', express.json({ limit: '8kb' }), (req, res) => {
   try {
     const out = nightstore.decideProposal(req.params.id, req.body || {});
     morning.syncProposals();
-    if (out.task) broadcast({ type: 'app_changed', section: 'tasks' });
+    // Quiet: the owner did this, so no "změnila Kacey" toast — pages just reload.
+    if (out.task) broadcast({ type: 'app_changed', section: 'tasks', quiet: true });
     broadcast({ type: 'app_changed', section: 'proposals' });
     pushNight();
     res.json({ ok: true, ...out });

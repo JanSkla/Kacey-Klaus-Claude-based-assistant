@@ -936,6 +936,12 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
 /* The quietest of three: still a real button, one step below the default. */
 .btn--quiet { background: var(--l1); color: var(--ink2); }
 
+.propoffer { display: flex; align-items: center; gap: 20px; padding: 16px 20px; background: var(--l1); border: 1px solid var(--acc); }
+.propoffer__text { flex: 1; min-width: 0; }
+.propoffer__text b { display: block; font-size: 22px; font-weight: 600; }
+.propoffer__text em { display: block; margin-top: 4px; font-size: 16px; font-style: normal; color: var(--ink2); }
+.propoffer .btn { min-height: 60px; font-size: 18px; }
+
 .propresults { display: flex; flex-direction: column; max-width: 760px; border-top: 1px solid var(--line); }
 .propresult { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 20px; }
 .propresult span:first-child { flex: 1; min-width: 0; }
@@ -1623,6 +1629,10 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .propacts .btn { min-height: 48px; font-size: 15px; }
   .propacts .btn--accent { grid-column: 1 / -1; min-height: 56px; font-size: 16px; }
   .propresult { font-size: 14px; }
+  .propoffer { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; }
+  .propoffer__text b { font-size: 16px; }
+  .propoffer__text em { font-size: 13px; }
+  .propoffer .btn { min-height: 48px; font-size: 15px; }
   .propresult__res { font-size: 13px; }
 
   /* ---- the rules editor: one pane at a time (3f sets · 3g a set · 3h the editor) ---- */

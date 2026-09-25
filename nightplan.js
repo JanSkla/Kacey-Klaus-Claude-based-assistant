@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 import { normalizeDue, addDays } from './public/js/core/due.js';
 import { dayRangeOf } from './calendar-days.js';
-import { eventMatchesRule, normalizeText, logicalStart } from './rules.js';
+import { eventMatchesRule, normalizeText, logicalStart, tokens } from './rules.js';
 
 export const MAX_PROPOSALS = 5;
 export const OVERLAP_NOTE = 'Možná jen jedna — kalendář a rutina se překrývají.';
@@ -168,7 +168,7 @@ export function postValidate({ output, eligible, asked, prior, now }) {
     const key = `${p.about_event}|${normalizeText(p.label).trim()}`;
     if (seen.has(key)) { dropped.push({ label: p.label, why: 'už navrženo' }); continue; }
     seen.add(key);
-    keep.push({ ...p, due_at: due, about_title: ev.title, about_end: ev.ends_at || ev.starts_at });
+    keep.push({ ...p, due_at: due, about_title: ev.title, about_start: ev.starts_at, about_end: ev.ends_at || ev.starts_at });
   }
 
   const askedKeys = new Set(asked.map((d) => d.keys.slice().sort().join('|')));
@@ -235,4 +235,87 @@ export function briefContext({ date, events, tasks, created, pendingProposals, i
   if (pendingProposals) parts.push(`Návrhy od Kacey čekající na potvrzení: ${pendingProposals}.`);
   if (injected.weather) parts.push('Počasí: použij, co víš, nebo ho vynech, když ho nemáš.');
   return parts.length ? '\n\nData k dispozici:\n' + parts.join('\n\n') : '';
+}
+
+/* ---- the learning loop (docs/DREAM.md §13) -------------------------------- */
+
+export const OFFER_AFTER = 3;
+export const OFFER_WINDOW_DAYS = 30;
+
+/** The last decisions, as the reasoning pass reads them: what was rejected should not come back. */
+export function decisionsForModel(decisions) {
+  return decisions.map((d) => ({
+    label: d.label, kind: d.kind, about: d.about_title,
+    decision: d.status === 'edited' ? 'upraveno a přijato' : d.status === 'accepted' ? 'přijato' : 'zamítnuto',
+    due_at: d.due_at,
+  }));
+}
+
+/**
+ * Kinds accepted (or edited) at least OFFER_AFTER times in the last
+ * OFFER_WINDOW_DAYS, not declined and not already made into a rule. Most
+ * accepted first. Each carries its examples, newest first.
+ */
+export function ruleOffers(decisions, { now = new Date(), closed = [] } = {}) {
+  const since = now.getTime() - OFFER_WINDOW_DAYS * 86400000;
+  const byKind = new Map();
+  for (const d of decisions) {
+    if (!d.kind || closed.includes(d.kind)) continue;
+    if (d.status !== 'accepted' && d.status !== 'edited') continue;
+    if (d.decided_at && new Date(d.decided_at).getTime() < since) continue;
+    (byKind.get(d.kind) || byKind.set(d.kind, []).get(d.kind)).push(d);
+  }
+  return [...byKind.entries()]
+    .filter(([, list]) => list.length >= OFFER_AFTER)
+    .map(([kind, list]) => ({ kind, count: list.length, examples: list }))
+    .sort((a, b) => b.count - a.count);
+}
+
+const STOP = new Set(['s', 'se', 'na', 'do', 'od', 'za', 'u', 'v', 've', 'a', 'i', 'k', 'ke', 'z', 'ze', 'po', 'pro', 'the', 'and']);
+
+function round15(m) { return Math.round(m / 15) * 15; }
+function hhmm(mins) { const m = ((mins % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+function median(xs) { const s = xs.slice().sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; }
+
+/**
+ * A rule draft from the examples of one kind — what the owner kept accepting.
+ * Keywords: the words the events' titles share (all of them if any, else those
+ * in at least two). Timing: the due time the evening before, the morning of,
+ * or a fixed time before the start, from where the accepted tasks sat. Task:
+ * the most recent final label. The result goes through the same schema and
+ * code path as rule_upsert when saved.
+ */
+export function draftRuleFromExamples(examples) {
+  const titles = examples.map((e) => new Set(tokens(e.about_title).filter((t) => t.length >= 3 && !STOP.has(t))));
+  const counts = new Map();
+  for (const set of titles) for (const t of set) counts.set(t, (counts.get(t) || 0) + 1);
+  let words = [...counts.entries()].filter(([, n]) => n === titles.length).map(([t]) => t);
+  if (!words.length) words = [...counts.entries()].filter(([, n]) => n >= 2).map(([t]) => t);
+  words = words.slice(0, 5);
+
+  const timed = examples.filter((e) => e.due_at && e.due_at.length > 10 && e.about_start);
+  let timing = { anchor: 'evening_before', at: '20:00' };
+  if (timed.length) {
+    const rel = timed.map((e) => {
+      const due = new Date(e.due_at);
+      const start = new Date(e.about_start);
+      const dueDay = e.due_at.slice(0, 10);
+      const startDay = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      return { before: Math.round((start - due) / 60000), dueMin: due.getHours() * 60 + due.getMinutes(), sameDay: dueDay === startDay };
+    });
+    const evening = rel.filter((r) => !r.sameDay && r.dueMin >= 17 * 60);
+    const morning = rel.filter((r) => r.sameDay && r.dueMin < 10 * 60 && r.before >= 90);
+    if (evening.length * 2 > rel.length) timing = { anchor: 'evening_before', at: hhmm(round15(median(evening.map((r) => r.dueMin)))) };
+    else if (morning.length * 2 > rel.length) timing = { anchor: 'morning_of', at: hhmm(round15(median(morning.map((r) => r.dueMin)))) };
+    else timing = { anchor: 'before_start', offset_min: Math.max(0, Math.min(1440, round15(median(rel.map((r) => r.before))))) };
+  }
+
+  const label = examples[0].label;
+  const name = words.length ? words[0].charAt(0).toUpperCase() + words[0].slice(1) : label.split(/\s+/).slice(0, 2).join(' ');
+  return {
+    name,
+    trigger: { sources: ['calendar'], calendar_match: words.length ? words : [label.split(/\s+/).pop().toLowerCase()] },
+    timing,
+    task: { label },
+  };
 }
