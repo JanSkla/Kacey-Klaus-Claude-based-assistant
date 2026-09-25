@@ -235,6 +235,12 @@ function routineOccurrences(trigger, routine, dates) {
   return out;
 }
 
+/** Would this rule's trigger fire on this calendar event at all (whatever the window)? */
+export function eventMatchesRule(rule, ev) {
+  const range = dayRangeOf(ev);
+  return !!range && calendarOccurrences(rule.trigger, [ev], new Set([range.first])).length > 0;
+}
+
 /** When a task for this occurrence is due, per the rule's timing. */
 export function dueFor(timing, occ) {
   const anchor = timing.anchor;

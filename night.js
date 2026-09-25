@@ -9,29 +9,39 @@
  * supervised by polling: a timer dies with the process, a tick cannot get
  * wedged.
  *
- * The night run itself is a stub until phase P5 (docs/DREAM.md §10): it logs,
- * and records the target date in `night.last_run` so that it happens once per
- * date — which is the part the fallback and the sleep trigger depend on now.
+ * The tick also starts the night run (dream.js) — on falling asleep, at the
+ * fallback hour, as a catch-up after a missed night, or as the one automatic
+ * retry of a failed run — and expires proposals whose event has passed.
+ * docs/DREAM.md §7 and §10.
  */
 
 import { kvGet, kvSet } from './db.js';
-import { LIGHTSD_URL, LOGICAL_DAY_START_HOUR, NIGHT_DEFAULTS, NIGHT_TICK_MS } from './config.js';
-import { sleepStep, normalizeSleep, targetDate, fallbackDue } from './sleep.js';
+import { LIGHTSD_URL, NIGHT_DEFAULTS, NIGHT_TICK_MS, DREAM_STUCK_HOURS } from './config.js';
+import { sleepStep, normalizeSleep, targetDate, fallbackDue, catchupDue } from './sleep.js';
 import { diffLightsd, makeLightsdClient } from './lightsd.js';
 import * as screen from './screen.js';
+import * as nightstore from './nightstore.js';
+import { runNight } from './dream.js';
+import { expiredProposals } from './nightplan.js';
 
 const log = (...a) => console.log('[night]', ...a);
 
 /** What the page may report as an interaction. A mouse move is not one. */
 export const INTERACTION_KINDS = ['pointer', 'key', 'touch', 'wake', 'message'];
 
+/* A failed run is retried automatically once, but not in a tight loop: a
+   model outage at 01:00 is unlikely to be over 30 s later. */
+const RETRY_AFTER_MS = 10 * 60000;
+
 let sleep = null;
 let lightsd = null;
 let lightsdPrev = null;        // the previous lightsd status on the current connection
 let tickTimer = null;
 let broadcast = () => {};
+let deps = {};                 // runner, persona, onWrite — handed to dream.js
+let inFlight = null;           // { date, promise } while a run is going in this process
 
-function settings() {
+export function settings() {
   const stored = (kvGet('settings', {}) || {}).night;
   return { ...NIGHT_DEFAULTS, ...(stored && typeof stored === 'object' ? stored : {}) };
 }
@@ -77,24 +87,33 @@ function rememberLightsd(status) {
   kvSet('lightsd.last', { ...seen, at: new Date().toISOString() });
 }
 
-/* ---- the run (a stub until P5) ----------------------------------------- */
+/* ---- the run ------------------------------------------------------------- */
 
-function startRun(trigger, now = new Date()) {
-  if (!settings().enabled) {
+/**
+ * Start the night run for the day `at` plans (the noon rule, sleep.js). One
+ * at a time in this process; the database claim in dream.js is what makes
+ * it once per date across restarts and races.
+ */
+export function startRun(trigger, at = new Date(), { force = false, date } = {}) {
+  if (trigger !== 'manual' && !settings().enabled) {
     log(`night run skipped (${trigger}): switched off in settings`);
-    return false;
+    return null;
   }
-  const date = targetDate(now);
-  const last = kvGet('night.last_run', null);
-  if (last && last.logical_date === date) {
-    log(`night run for ${date} already happened (${last.trigger}); not again (${trigger})`);
-    return false;
+  const target = date || targetDate(at);
+  if (inFlight) {
+    log(`night run for ${target} (${trigger}) not started: ${inFlight.date} is still running`);
+    return inFlight.promise;
   }
-  const record = { logical_date: date, trigger, started_at: now.toISOString(), status: 'done', stub: true };
-  kvSet('night.last_run', record);
-  log(`night run for ${date} (trigger: ${trigger}) — stub, nothing planned yet`);
+  if (trigger !== 'manual' && !nightstore.canAutoStart(target)) {
+    log(`night run for ${target} already happened; not again (${trigger})`);
+    return null;
+  }
+  const promise = runNight({ date: target, trigger, force }, deps)
+    .catch((err) => { log(`night run crashed: ${err.stack || err.message}`); return null; })
+    .finally(() => { inFlight = null; push(); });
+  inFlight = { date: target, promise };
   push();
-  return true;
+  return promise;
 }
 
 /* ---- the tick ---------------------------------------------------------- */
@@ -103,14 +122,43 @@ function tick() {
   const now = new Date();
   try {
     apply({ type: 'tick' }, now);
-    const last = kvGet('night.last_run', null);
-    if (fallbackDue(now, settings(), last && last.logical_date, LOGICAL_DAY_START_HOUR)) {
-      startRun('fallback', now);
+
+    const s = settings();
+    const target = targetDate(now);
+    if (fallbackDue(now, s, nightstore.canAutoStart(target) ? null : target)) startRun('fallback', now);
+
+    // The one automatic retry of a failed run, while the night is still on.
+    const run = nightstore.getRun(target);
+    if (run && run.status === 'failed' && !inFlight && nightstore.canAutoStart(target)
+        && now.getTime() - new Date(run.finished_at || run.started_at).getTime() > RETRY_AFTER_MS
+        && (sleep.state === 'asleep' || fallbackDue(now, s, null))) {
+      log(`retrying the failed night run for ${target}`);
+      startRun(run.trigger, now);
     }
+
+    const expired = expiredProposals(nightstore.listProposals({ status: 'pending', limit: 200 }), now);
+    if (expired.length) {
+      nightstore.markExpired(expired.map((p) => p.proposal_id), now);
+      log(`${expired.length} proposal(s) expired: their event has passed`);
+      if (deps.onWrite) deps.onWrite('proposals');
+      push();
+    }
+
+    if (deps.onTick) deps.onTick(now);
   } catch (err) {
     // One bad tick must not stop the next one.
-    log(`tick failed: ${err.message}`);
+    log(`tick failed: ${err.stack || err.message}`);
   }
+}
+
+/* A missed night, caught up at boot — only while its morning is still ahead. */
+function catchUp(now = new Date()) {
+  const target = targetDate(now);
+  const peak = (kvGet('lightsd.last', null) || {}).morning_peak_at;
+  if (!catchupDue(now, { peak, fallback: settings().fallback })) return;
+  if (!nightstore.canAutoStart(target)) return;
+  log(`catching up the night run for ${target}`);
+  startRun('catchup', now);
 }
 
 /* ---- the outside world ------------------------------------------------- */
@@ -123,6 +171,7 @@ export function noteInteraction(kind) {
   // A tap or a key already woke it through the OS.
   if (kind === 'wake') screen.on('wake word');
   apply({ type: 'interaction', kind });
+  if (deps.onInteraction) deps.onInteraction(kind);
 }
 
 /** The page started or stopped speaking. Keeps the panel lit; not an interaction. */
@@ -137,37 +186,68 @@ export function noteVisibility(state) {
   log(`page visibility: ${state} (screen ${screen.status().state})`);
 }
 
+function runSummary(r) {
+  if (!r) return null;
+  const rep = r.report || {};
+  return {
+    logical_date: r.logical_date, status: r.status, trigger: r.trigger, attempts: r.attempts,
+    started_at: r.started_at, finished_at: r.finished_at,
+    tasks: (rep.rules?.created || []).length, proposals: rep.reasoning?.proposals || 0,
+    reasoning: rep.reasoning?.status || null, brief: rep.brief?.status || null,
+    error: rep.error || rep.reasoning?.error || (rep.reset === 'stuck' ? 'přerušený běh' : null),
+  };
+}
+
 /** Everything the readout and the `night_state` frame show. */
 export function nightState() {
   const now = new Date();
+  const s = settings();
+  const last = nightstore.recentRuns(1)[0] || null;
   return {
     sleep,
     screen: screen.status(),
     lightsd: lightsd ? lightsd.status() : { mode: 'down' },
     run: {
-      last: kvGet('night.last_run', null),
-      next: { logical_date: targetDate(now), fallback: settings().fallback },
+      last: runSummary(last),
+      running: inFlight ? inFlight.date : null,
+      next: { logical_date: targetDate(now), fallback: s.fallback },
     },
-    enabled: settings().enabled,
+    pending_proposals: nightstore.listProposals({ status: 'pending', limit: 200 }).length,
+    ...(deps.morningState ? { morning: deps.morningState() } : {}),
+    enabled: s.enabled,
   };
 }
 
-function push() {
+export function push() {
   try { broadcast({ type: 'night_state', ...nightState() }); } catch (err) { log(`broadcast failed: ${err.message}`); }
 }
 
-export function startNight({ broadcast: send } = {}) {
-  if (typeof send === 'function') broadcast = send;
+/**
+ *   broadcast  (frame) => void — every open page
+ *   runner     the model runner for dream.js (default: the Agent SDK)
+ *   persona    (date) => the rendered persona, for the brief
+ *   onWrite    (section) => void — app_changed for tasks / proposals
+ */
+export function startNight(options = {}) {
+  if (typeof options.broadcast === 'function') broadcast = options.broadcast;
+  deps = { ...deps, ...options };
   sleep = normalizeSleep(kvGet('night.sleep', null), new Date());
   log(`starting: ${describe(sleep)}; lightsd at ${LIGHTSD_URL}`);
+
+  const reset = nightstore.resetStuckRuns(DREAM_STUCK_HOURS);
+  if (reset.length) log(`reset stuck run(s): ${reset.join(', ')}`);
 
   lightsd = makeLightsdClient({ url: LIGHTSD_URL, onStatus: onLightsdStatus, log });
   lightsd.start();
   screen.startScreen({ getIdleMinutes: () => settings().screen_idle_min });
 
   tick();
+  catchUp();
   tickTimer = setInterval(tick, NIGHT_TICK_MS);
 }
+
+/** Let later phases (morning.js) add hooks after startNight. */
+export function extendNight(more) { deps = { ...deps, ...more }; }
 
 export function stopNight() {
   clearInterval(tickTimer);

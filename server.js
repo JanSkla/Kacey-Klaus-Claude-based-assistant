@@ -24,6 +24,7 @@ import { RuleSchema, explainIssues } from './rules.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 import {
   startNight, stopNight, noteInteraction, noteSpeaking, noteVisibility, nightState, INTERACTION_KINDS,
+  startRun as startNight_run, push as pushNight,
 } from './night.js';
 
 import {
@@ -499,6 +500,44 @@ app.get('/api/health', (_req, res) => {
    pushed as `night_state` whenever it changes. */
 app.get('/api/night', (_req, res) => {
   res.json(nightState());
+});
+
+/* A night run by hand, for testing (docs/DREAM.md §10). NOT a tool: no
+   session's allow-list has it, because a run spends cloud calls, rewrites
+   the brief and can add a batch of tasks — not something a misheard sentence
+   should do. `wait: true` answers when the run has finished; otherwise it
+   answers at once and the result is in /api/night/runs. */
+app.post('/api/night/run', express.json({ limit: '4kb' }), async (req, res) => {
+  const body = req.body || {};
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || '')) ? String(body.date) : undefined;
+  const promise = startNight_run('manual', new Date(), { force: !!body.force, date });
+  if (!promise) return res.status(409).json({ error: 'běh nelze spustit' });
+  if (!body.wait) return res.status(202).json({ ok: true, started: true, date: date || null });
+  const run = await promise;
+  if (!run) return res.status(409).json({ error: 'běh pro tento den už proběhl nebo právě běží (force: true ho spustí znovu)' });
+  res.json({ ok: true, run });
+});
+
+app.get('/api/night/runs', (req, res) => {
+  res.json({ runs: nightstore.recentRuns(Number(req.query.limit) || 10) });
+});
+
+/* The reasoning pass's proposals, reviewed one at a time (§11). */
+app.get('/api/proposals', (req, res) => {
+  const status = ['pending', 'accepted', 'rejected', 'edited', 'expired'].includes(req.query.status) ? req.query.status : undefined;
+  res.json({ proposals: nightstore.listProposals({ status, limit: Number(req.query.limit) || 50 }) });
+});
+
+app.post('/api/proposals/:id', express.json({ limit: '8kb' }), (req, res) => {
+  try {
+    const out = nightstore.decideProposal(req.params.id, req.body || {});
+    if (out.task) broadcast({ type: 'app_changed', section: 'tasks' });
+    broadcast({ type: 'app_changed', section: 'proposals' });
+    pushNight();
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.get('/api/voices', async (_req, res) => {
@@ -1049,7 +1088,15 @@ server.listen(PORT, HOST, () => {
   }
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
   try { nightstore.seedStarterRules(); } catch (err) { log(`starter rules not seeded: ${err.message}`); }
-  startNight({ broadcast });
+  startNight({
+    broadcast,
+    // The brief is in Kacey's voice, rendered for the morning it is read in.
+    persona: (date) => {
+      const [y, m, d] = date.split('-').map(Number);
+      return renderPersona(persona, new Date(y, m - 1, d, 7, 0));
+    },
+    onWrite: (section) => broadcast({ type: 'app_changed', section }),
+  });
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {

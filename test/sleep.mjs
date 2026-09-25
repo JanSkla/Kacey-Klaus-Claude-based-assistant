@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 
 import {
-  sleepStep, normalizeSleep, initialSleep, targetDate, fallbackDue, clockMinutes,
+  sleepStep, normalizeSleep, initialSleep, targetDate, fallbackDue, clockMinutes, catchupDue,
 } from '../sleep.js';
 
 let passed = 0;
@@ -241,6 +241,17 @@ test('the fallback time is a setting, and the night run can be switched off', ()
   assert.equal(fallbackDue(at(2026, 9, 26, 2, 59), { fallback: '03:00' }, null), false);
   assert.equal(fallbackDue(at(2026, 9, 26, 4, 0), { ...SETTINGS, enabled: false }, null), false);
   assert.equal(fallbackDue(at(2026, 9, 26, 4, 0), { fallback: 'garbage' }, null), true, 'bad setting falls back to 04:00');
+});
+
+test('catch-up: after the fallback window, before the brief', () => {
+  const s = { fallback: '04:00', peak: '07:00' };
+  assert.equal(catchupDue(at(2026, 9, 26, 4, 30), s), false, 'still the fallback window');
+  assert.equal(catchupDue(at(2026, 9, 26, 5, 0), s), true);
+  assert.equal(catchupDue(at(2026, 9, 26, 6, 59), s), true);
+  assert.equal(catchupDue(at(2026, 9, 26, 7, 0), s), false, 'the morning is over');
+  assert.equal(catchupDue(at(2026, 9, 25, 22, 0), s), false, 'the evening before: the night has not come yet');
+  assert.equal(catchupDue(at(2026, 9, 26, 8, 30), { fallback: '04:00' }), true, 'no peak known: until 09:00');
+  assert.equal(catchupDue(at(2026, 9, 26, 9, 0), { fallback: '04:00' }), false);
 });
 
 test('clockMinutes reads HH:MM and nothing else', () => {

@@ -482,6 +482,15 @@ on. The task section gained server-owned generation columns and a revision:
 and refuses a stale list with a 409, which `store.js` answers by re-applying
 its pending edits to the fresh list.
 
+`dream.js` is the night run itself. It claims the target date in
+`kacey_dream_run` (the primary key is the idempotence), then collects, turns
+the rules into tasks in their own transaction, asks a headless `query()` with
+read-only memory tools for proposals and overlap verdicts, writes the brief and
+stores a report. The model is reached through an injected runner, so
+`test/dream.mjs` runs a whole night with a scripted one. `nightplan.js` is its
+pure half. `night.js`'s tick starts runs (sleep, fallback, catch-up, the one
+automatic retry) and expires proposals.
+
 In short: lightsd's sleep button starts a wind-down, and an hour with no
 interaction means asleep. Kacey then plans the next day once per logical date.
 Deterministic rules turn the calendar and routine into tasks, and a read-only

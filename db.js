@@ -142,6 +142,41 @@ CREATE TABLE IF NOT EXISTS kacey_dream_suppress (
   reason     TEXT NOT NULL CHECK (reason IN ('deleted','merged')),
   created_at TEXT NOT NULL
 );
+
+/* One night run per TARGET date (docs/DREAM.md §4, §10). The primary key is
+   the idempotence: a second run for the same day is a no-op, and a retry
+   after a crash is safe. The pattern is klaus_memory's consolidation_run;
+   the table is not. */
+CREATE TABLE IF NOT EXISTS kacey_dream_run (
+  logical_date TEXT PRIMARY KEY,
+  status       TEXT NOT NULL CHECK (status IN ('running','done','failed')),
+  trigger      TEXT NOT NULL CHECK (trigger IN ('sleep','fallback','manual','catchup')),
+  attempts     INTEGER NOT NULL DEFAULT 1,
+  started_at   TEXT NOT NULL,
+  finished_at  TEXT,
+  report       TEXT NOT NULL DEFAULT '{}'        -- JSON
+);
+
+/* What the reasoning pass suggested and what the owner decided. Nothing is
+   deleted: decided proposals are the learning loop's data (§13). */
+CREATE TABLE IF NOT EXISTS kacey_proposal (
+  proposal_id   TEXT PRIMARY KEY,
+  logical_date  TEXT NOT NULL,
+  label         TEXT NOT NULL,
+  due_at        TEXT,
+  reason        TEXT NOT NULL DEFAULT '',
+  about_event   TEXT,
+  about_title   TEXT NOT NULL DEFAULT '',
+  about_end     TEXT,
+  kind          TEXT NOT NULL DEFAULT '',
+  confidence    REAL NOT NULL DEFAULT 0,
+  status        TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','accepted','rejected','edited','expired')),
+  decided_at    TEXT,
+  final_task_id TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS kacey_proposal_status_idx ON kacey_proposal (status, logical_date);
 `;
 
 export function now() { return new Date().toISOString(); }

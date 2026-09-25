@@ -9,9 +9,9 @@ Like [ARCHITECTURE.md](../ARCHITECTURE.md), it explains structure and invariants
 not every line. The reasoning sits next to each decision, so a later session can
 tell a deliberate choice from an accident.
 
-**Status:** P1 (lightsd), P2 (screen, lid, runbook), P3 (sleep detection)
-and P4 (rules, the task schema, the agent tools) have landed. The night run is
-still a stub. The rest is planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
+**Status:** P1 (lightsd), P2 (screen, lid, runbook), P3 (sleep detection),
+P4 (rules, the task schema, the agent tools) and P5 (the night run, proposals)
+have landed. P6 (morning mode and the UI) and P7 (learning) are planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
 moves its row from *planned* to *done* and records the commit.
 
 ## Contents
@@ -1035,7 +1035,27 @@ A failed brief does not fail the run. Morning mode tries again at T − 5
 }
 ```
 
-**A manual run for testing:** `POST /api/night/run { date?, force? }` and
+**As built in P5:**
+- `nightplan.js` holds the pure decisions (eligibility, the zod output schema,
+  post-validation, expiry, the brief hash and context), and `test/nightplan.mjs`
+  covers them. `test/dream.mjs` runs the whole night against a throwaway
+  database with a scripted model.
+- **The reasoning pass is skipped** (`status: 'skipped'`) when there is nothing
+  to ask: no eligible event and no overlap to judge. That saves a cloud call on
+  quiet nights.
+- **Reconciliation moves a task wherever its source moved**, not only within
+  tonight's window. The truth is a preview over the next 14 days, and a task
+  whose key is not in it is withdrawn. That is simpler than §9's "leave it for
+  the run whose window it is in", and gives the same result sooner.
+- **The run fails when the reasoning pass fails** (after its retry). With two
+  automatic attempts per date, a transient model outage gets a second chance
+  10 minutes later while the owner is still asleep (`night.js`). Step 2's tasks
+  and the brief are kept either way.
+- The brief's system prompt is the persona rendered for 07:00 on the target
+  date, so `{{TODAY}}` is the day being planned.
+- `KACEY_DREAM_EFFORT` overrides the effort for the night run only.
+
+**A manual run for testing:** `POST /api/night/run { date?, force?, wait? }` and
 `npm run night:run` (a script that calls it). **The persona does not get it.** No
 session's allow-list includes it, and there is no MCP tool for it. *Why:* a run
 spends cloud calls, rewrites the brief and can create a batch of tasks, and "run
@@ -1317,7 +1337,7 @@ entry, and this document updated if the build changed the design.
 | **P2** | Kiosk, screen, lid (§6): `screen.js` (on/off, the idle check with xprintidle, `speaking`), `readLid()`, the `visibility` report, [the runbook](RUNBOOK-kaceybody.md). **Moved:** the readout rows go to P6, because the Claude Design output already has the "Noc a ráno" controller group | Kacey | — | done, awaiting the runbook (P2.1–P2.9) |
 | **P3** | Sleep detection (§7): `lightsd.js`, `sleep.js`, `night.js` tick, `interaction` frame, `ready.features`, `night_state`, a minimal `screen.js` (on/off), tests. **Not yet:** the `speaking` frame and the idle timeout (with P2's screen work), the readout rows (UI), the real run (P5) | Kacey | P1, P2 | done (see the commit adding it) |
 | **P4** | Rules (§8), the task schema (§9): tables, migration, `writeTasks` carry-over, suppress, `tasks.rev`/409, `routine-cats.js`, `calendar-days.js`, `rules.js`, the agent tools, starters, the persona, tests | Kacey | — | done. Also: the rules HTTP endpoints of §15 (for P6's editor), `nightstore.js` |
-| **P5** | The night run (§10), proposals (§11): `dream.js`, `nightstore.js`, runs, catch-up, stuck reset, reasoning, brief draft, report, endpoints, readout rows, tests | Kacey | P3, P4 | planned |
+| **P5** | The night run (§10), proposals (§11): `dream.js`, `nightstore.js`, runs, catch-up, stuck reset, reasoning, brief draft, report, endpoints, readout rows, tests | Kacey | P3, P4 | done. Pure decisions in `nightplan.js`; the readout rows moved to P6 |
 | **P6** | Morning mode (§12) and the UI from Claude Design: morning screen, proposal review, rules editor, the real cycle in Brief, task origin/reason/note in rows, the settings `srow`s, the report view | Kacey | P5 | planned |
 | **P7** | The learning loop (§13) | Kacey | P6 | planned |
 
@@ -1335,7 +1355,8 @@ entry, and this document updated if the build changed the design.
   re-run.
 - **P5:** a manual run produces tasks, at most 5 proposals and a brief, and the
   report says so; a second run for the same date is a no-op; killing the process
-  mid-run leads to a stuck reset and a clean retry.
+  mid-run leads to a stuck reset and a clean retry. *(Verified by `test/dream.mjs`
+  with a scripted model; the first real run on kaceybody is still to come.)*
 - **P6:** one real morning, end to end.
 
 ---

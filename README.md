@@ -164,6 +164,7 @@ All environment variables, all with working defaults — see `.env.example`.
 > `tailscale serve --bg 8082` gives a real certificate on the tailnet.
 | `KACEY_MODEL`             | `claude-opus-5-5`                      |                                           |
 | `KACEY_EFFORT`            | `low`                                  | low · medium · high · xhigh · max         |
+| `KACEY_DREAM_EFFORT`      | = `KACEY_EFFORT`                       | The night run's reasoning pass and brief only |
 | `KACEY_PERSONA_PATH`      | `./persona/kacey.md`                   | Missing file → built-in default + warning |
 | `PYTHON_BIN`              | `python`                               | Launches the MCP server                   |
 | `KLAUS_DB`                | `<PYTHONPATH>\klaus.db`                | Passed as `--db`                          |
@@ -269,6 +270,10 @@ HTTP:
 - `GET /api/rules` · `PUT /api/rules/sets/:id|new` · `DELETE /api/rules/sets/:id` ·
   `PUT /api/rules/:id|new` · `DELETE /api/rules/:id` · `POST /api/rules/preview`
   → the night routine's rules ([docs/DREAM.md §8](docs/DREAM.md#8-rules))
+- `POST /api/night/run { date?, force?, wait? }` → a night run by hand, for testing
+  (`npm run night:run`, `-- --force` to redo a done day). Not a tool: the persona never gets it.
+- `GET /api/night/runs` → recent runs with their reports
+- `GET /api/proposals?status=pending` · `POST /api/proposals/:id { action: accept|edit|reject, label?, due_at? }`
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)
 

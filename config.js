@@ -306,3 +306,16 @@ export const NIGHT_DEFAULTS = {
   screen_idle_min: 2,
   lid_check: true,
 };
+
+/* The night run's reasoning pass and brief (docs/DREAM.md §10): the same
+   model as Kacey, and by default the same effort. Latency does not matter at
+   02:00, so this can be raised without making her slower to answer. */
+export const DREAM_EFFORT = EFFORTS.includes(process.env.KACEY_DREAM_EFFORT) ? process.env.KACEY_DREAM_EFFORT : EFFORT;
+
+/* A run left `running` longer than this died mid-run; it is reset to failed
+   and becomes eligible again. */
+export const DREAM_STUCK_HOURS = 3;
+
+/* The reasoning pass's system prompt. Not the persona: this is not Kacey
+   talking, it is a planner whose output a program reads. */
+export const DREAM_PLANNER_PATH = path.join(HERE, 'persona', 'dream-planner.md');

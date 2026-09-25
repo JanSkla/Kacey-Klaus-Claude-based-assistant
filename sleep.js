@@ -116,6 +116,21 @@ export function sleepStep(state, event, now, settings = {}) {
   }
 }
 
+/**
+ * Catch-up at boot (docs/DREAM.md §10): the server was down through the night
+ * and the fallback window. Worth running only while the morning it plans is
+ * still ahead — after the fallback window and before the brief (the sunrise
+ * peak, or 09:00 when lightsd never said). Planning a morning that is over
+ * would only put stale proposals on the screen.
+ */
+export function catchupDue(now, { peak, fallback } = {}, startHour = 4) {
+  const fb = clockMinutes(fallback);
+  const from = (fb === null ? startHour * 60 : fb) + FALLBACK_WINDOW_MIN;
+  const until = clockMinutes(peak) ?? 9 * 60;
+  const mins = minutesOf(now);
+  return mins >= from && mins < Math.min(until, 12 * 60);
+}
+
 /** How long after the fallback time it may still fire — a restart at 04:20 still counts. */
 export const FALLBACK_WINDOW_MIN = 60;
 

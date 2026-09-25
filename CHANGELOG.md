@@ -19,6 +19,24 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The night routine, phase P5: the night run**
+- Once per planned day, while the owner sleeps, Kacey:
+  - turns the rules into tasks (merging exact calendar × routine duplicates;
+    other same-day overlaps are created with a note),
+  - moves or withdraws rule tasks whose event moved or vanished,
+  - asks a read-only reasoning pass for up to 5 **proposals** for unusual
+    events and for verdicts on the overlaps,
+  - writes the morning brief with a hash of what it was written from,
+  - and stores a report of all of it (`kacey_dream_run`).
+- Robust like Klaus's consolidation: idempotent per date, a stuck run is reset
+  after 3 h, one automatic retry, a catch-up at boot while the morning is still
+  ahead. Nothing `local_only` goes to the cloud.
+- Proposals (`kacey_proposal`) can be accepted, edited or rejected through
+  `POST /api/proposals/:id`; accepting makes a task with origin `dream`. They
+  expire once their event has passed. The review screen comes in P6.
+- A manual run for testing: `npm run night:run` (`POST /api/night/run`).
+  New setting from the environment: `KACEY_DREAM_EFFORT`.
+
 **The night routine, phase P4: rules**
 - Rules turn the calendar and the weekly routine into tasks: "whenever there's
   gym, the evening before at 20:00: pack the gym bag". They are data
