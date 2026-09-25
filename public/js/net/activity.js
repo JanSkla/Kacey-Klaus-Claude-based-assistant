@@ -15,6 +15,7 @@
    ========================================================================= */
 
 import { sendFrame, serverHas } from './protocol.js';
+import { state } from '../core/state.js';
 
 var THROTTLE_MS = 10000;
 var lastSent = 0;
@@ -28,7 +29,25 @@ export function noteInteraction(kind) {
   sendFrame({ type: 'interaction', kind: kind });
 }
 
+/* Orb follower (subscribed in app.js): tell the server when speech starts and
+   stops, so the bedside panel stays lit while she talks and its idle clock
+   starts when she finishes. Sent on transitions only. */
+var wasSpeaking = false;
+export function followSpeaking() {
+  var now = state.ttsPending > 0;
+  if (now === wasSpeaking) return;
+  wasSpeaking = now;
+  if (serverHas('night')) sendFrame({ type: 'speaking', on: now });
+}
+
 export function initActivity() {
+  /* Whether Chromium hides the kiosk page when DPMS blanks the panel decides
+     whether the wake word keeps listening at night (DREAM.md §6). Reported so
+     the server log can answer it on the real machine. */
+  document.addEventListener('visibilitychange', function () {
+    if (serverHas('night')) sendFrame({ type: 'visibility', state: document.visibilityState });
+  });
+
   var kinds = { pointerdown: 'pointer', keydown: 'key', touchstart: 'touch' };
   Object.keys(kinds).forEach(function (ev) {
     // Capture phase and passive: this watches, it never interferes.

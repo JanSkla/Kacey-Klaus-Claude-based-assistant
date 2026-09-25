@@ -99,7 +99,7 @@ import { initController } from './js/views/controller.js';
 import { initRoutine } from './js/views/routine.js';
 import { initLights } from './js/views/lights.js';
 import { installDebugSurface } from './js/debug.js';
-import { initActivity } from './js/net/activity.js';
+import { initActivity, followSpeaking } from './js/net/activity.js';
 
 /* =======================================================================
    1. THE ORB'S FOLLOWERS
@@ -111,6 +111,7 @@ import { initActivity } from './js/net/activity.js';
 bus.on('orb', updateTelemetry);
 bus.on('orb', superviseBarge);
 bus.on('orb', followOrbHint);
+bus.on('orb', followSpeaking);
 
 /* =======================================================================
    2. PERSISTED PREFERENCES

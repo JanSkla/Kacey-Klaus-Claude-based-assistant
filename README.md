@@ -228,6 +228,8 @@ Client → server:
 { "type": "user_message", "text": "..." }
 { "type": "interrupt" }
 { "type": "interaction", "kind": "pointer" }        // pointer | key | touch | wake; throttled, only if ready.features has "night"
+{ "type": "speaking", "on": true }                  // TTS started / stopped: keeps the bedside panel lit
+{ "type": "visibility", "state": "hidden" }         // logged: does the kiosk page go hidden with the panel off?
 ```
 
 Server → client:

@@ -19,6 +19,19 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The night routine, phases P1–P2: the sunrise peak, the screen, the lid**
+- lightsd publishes `morning_peak_at`, the top of the sunrise ramp: when the
+  brief will play (lightsd repo, `7093fb6`).
+- The bedside screen: `screen.js` turns the panel on for the wake word, keeps
+  it lit while Kacey speaks, and turns it off after 2 minutes of nothing. It
+  also turns off a panel the mouse woke, using X's own idle time via
+  `xprintidle`. It reads the lid from `/proc/acpi`.
+- The page reports `speaking` and `visibility` frames. The second answers
+  whether the wake word still listens with the panel off.
+- [docs/RUNBOOK-kaceybody.md](docs/RUNBOOK-kaceybody.md): the steps to run by
+  hand: X11 kiosk with autologin, Chromium flags and the microphone policy,
+  DPMS handed to Kacey, logind ignoring the lid, the display in `/etc/kacey.env`.
+
 **The night routine, phase P3: sleep detection** ([docs/DREAM.md §7](docs/DREAM.md#7-sleep-detection))
 - Kacey listens to lightsd (`/ws`, polling `/api/status` every 30 s when the
   socket is down). The sleep button starts a 60-minute wind-down and turns the

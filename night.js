@@ -118,7 +118,23 @@ function tick() {
 /** The owner did something: a tap, a key, the wake word, a message. */
 export function noteInteraction(kind) {
   if (!sleep || !INTERACTION_KINDS.includes(kind)) return;
+  screen.noteActivity();
+  // The wake word is said from bed, in the dark: light the panel for the answer.
+  // A tap or a key already woke it through the OS.
+  if (kind === 'wake') screen.on('wake word');
   apply({ type: 'interaction', kind });
+}
+
+/** The page started or stopped speaking. Keeps the panel lit; not an interaction. */
+export function noteSpeaking(on) {
+  screen.setSpeaking(on);
+}
+
+/* docs/DREAM.md §6: the wake word only listens while the page is visible, and
+   whether Chromium hides a kiosk page when DPMS blanks the panel is something
+   to measure on kaceybody, not assume. So the page reports, and this logs. */
+export function noteVisibility(state) {
+  log(`page visibility: ${state} (screen ${screen.status().state})`);
 }
 
 /** Everything the readout and the `night_state` frame show. */
@@ -147,6 +163,7 @@ export function startNight({ broadcast: send } = {}) {
 
   lightsd = makeLightsdClient({ url: LIGHTSD_URL, onStatus: onLightsdStatus, log });
   lightsd.start();
+  screen.startScreen({ getIdleMinutes: () => settings().screen_idle_min });
 
   tick();
   tickTimer = setInterval(tick, NIGHT_TICK_MS);
@@ -156,4 +173,5 @@ export function stopNight() {
   clearInterval(tickTimer);
   tickTimer = null;
   lightsd?.stop();
+  screen.stopScreen();
 }

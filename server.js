@@ -19,7 +19,9 @@ import path from 'node:path';
 
 import * as appstate from './appstate.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
-import { startNight, stopNight, noteInteraction, nightState, INTERACTION_KINDS } from './night.js';
+import {
+  startNight, stopNight, noteInteraction, noteSpeaking, noteVisibility, nightState, INTERACTION_KINDS,
+} from './night.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -989,6 +991,10 @@ wss.on('connection', (ws) => {
       // A tap, a key, the wake word — the page throttles these. Anything else
       // in `kind` is dropped silently: it is a signal, not a request.
       if (INTERACTION_KINDS.includes(frame.kind)) noteInteraction(frame.kind);
+    } else if (frame?.type === 'speaking') {
+      noteSpeaking(frame.on === true);
+    } else if (frame?.type === 'visibility') {
+      if (frame.state === 'visible' || frame.state === 'hidden') noteVisibility(frame.state);
     } else {
       session.send({ type: 'error', message: `Unknown frame type: ${frame?.type}` });
     }

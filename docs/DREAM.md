@@ -9,8 +9,8 @@ Like [ARCHITECTURE.md](../ARCHITECTURE.md), it explains structure and invariants
 not every line. The reasoning sits next to each decision, so a later session can
 tell a deliberate choice from an accident.
 
-**Status:** P3 (sleep detection) has landed, with the night run still a stub.
-The rest is planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
+**Status:** P1 (lightsd), P2 (screen, lid, runbook) and P3 (sleep detection)
+have landed. The night run is still a stub. The rest is planned. Phases P1–P7 are in [§16](#16-phases). A phase that ships
 moves its row from *planned* to *done* and records the commit.
 
 ## Contents
@@ -390,9 +390,9 @@ The controller's `readout` gains a block **Noc**: screen (on/off, since, why),
 lid, sleep state (and since when), next night run (target date, what triggers
 it), last run (date, status, how long). It is fed by `GET /api/night` and the
 `night_state` frame ([§15](#15-server-surface-for-reference)). It uses the
-existing `readout__row` component. That is a small UI change, logged in
-DESIGN.md with `[design: pending]`. Rows are added phase by phase as their data
-starts to exist.
+existing `readout__row` component. **Built in P6** from the Claude Design
+"Noc a ráno" controller group, since the design exists; until then the same
+data is at `GET /api/night`.
 
 ---
 
@@ -1275,6 +1275,7 @@ wire-protocol table, as ARCHITECTURE.md § Adding things requires.
 | s → c     | `ready { …, features: ['night'] }`      | This server understands the frames below |
 | c → s     | `interaction { kind: 'pointer'\|'key'\|'touch'\|'wake' }` | Throttled to one per 10 s; counts for sleep and screen |
 | c → s     | `speaking { on: bool }`                 | The screen stays on while she speaks; the idle clock starts at `on: false`. Not an interaction |
+| c → s     | `visibility { state: 'visible'\|'hidden' }` | Logged, to answer §6's visibility question on the real machine |
 | c → s     | `morning_ack { logical_date }`          | The brief started playing          |
 | s → c     | `night_state { sleep, screen, lid, run: { next, last }, morning, pending_proposals }` | On every change, to every client |
 | s → c     | `morning { logical_date, lines, checklist, peak_at }` | Open the morning screen and play |
@@ -1307,8 +1308,8 @@ entry, and this document updated if the build changed the design.
 
 | Phase | What | Repo | Depends on | Status |
 | ----- | ---- | ---- | ---------- | ------ |
-| **P1** | lightsd `morning_peak_at` (§5): schedule, arbiter, status, pytest | lights | — | planned |
-| **P2** | Kiosk, screen, lid (§6): `screen.js`, the lid, readout rows, the `visibilityState` check, runbook | Kacey | — | planned |
+| **P1** | lightsd `morning_peak_at` (§5): schedule, arbiter, status, pytest | lights | — | done, lights `7093fb6`; awaiting the lightsd restart (runbook P1) |
+| **P2** | Kiosk, screen, lid (§6): `screen.js` (on/off, the idle check with xprintidle, `speaking`), `readLid()`, the `visibility` report, [the runbook](RUNBOOK-kaceybody.md). **Moved:** the readout rows go to P6, because the Claude Design output already has the "Noc a ráno" controller group | Kacey | — | done, awaiting the runbook (P2.1–P2.9) |
 | **P3** | Sleep detection (§7): `lightsd.js`, `sleep.js`, `night.js` tick, `interaction` frame, `ready.features`, `night_state`, a minimal `screen.js` (on/off), tests. **Not yet:** the `speaking` frame and the idle timeout (with P2's screen work), the readout rows (UI), the real run (P5) | Kacey | P1, P2 | done (see the commit adding it) |
 | **P4** | Rules (§8), the task schema (§9): tables, migration, `writeTasks` carry-over, suppress, `tasks.rev`/409, `routine-cats.js`, `calendar-days.js`, `rules.js`, the agent tools, starters, the persona, tests | Kacey | — | planned |
 | **P5** | The night run (§10), proposals (§11): `dream.js`, `nightstore.js`, runs, catch-up, stuck reset, reasoning, brief draft, report, endpoints, readout rows, tests | Kacey | P3, P4 | planned |
