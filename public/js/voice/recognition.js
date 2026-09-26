@@ -18,6 +18,7 @@ import { showAlert, flashHint } from '../ui/log.js';
 import { cancelSpeech, primeTTS } from './tts.js';
 import { stopBarge } from './barge.js';
 import { submit } from '../net/protocol.js';
+import { castTranscript } from './voicecast.js';
 import { ServerRecognition, serverSttAvailable, serverSttKnown } from './server-stt.js';
 
 /* Whether the browser has the API at all — read by the wake word, the barge-in
@@ -116,11 +117,13 @@ function buildRecognition() {
     if (interim) {
       dom.input.value = (baseText ? baseText + ' ' : '') + interim;
       dom.input.classList.add('is-interim');
+      castTranscript(interim);
     }
     if (finalText.trim()) {
       dom.input.classList.remove('is-interim');
       var text = (baseText ? baseText + ' ' : '') + finalText.trim();
       dom.input.value = text;
+      castTranscript(finalText.trim());
       baseText = '';
       state.micDesired = false;
       state.resumeVoiceLoop = true;     // keep the hands-free conversation going

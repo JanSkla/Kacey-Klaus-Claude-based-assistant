@@ -169,6 +169,8 @@ All environment variables, all with working defaults — see `.env.example`.
 | `KACEY_DREAM_EFFORT`      | = `KACEY_EFFORT`                       | The night run's reasoning pass and brief only |
 | `KACEY_STT_URL`           | `http://127.0.0.1:8791`                | Whisper sidecar (`voicelab/stt_server.py`) for browsers without Web Speech recognition |
 | `KACEY_BRIEF_AUDIO_DIR`   | `./data/brief-audio`                   | The morning brief rendered to audio at night, one WAV per line |
+| `KACEY_NOWPLAYING_URL`    | `http://127.0.0.1:8081`                | nowplayingd (the music visual): ducking goes through its `/api/volume` |
+| `KACEY_DUCK_PERCENT`      | `20`                                   | Music volume while Kacey listens (and through her answer) |
 | `KACEY_PERSONA_PATH`      | `./persona/kacey.md`                   | Missing file → built-in default + warning |
 | `PYTHON_BIN`              | `python`                               | Launches the MCP server                   |
 | `KLAUS_DB`                | `<PYTHONPATH>\klaus.db`                | Passed as `--db`                          |
@@ -285,6 +287,7 @@ HTTP:
 - `GET /api/morning` · `POST /api/morning/tick { key, done }` · `POST /api/morning/start` (by hand) · `POST /api/morning/idle`
 - `POST /api/stt?lang=cs` (WAV body) → `{ text }`, via the Whisper sidecar · `GET /api/stt/health`
 - `GET /api/brief/audio/:date/:n` → line `n` of the morning brief, rendered at night
+- `GET /api/next` → the next timed event or task (`label` e.g. `zítra 07:30 · Běh`) · `GET /api/voice` → `{ available, listening, transcript, next }` · `GET /api/voice/events` → the same as a server-sent event stream · `POST /api/wake` → asks the kiosk page to listen (409 when none can) · `POST /api/voice/stop`. For nowplayingd's corner widget ([voicebridge.js](voicebridge.js)); these few answer CORS for loopback, `kaceybody` and the tailnet
 - `GET /api/night/cycle` → the night's timeline · `POST /api/night/sunrise { minutes }` → moves lightsd's "morning" routine
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)

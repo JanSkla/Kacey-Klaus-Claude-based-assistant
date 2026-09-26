@@ -268,6 +268,12 @@ export const DEFAULT_VOICE = process.env.KACEY_TTS_VOICE || 'Nova Hogarth';
  * Loopback, no auth — never expose the sidecar itself. */
 export const STT_URL = process.env.KACEY_STT_URL || 'http://127.0.0.1:8791';
 
+/* nowplayingd (lights repo, tools/nowplaying): the music visual. Kacey turns
+ * the music down through it while she listens (voicebridge.js createDucker),
+ * and its corner widget reads /api/voice from here. */
+export const NOWPLAYING_URL = process.env.KACEY_NOWPLAYING_URL || 'http://127.0.0.1:8081';
+export const DUCK_PERCENT = Number(process.env.KACEY_DUCK_PERCENT) || 20;
+
 /* 'comma' rewrites full stops before synthesis, which measurably cleans up
  * XTTS's delivery — see ttsText() in server.js for why, and where. Set
  * KACEY_TTS_DOTS=keep to send the text through untouched. */

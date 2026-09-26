@@ -100,6 +100,8 @@ import { initRoutine } from './js/views/routine.js';
 import { initLights } from './js/views/lights.js';
 import { installDebugSurface } from './js/debug.js';
 import { initActivity, followSpeaking } from './js/net/activity.js';
+import { initVoicecast, followListening } from './js/voice/voicecast.js';
+import { initMiniPlayer } from './js/views/miniplayer.js';
 import { initMorning } from './js/views/morning.js';
 import { initProposals } from './js/views/proposals.js';
 import { initRules } from './js/views/rules.js';
@@ -115,6 +117,7 @@ bus.on('orb', updateTelemetry);
 bus.on('orb', superviseBarge);
 bus.on('orb', followOrbHint);
 bus.on('orb', followSpeaking);
+bus.on('orb', followListening);
 
 /* =======================================================================
    2. PERSISTED PREFERENCES
@@ -167,6 +170,8 @@ initMorning();
 initProposals();
 initRules();
 initActivity();
+initVoicecast();
+initMiniPlayer();
 initSheets();
 initRouter();
 

@@ -117,6 +117,65 @@ select:focus-visible, textarea:focus-visible {
 .top__end { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .top__view { font-size: 13px; color: var(--ink3); }
 
+/* The mini player (Claude Design "MiniVinyl", views/miniplayer.js): what is
+   playing on kaceybody, in the header before Controller. It sits in the header
+   row -- never over content -- and its panel drops below it. */
+.mini { position: relative; display: flex; }
+.mini[hidden] { display: none; }
+.mini__bar {
+  width: 250px; height: 34px; display: flex; align-items: stretch;
+  background: var(--l2); border: 1px solid var(--line2);
+}
+.mini__open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 0;
+  background: none; border: 0; color: var(--ink); cursor: pointer; font-size: 13px; text-align: left;
+}
+.mini__open:hover { background: var(--l3); }
+/* A 48x32 window onto the turntable at about 0.21x, centred on the record. */
+.mini__win { flex: none; width: 48px; height: 32px; overflow: hidden; position: relative; }
+.mini__deck { position: absolute; width: 84px; height: 47px; left: -18px; top: -8px; image-rendering: pixelated; }
+.mini__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini__text b { font-weight: 600; }
+.mini__artist { color: var(--ink3); }
+.mini__play {
+  flex: none; width: 52px; border: 0; border-left: 1px solid var(--line2);
+  background: var(--acc); color: var(--on-acc); font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.mini__play:hover { filter: brightness(1.12); }
+
+.mini__drop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 340px;
+  background: var(--l1); border: 1px solid var(--line2); box-shadow: 0 8px 24px rgb(0 0 0 / .5);
+}
+.mini__row { padding: 10px 14px; border-top: 1px solid var(--line); }
+.mini__head { display: flex; align-items: center; justify-content: space-between; border-top: 0; }
+.mini__state, .mini__label { font-size: 12px; letter-spacing: .06em; color: var(--ink3); }
+.mini__stage { height: 190px; overflow: hidden; position: relative; background: var(--bg); border-top: 1px solid var(--line); }
+.mini__big { position: absolute; width: 400px; height: 225px; left: calc(50% - 200px); top: calc(50% - 112.5px); image-rendering: pixelated; }
+.mini__meta { display: grid; gap: 4px; }
+.mini__bigtitle { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.mini__meta .mini__artist { font-size: 13px; }
+.mini__progress { height: 4px; margin-top: 8px; }
+.mini__fill { transition: none; }
+.mini__times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink3); }
+.mini__error { font-size: 12px; color: var(--err); }
+.mini__transport { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+.mini__transport button {
+  height: 44px; background: none; border: 0; border-left: 1px solid var(--line);
+  color: var(--ink); font-size: 13px; cursor: pointer;
+}
+.mini__transport button:first-child { border-left: 0; }
+.mini__transport button:hover { background: var(--l2); }
+.mini__vol { display: flex; align-items: center; gap: 10px; }
+.mini__vol[hidden] { display: none; }
+.mini__step { width: 32px; height: 32px; padding: 0; }
+.mini__volnum { width: 44px; text-align: right; font-size: 13px; color: var(--ink2); }
+.mini__link {
+  display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-top: 1px solid var(--line);
+  color: var(--acc); font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.mini__link:hover { background: var(--l2); }
+
 /* The connection pill doubles as the state dot the orb drives. */
 .conn { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); white-space: nowrap; }
 .conn__dot {

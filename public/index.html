@@ -51,6 +51,43 @@
 
   <span class="top__end">
     <span class="top__view" id="viewLabel">main</span>
+    <!-- What is playing on kaceybody (nowplayingd, :8081): views/miniplayer.js -->
+    <span class="mini" id="mini" hidden>
+      <span class="mini__bar">
+        <button type="button" class="mini__open" id="miniOpen" aria-expanded="false" aria-controls="miniDrop">
+          <span class="mini__win" aria-hidden="true"><canvas class="mini__deck" id="miniDeck" width="400" height="225"></canvas></span>
+          <span class="mini__text"><b id="miniTitle"></b> <span class="mini__artist" id="miniArtist"></span></span>
+        </button>
+        <button type="button" class="mini__play" id="miniPlay">Pauza</button>
+      </span>
+      <div class="mini__drop" id="miniDrop" role="dialog" aria-label="Hudba" hidden>
+        <div class="mini__row mini__head">
+          <span class="mini__state" id="miniState">HRAJE</span>
+          <button type="button" class="btn btn--sm" id="miniClose">Zavřít</button>
+        </div>
+        <div class="mini__stage" aria-hidden="true"><canvas class="mini__big" id="miniBig" width="400" height="225"></canvas></div>
+        <div class="mini__row mini__meta">
+          <b class="mini__bigtitle" id="miniBigTitle"></b>
+          <span class="mini__artist" id="miniBigArtist"></span>
+          <span class="bar mini__progress"><span class="bar__fill mini__fill" id="miniFill"></span></span>
+          <span class="mini__times num"><span id="miniNow">0:00</span><span id="miniEnd">0:00</span></span>
+          <span class="mini__error" id="miniError" hidden></span>
+        </div>
+        <div class="mini__transport">
+          <button type="button" id="miniPrev">Zpět</button>
+          <button type="button" id="miniToggle">Pauza</button>
+          <button type="button" id="miniNext">Dál</button>
+        </div>
+        <div class="mini__row mini__vol" id="miniVol">
+          <span class="mini__label">HLASITOST</span>
+          <button type="button" class="btn btn--step mini__step" id="miniVolDown" aria-label="Tišeji">−</button>
+          <span class="bar bar--grow"><span class="bar__fill" id="miniVolFill"></span></span>
+          <button type="button" class="btn btn--step mini__step" id="miniVolUp" aria-label="Hlasitěji">+</button>
+          <span class="mini__volnum num" id="miniVolNum">0 %</span>
+        </div>
+        <a class="mini__link" id="miniLink" target="_blank" rel="noopener">Otevřít vizuál na celou obrazovku</a>
+      </div>
+    </span>
     <button type="button" class="btn" id="controllerBtn">Controller</button>
   </span>
 </header>

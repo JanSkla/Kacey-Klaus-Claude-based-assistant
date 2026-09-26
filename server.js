@@ -20,6 +20,7 @@ import path from 'node:path';
 import * as appstate from './appstate.js';
 import { logicalDayOf, dayRangeOf, dayIndex } from './calendar-days.js';
 import * as nightstore from './nightstore.js';
+import { nextItem, createVoiceBridge, createDucker } from './voicebridge.js';
 import { RuleSchema, explainIssues } from './rules.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 import {
@@ -37,7 +38,7 @@ import {
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
-  XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL,
+  XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL, NOWPLAYING_URL, DUCK_PERCENT,
   LOGICAL_DAY_START_HOUR, LIGHTSD_URL,
 } from './config.js';
 
@@ -996,6 +997,81 @@ function ttsText(input) {
 }
 
 /* ---------------------------------------------------------------------------
+ * The music visual's corner widget (nowplayingd, :8081) — voicebridge.js.
+ * It reads the next thing in the day and whether Kacey is listening, and can
+ * ask the kiosk page to listen. A different origin, so these few routes (and
+ * only these) answer CORS for loopback, kaceybody and the tailnet.
+ * ------------------------------------------------------------------------- */
+
+const VOICE_ORIGIN = /^https?:\/\/(127\.0\.0\.1|localhost|kaceybody(\.[a-z0-9-]+\.ts\.net)?|100\.\d+\.\d+\.\d+)(:\d+)?$/;
+
+function voiceCors(req, res, next) {
+  const origin = req.headers.origin;
+  if (origin && VOICE_ORIGIN.test(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type');
+  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+}
+
+const voice = createVoiceBridge({ send: (session, frame) => session.send(frame) });
+const ducker = createDucker({ url: NOWPLAYING_URL, level: DUCK_PERCENT, log });
+voice.subscribe((s) => ducker.update({ listening: s.listening }));
+
+/** The next timed event or task, for the widget's "DALŠÍ" row. */
+function nextUp() {
+  const now = new Date();
+  let events = [];
+  try {
+    events = nightstore.readCalendar(new Date(now.getTime() - 86400000), new Date(now.getTime() + 3 * 86400000));
+  } catch (err) {
+    log(`next: calendar unavailable (${err.message})`);
+  }
+  const tasks = appstate.get().tasks || [];
+  return nextItem({ events, tasks, now });
+}
+
+const voicePayload = () => ({ ...voice.status(), next: nextUp() });
+
+app.use(['/api/voice', '/api/next', '/api/wake'], voiceCors);
+
+app.get('/api/next', (_req, res) => res.json({ next: nextUp() }));
+
+app.get('/api/voice', (_req, res) => res.json(voicePayload()));
+
+/* A stream rather than polling: the transcript changes several times a
+   second while she listens. The next item rides along and is refreshed each
+   minute, so the widget needs one connection for everything. */
+app.get('/api/voice/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  let next = nextUp();
+  const push = (s) => res.write(`data: ${JSON.stringify({ ...s, next })}\n\n`);
+  push(voice.status());
+  const unsubscribe = voice.subscribe(push);
+  const minute = setInterval(() => { next = nextUp(); push(voice.status()); }, 60000);
+  req.on('close', () => { unsubscribe(); clearInterval(minute); });
+});
+
+app.post('/api/wake', (_req, res) => {
+  if (!voice.wake()) {
+    return res.status(409).json({ error: 'Kacey teď nemá stránku, která by mohla poslouchat.' });
+  }
+  noteInteraction('wake');
+  res.status(202).json(voice.status());
+});
+
+app.post('/api/voice/stop', (_req, res) => {
+  voice.stop();
+  res.status(202).json(voice.status());
+});
+
+/* ---------------------------------------------------------------------------
  * Speech-to-text, for a browser without Web Speech recognition (the kiosk's
  * Epiphany). The page records one utterance as WAV and posts it here; the
  * Whisper sidecar transcribes it on this machine — the audio never leaves it.
@@ -1174,7 +1250,7 @@ wss.on('connection', (ws) => {
      so a newer page must not send `interaction` to an older server. */
   session.send({
     type: 'ready', version: VERSION, model: MODEL, mcpServers: Object.keys(MCP_SERVERS),
-    features: ['night'],
+    features: ['night', 'voicecast'],
   });
   session.send({ type: 'night_state', ...nightState() });
 
@@ -1222,6 +1298,11 @@ wss.on('connection', (ws) => {
       notePresence();
     } else if (frame?.type === 'speaking') {
       noteSpeaking(frame.on === true);
+      ducker.update({ speaking: frame.on === true });
+    } else if (frame?.type === 'voice_page') {
+      voice.page(session, { kiosk: frame.kiosk === true, available: frame.available === true });
+    } else if (frame?.type === 'listening') {
+      voice.listening(session, frame.on === true, typeof frame.transcript === 'string' ? frame.transcript : '');
     } else if (frame?.type === 'morning_ack') {
       if (typeof frame.logical_date === 'string') morning.ackMorning(frame.logical_date);
     } else if (frame?.type === 'visibility') {
@@ -1233,6 +1314,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     log('client disconnected');
+    voice.drop(session);
     session.dispose();
   });
 

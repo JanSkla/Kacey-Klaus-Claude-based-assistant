@@ -32,6 +32,7 @@ import { applyRemoteChange } from '../core/store.js';
 import { receiveNightState, receiveMorning, refresh as refreshNight } from './nightapi.js';
 import { makeSocketTransport } from './transport-socket.js';
 import { makeMockTransport } from './transport-mock.js';
+import { announceVoicePage, onVoiceWake, onVoiceStop } from '../voice/voicecast.js';
 
 var transport = null;
 var toolDepth = 0;
@@ -96,6 +97,17 @@ export function onServer(msg) {
       setMcp(msg.mcpServers);
       features = Array.isArray(msg.features) ? msg.features.filter(function (f) { return typeof f === 'string'; }) : [];
       flashHint(info, false, 4200);
+      announceVoicePage(true);
+      break;
+
+    case 'voice_wake':
+      /* The music visual's "Mluv" (voicebridge.js). Only a kiosk page
+         listens; voicecast.js decides. */
+      onVoiceWake();
+      break;
+
+    case 'voice_stop':
+      onVoiceStop();
       break;
 
     case 'night_state':

@@ -156,6 +156,7 @@ status dots (`.conn__dot`, `.btn .dot`).
 | `0 2px 6px rgb(0 0 0 / .35)` | `.eblock` (calendar event) |
 | `0 2px 6px rgb(0 0 0 / .4)` | `.toast` |
 | `0 2px 6px rgb(0 0 0 / .5)` | `.sheet__box` |
+| `0 8px 24px rgb(0 0 0 / .5)` | `.mini__drop` (the header mini player's panel; the same shadow as nowplayingd's corner widget) |
 | `rgb(0 0 0 / .6)` | Sheet backdrop |
 
 ### Breakpoints *(literals, in styles.css)*
@@ -177,6 +178,7 @@ status dots (`.conn__dot`, `.btn .dot`).
 | Sticky dock / inline event editor | 5 | `.dock` (phone), `.eventedit` |
 | Sticky column heads (multi-day lane) | 7 | `.colheads` |
 | Routine block note editor | 8 | `.noteedit` |
+| Header mini player's panel | 20 | `.mini__drop` |
 | Sheets (modals); phone scrim | 30 | `.sheet`, `.scrim` |
 | Phone bottom sheet | 31 | `.is-psheet-open` |
 | Toast | 40 | `.toast` |
@@ -223,6 +225,7 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.conn` + `#orb` | index.html, [orb.js](public/js/ui/orb.js) | Connection pill / state dot; `__short` is the phone's three-word state (main.js) | `#orb[data-state]` = boot, idle, thinking, speaking, listening, offline, error | — |
 | `.tabbar` / `.tab` | index.html, [router.js](public/js/ui/router.js) | Phone bottom nav, 5 tabs (56px), SVG icons 22px stroke 1.6 | `aria-current="true"`, `:active`; hidden >760px and in `task`/`focus` | `<button class="tab" data-go="tasks" data-tab="tasks">` |
 | `.btn--fn` in `.fnlist` | index.html | Desktop "Funkce" rail list | first item usually `--accent` | `<button class="btn btn--fn" data-go="journal">Deník</button>` |
+| `.mini` | index.html, [miniplayer.js](public/js/views/miniplayer.js) | Header mini player (Claude Design "MiniVinyl"): what nowplayingd (:8081) is playing, before Controller. `__bar` 250×34 on `--l2`: `__win` (48×32 window onto the live turntable at ~0.21×, `__deck`), `__text` (title + `__artist`, ellipsis), `__play` 52px accent. `__drop` 340px panel below the header, right-aligned: `__head` (`__state` "HRAJE · kaceybody" + Zavřít), `__stage` 190px (turntable at 1×, pixelated), `__meta` (title, artist, `.bar` progress, `__times`, `__error`), `__transport` (3 × 44px), `__vol` (`.btn--step` −/+, `.bar--grow`, `__volnum`), `__link`. Uses Kacey's accent, not the cover's. Desktop header only (the phone hides `.top__end`) | `hidden` when nothing plays or nowplayingd is down; paused keeps it, frame held; `__drop[hidden]`, `__open[aria-expanded]` | — |
 | `.btn--back` | index.html | "← Zpět na hlavní" | hidden on phone | `<button class="btn btn--back" data-go="main">` |
 | `.link` | styles.css | Inline text action | `:hover` | `<button class="link" data-go="calendar">` |
 
@@ -390,6 +393,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 | Sheet: routine planner | sheet xwide | [index.html](public/index.html) `#routinePanel` | [views/routine.js](public/js/views/routine.js) | sheet__bar, chips (brushes), revert btn, dirty, confirm, btn--step, grid/cell/grid__label, noteedit, weektotals/wtrow |
 | Sheet: voiceprint | sheet wide | [index.html:657](public/index.html:657) | [voice/wake-panel.js](public/js/voice/wake-panel.js) | vw__* |
 | Toast | global | [index.html:709](public/index.html:709) | [ui/toast.js](public/js/ui/toast.js) | toast |
+| Header: mini player | global (desktop) | [index.html](public/index.html) `#mini` in `.top__end` | [views/miniplayer.js](public/js/views/miniplayer.js) | mini, bar, btn--step, btn--sm |
 
 ---
 
@@ -454,6 +458,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 One line per feature that changes the UI. Newest first. Format: `YYYY-MM-DD — what changed (tokens / components / screens touched) [design: pending|synced]`.
 `pending` means Claude Design hasn't picked the change up yet; see [§0](#0-design-implementation-loop).
 
+- 2026-09-26 — Implemented Claude Design "MiniVinyl": the header mini player `.mini` before Controller. It shows what nowplayingd plays on kaceybody, with a live turntable window, Pauza/Hrát, and a dropdown panel with the turntable at 1×, progress, transport, volume and a link to the full-screen visual. New shadow literal `0 8px 24px` and z-index 20 (`.mini__drop`). Built from the design brief's values; the `MiniVinyl.dc.html` export itself has not been compared yet. [design: synced]
 - 2026-09-25 — Proposal review gets the learning loop's offer (Claude Design 2c): after an accept that makes a kind regular, the card stays with `.propoffer` ("Tohle přijímáš pravidelně — udělat z toho pravidlo?", Vytvořit pravidlo · Teď ne), which opens the rules editor prefilled. [design: synced]
 - 2026-09-25 — Implemented Claude Design "Kacey DREAM" (the night routine, docs/DREAM.md P6): new full-bleed views **morning** (1a–1e: `.bleedbar`, `.clockbig`, `.briefline--big`, `.segbar`, `.checkitem`, `.ruletask`, `.morningdone`) and **proposals** (2a, 2b, 2d: `.propcard`, `.confbar`, `.propacts`, `.propview--final`); new view **rules** (3a–3h: `.ruleset`, `.field`, `.catpick`, `.preview7`, phone panes by `data-step`); Brief's cycle card replaced by the real night `.timeline` (4a–4f) with sunrise ±15 moving lightsd's morning routine; task rows get `.origin` PRAVIDLO/KACEY + "?" reason (5a, placed under the meta line so it never squeezes the label); Controller gets "Noc a ráno" `.srow`s (switch and `.srow__step`) and a "Stav noci" readout (5b); night dim `html.is-night` (5c, the dim layer only — the minimal night layout is not built); Funkce rail and Víc gain Ráno and Pravidla. `.cyclestep` removed. [design: synced]
 - 2026-09-24 — **KC 1.0.0**, the first release ([CHANGELOG.md](CHANGELOG.md)). Header stats lead with the release (`KC 1.0.0`, from the server's `ready` frame). [design: pending]
