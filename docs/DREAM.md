@@ -297,8 +297,9 @@ Three of these rows exist because of how lightsd works:
 >   the backend at start: backlight, else xset, else a no-op. Darkening is a
 >   20 s fade (`brightness` down to 4 %, then `bl_power` off), and any
 >   activity during it restores full brightness. The music visual on `:8081`
->   counts as the page: it posts `/api/presence` on mouse moves, and the mini
->   player opens it as a window that "Otevřít Kacey" closes again.
+>   counts as the page: it posts `/api/presence` on mouse moves. On the kiosk
+>   the mini player shows it in a full-screen frame over Kacey's page (cage
+>   0.2 crashes on a second window), and "Otevřít Kacey" closes the frame.
 > - **The kiosk** only needs `KIOSK_URL=http://127.0.0.1:8082/?kiosk=1`.
 > - **The voice** will be XTTS on the laptop's GeForce 940MX (once the 580
 >   legacy driver replaces the 610 one that ignores it).

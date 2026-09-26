@@ -191,18 +191,32 @@ function nudgeVolume(delta) {
   }, 300);
 }
 
+function openVisual() {
+  $('visualFrame').src = nowplayingUrl() + '/';
+  $('visualOverlay').hidden = false;
+}
+
+function closeVisual() {
+  $('visualOverlay').hidden = true;
+  $('visualFrame').removeAttribute('src');     // stop drawing a record nobody sees
+}
+
 export function initMiniPlayer() {
   if (!$('mini')) return;
   canvases = [$('miniDeck'), $('miniBig')];
   $('miniLink').href = nowplayingUrl();
-  /* The kiosk has no tabs: a link opened in a new one would cover Kacey for
-     good. Open it by script instead, so the visual's "Otevřít Kacey" can close
-     it again and uncover this page, which keeps listening underneath. */
+  /* The kiosk has no tabs, and cage 0.2 crashes when the browser opens a
+     second window, so the visual never gets one there: it is shown over this
+     page in a full-screen frame. Kacey keeps running (and listening)
+     underneath, and the visual's "Otevřít Kacey" asks for the frame to close. */
   if (KIOSK) {
     $('miniLink').addEventListener('click', function (ev) {
       ev.preventDefault();
       setOpen(false);
-      window.open(nowplayingUrl(), 'kacey-visual');
+      openVisual();
+    });
+    window.addEventListener('message', function (ev) {
+      if (ev.origin === nowplayingUrl() && ev.data && ev.data.type === 'kacey-close-visual') closeVisual();
     });
   }
 

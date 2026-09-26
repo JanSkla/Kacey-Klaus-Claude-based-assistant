@@ -176,6 +176,11 @@ select:focus-visible, textarea:focus-visible {
 }
 .mini__link:hover { background: var(--l2); }
 
+/* The music visual over the kiosk page: a frame, not a second window, because
+   cage 0.2 crashes on one. The visual closes it by postMessage. */
+.visualover { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
+.visualover__frame { display: block; width: 100%; height: 100%; border: 0; }
+
 /* The connection pill doubles as the state dot the orb drives. */
 .conn { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); white-space: nowrap; }
 .conn__dot {

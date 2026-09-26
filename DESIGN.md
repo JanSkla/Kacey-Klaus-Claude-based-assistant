@@ -179,6 +179,7 @@ status dots (`.conn__dot`, `.btn .dot`).
 | Sticky column heads (multi-day lane) | 7 | `.colheads` |
 | Routine block note editor | 8 | `.noteedit` |
 | Header mini player's panel | 20 | `.mini__drop` |
+| Music visual over the kiosk page | 50 | `.visualover` |
 | Sheets (modals); phone scrim | 30 | `.sheet`, `.scrim` |
 | Phone bottom sheet | 31 | `.is-psheet-open` |
 | Toast | 40 | `.toast` |
@@ -213,6 +214,7 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.card` | The panel. `--l1` bg, 1px `--line` border | `--pad`, `--flush`; parts `__head`, `__sub`, `__title` (`--lg`, `--bar`), `__body` (`--scroll`), `__foot` (`--block`) | — | `<section class="card"><div class="card__head"><h2 class="card__title">Dnes</h2></div>…` |
 | `.sheet` | Modal overlay | `--bottom`; `__box` (`--wide` 760, `--xwide` 1080, `--sheetbottom`), `__head`, `__title`, `__close`, `__bar`, `__lede`, `__body`, `__foot`, `__note` | `hidden` | `<div class="sheet" hidden><div class="sheet__box" role="dialog" aria-modal="true">` |
 | `.runner` / `.focus` | Full-bleed task screens | `runner__head/title/list/add/foot`; `focus__title/clock` | — | `<div class="focus"><h1 class="focus__title">` |
+| `.visualover` | The music visual (nowplayingd) in a full-screen frame over the kiosk page, opened from the mini player's link; `__frame`. Kiosk only: cage cannot take a second window | `hidden` | `<div class="visualover" id="visualOverlay" hidden>` |
 | `.viewbar` / `.embed` | Header row + full-height iframe for a view that frames a separate app (lights) | `.embed__off` (notice card when off or unreachable) | `hidden` | `<iframe class="embed" id="lightsFrame">` |
 | `.psheet` + `.scrim` | A panel that sits in the page on desktop and becomes a bottom sheet on a phone ([psheet.js](public/js/ui/psheet.js)): calendar sources, event editor, journal KC chat. `__head` (title + `[data-psheet-close]`) | — | `.is-psheet-open` (phone only has an effect); scrim `hidden` | `openSheet($('calSourcesSheet'))` |
 | Helpers | `.row` (flex, gap 8, wraps; `.center`), `.push` (margin-left:auto), `.narrow` (60ch), `.center`, `.sr-only`, `.phone-only` / `.desk-only` (shown on one layout only), `.pairrow` (two equal buttons) | | | `<span class="row push">` |
@@ -458,6 +460,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 One line per feature that changes the UI. Newest first. Format: `YYYY-MM-DD — what changed (tokens / components / screens touched) [design: pending|synced]`.
 `pending` means Claude Design hasn't picked the change up yet; see [§0](#0-design-implementation-loop).
 
+- 2026-09-26 — On the kiosk, the mini player's "Otevřít vizuál" shows the music visual in a full-screen frame over the page (`.visualover`, z-index 50) instead of a new window. A new tab covered Kacey with no way back, and a second window crashes cage. [design: pending]
 - 2026-09-26 — Implemented Claude Design "MiniVinyl": the header mini player `.mini` before Controller. It shows what nowplayingd plays on kaceybody, with a live turntable window, Pauza/Hrát, and a dropdown panel with the turntable at 1×, progress, transport, volume and a link to the full-screen visual. New shadow literal `0 8px 24px` and z-index 20 (`.mini__drop`). Built from the design brief's values; the `MiniVinyl.dc.html` export itself has not been compared yet. [design: synced]
 - 2026-09-25 — Proposal review gets the learning loop's offer (Claude Design 2c): after an accept that makes a kind regular, the card stays with `.propoffer` ("Tohle přijímáš pravidelně — udělat z toho pravidlo?", Vytvořit pravidlo · Teď ne), which opens the rules editor prefilled. [design: synced]
 - 2026-09-25 — Implemented Claude Design "Kacey DREAM" (the night routine, docs/DREAM.md P6): new full-bleed views **morning** (1a–1e: `.bleedbar`, `.clockbig`, `.briefline--big`, `.segbar`, `.checkitem`, `.ruletask`, `.morningdone`) and **proposals** (2a, 2b, 2d: `.propcard`, `.confbar`, `.propacts`, `.propview--final`); new view **rules** (3a–3h: `.ruleset`, `.field`, `.catpick`, `.preview7`, phone panes by `data-step`); Brief's cycle card replaced by the real night `.timeline` (4a–4f) with sunrise ±15 moving lightsd's morning routine; task rows get `.origin` PRAVIDLO/KACEY + "?" reason (5a, placed under the meta line so it never squeezes the label); Controller gets "Noc a ráno" `.srow`s (switch and `.srow__step`) and a "Stav noci" readout (5b); night dim `html.is-night` (5c, the dim layer only — the minimal night layout is not built); Funkce rail and Víc gain Ráno and Pravidla. `.cyclestep` removed. [design: synced]
