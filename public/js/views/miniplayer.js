@@ -15,6 +15,7 @@
    ========================================================================= */
 
 import { $ } from '../core/dom.js';
+import { KIOSK } from '../core/state.js';
 
 var PORT = 8081;
 var VOLUME_STEP = 5;
@@ -194,6 +195,16 @@ export function initMiniPlayer() {
   if (!$('mini')) return;
   canvases = [$('miniDeck'), $('miniBig')];
   $('miniLink').href = nowplayingUrl();
+  /* The kiosk has no tabs: a link opened in a new one would cover Kacey for
+     good. Open it by script instead, so the visual's "Otevřít Kacey" can close
+     it again and uncover this page, which keeps listening underneath. */
+  if (KIOSK) {
+    $('miniLink').addEventListener('click', function (ev) {
+      ev.preventDefault();
+      setOpen(false);
+      window.open(nowplayingUrl(), 'kacey-visual');
+    });
+  }
 
   $('miniOpen').addEventListener('click', function () { setOpen($('miniDrop').hidden); });
   $('miniClose').addEventListener('click', function () { setOpen(false); });

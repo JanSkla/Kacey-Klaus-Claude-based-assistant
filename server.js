@@ -1036,7 +1036,14 @@ function nextUp() {
 
 const voicePayload = () => ({ ...voice.status(), next: nextUp() });
 
-app.use(['/api/voice', '/api/next', '/api/wake'], voiceCors);
+app.use(['/api/voice', '/api/next', '/api/wake', '/api/presence'], voiceCors);
+
+/* The mouse over the music visual: the same as over the kiosk page — wakes a
+   dark screen and keeps a lit one lit (screen.js). A signal, not a request. */
+app.post('/api/presence', (_req, res) => {
+  notePresence();
+  res.status(204).end();
+});
 
 app.get('/api/next', (_req, res) => res.json({ next: nextUp() }));
 

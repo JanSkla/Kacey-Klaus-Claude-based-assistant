@@ -294,7 +294,11 @@ Three of these rows exist because of how lightsd works:
 >   rule), not with `xset`. It is dark by default. A tap, a key, the wake word,
 >   or the mouse moving over the page (the `presence` frame, which is not an
 >   interaction) lights it, and the idle timeout darkens it. `screen.js` picks
->   the backend at start: backlight, else xset, else a no-op.
+>   the backend at start: backlight, else xset, else a no-op. Darkening is a
+>   20 s fade (`brightness` down to 4 %, then `bl_power` off), and any
+>   activity during it restores full brightness. The music visual on `:8081`
+>   counts as the page: it posts `/api/presence` on mouse moves, and the mini
+>   player opens it as a window that "Otevřít Kacey" closes again.
 > - **The kiosk** only needs `KIOSK_URL=http://127.0.0.1:8082/?kiosk=1`.
 > - **The voice** will be XTTS on the laptop's GeForce 940MX (once the 580
 >   legacy driver replaces the 610 one that ignores it).

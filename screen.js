@@ -18,6 +18,11 @@
  *              X's own input wakes the panel there, so the idle check also
  *              reads X's idle time (xprintidle) to darken it again.
  *
+ * With the backlight, going dark is a 20 s fade rather than a cut: the panel
+ * dims down (brightness), then the backlight goes off. Anybody who moves the
+ * mouse, taps or talks during the fade gets full brightness back at once, and
+ * the fade is the warning that the screen is about to go.
+ *
  * ONE owner decides when the panel sleeps: this module. Every change is
  * logged with its reason, because "why did the screen come on at three in the
  * morning" has to be answerable from the log alone.
@@ -39,6 +44,9 @@ const LID_DIR = '/proc/acpi/button/lid';
 const BACKLIGHT_DIR = '/sys/class/backlight';
 const BL_ON = '0';
 const BL_OFF = '4';
+const FADE_MS = 20000;             // idle → dark takes this long, not an instant
+const FADE_STEP_MS = 250;
+const FADE_FLOOR = 0.04;           // the last step before the backlight goes off
 
 let backend = null;                // 'backlight' | 'xset' | 'none', decided on first use
 let blPower = null;                // the bl_power file, for the backlight backend
@@ -49,6 +57,7 @@ let speaking = false;
 let idleTimer = null;
 let idleMinutes = () => 2;
 let warned = false;
+let fade = null;                   // { timer } while the panel is dimming towards off
 
 function run(cmd, args) {
   return new Promise((resolve) => {
@@ -79,13 +88,61 @@ function pickBackend() {
   return (backend = 'xset');
 }
 
+/* ---- brightness (backlight backend) ------------------------------------------
+   The kiosk never changes brightness otherwise, so "full" is the maximum. */
+
+function brightnessFiles() {
+  const dir = path.dirname(blPower);
+  return { file: path.join(dir, 'brightness'), max: path.join(dir, 'max_brightness') };
+}
+
+function fullBrightness() {
+  try { return Number(readFileSync(brightnessFiles().max, 'utf8').trim()) || null; } catch { return null; }
+}
+
+function setBrightness(level) {
+  try { writeFileSync(brightnessFiles().file, String(Math.max(1, Math.round(level)))); return true; } catch { return false; }
+}
+
+/** Dim towards dark over FADE_MS, then switch the backlight off. */
+function startFade() {
+  if (fade) return;
+  const full = fullBrightness();
+  if (!full || !setBrightness(full)) { off('idle'); return; }   // cannot dim here: plain off
+  const started = Date.now();
+  log(`fading (idle, ${FADE_MS / 1000} s)`);
+  fade = {
+    timer: setInterval(() => {
+      const t = (Date.now() - started) / FADE_MS;
+      if (t >= 1) {
+        clearInterval(fade.timer);
+        fade = null;
+        off('idle').finally(() => setBrightness(full));   // lit at full next time
+        return;
+      }
+      // Eyes read brightness roughly logarithmically: a squared curve looks even.
+      setBrightness(full * (FADE_FLOOR + (1 - FADE_FLOOR) * (1 - t) * (1 - t)));
+    }, FADE_STEP_MS),
+  };
+}
+
+/** Somebody is back during the fade: full brightness now. */
+function cancelFade(reason) {
+  if (!fade) return;
+  clearInterval(fade.timer);
+  fade = null;
+  const full = fullBrightness();
+  if (full) setBrightness(full);
+  log(`fade cancelled (${reason})`);
+}
+
 function set(state, reason) {
   if (current.state === state && current.reason === reason) return;
   current = { state, since: new Date().toISOString(), reason };
 }
 
 async function force(state, reason) {
-  if (state === 'on') lastActivity = Date.now();
+  if (state === 'on') { lastActivity = Date.now(); cancelFade(reason); }
   const b = pickBackend();
   if (b === 'none') {
     log(`${state} (${reason}) — no-op, no screen control here`);
@@ -119,7 +176,7 @@ export function on(reason) { return force('on', reason); }
 export function off(reason) { return force('off', reason); }
 
 /** Something happened that should keep a lit panel lit for another timeout. */
-export function noteActivity() { lastActivity = Date.now(); }
+export function noteActivity() { lastActivity = Date.now(); cancelFade('activity'); }
 
 /**
  * Somebody is at the screen (a tap, a key, the mouse over the kiosk page): keep
@@ -128,6 +185,7 @@ export function noteActivity() { lastActivity = Date.now(); }
  */
 export function wake(reason) {
   lastActivity = Date.now();
+  cancelFade(reason);
   if (current.state !== 'on') return on(reason);
   return Promise.resolve(true);
 }
@@ -136,6 +194,7 @@ export function wake(reason) {
 export function setSpeaking(isOn) {
   speaking = !!isOn;
   lastActivity = Date.now();
+  if (speaking) cancelFade('speaking');
 }
 
 /* ---- the lid ------------------------------------------------------------ */
@@ -189,7 +248,7 @@ async function checkIdle() {
   if (b === 'none') return;
   const panel = await panelState();
   if (panel === null) return;
-  if (panel === 'off') { set('off', current.state === 'off' ? current.reason : 'os'); return; }
+  if (panel === 'off') { cancelFade('os'); set('off', current.state === 'off' ? current.reason : 'os'); return; }
   if (current.state !== 'on') set('on', 'os');        // woken by something else (X input, a person at the console)
   if (speaking) return;
 
@@ -197,7 +256,9 @@ async function checkIdle() {
   const xIdle = await xIdleMs();
   const idle = xIdle === null ? kaceyIdle : Math.min(kaceyIdle, xIdle);
   const limit = Math.max(0.25, Number(idleMinutes()) || 2) * 60000;
-  if (idle >= limit) await off('idle');
+  if (idle < limit) return;
+  if (b === 'backlight') startFade();
+  else await off('idle');
 }
 
 /** Start the idle check. `getIdleMinutes` is read on every check, so the setting applies at once. */
@@ -205,6 +266,8 @@ export function startScreen({ getIdleMinutes } = {}) {
   if (typeof getIdleMinutes === 'function') idleMinutes = getIdleMinutes;
   pickBackend();
   log(`backend: ${backend}${blPower ? ` (${blPower})` : ''}`);
+  // A restart in the middle of a fade must not leave the panel dim for good.
+  if (backend === 'backlight') { const full = fullBrightness(); if (full) setBrightness(full); }
   if (idleTimer) return;
   idleTimer = setInterval(() => { checkIdle().catch((e) => log(`idle check failed: ${e.message}`)); }, IDLE_CHECK_MS);
 }
@@ -215,5 +278,5 @@ export function stopScreen() {
 }
 
 export function status() {
-  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, lid: readLid(), idle_ms: Date.now() - lastActivity };
+  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, fading: !!fade, lid: readLid(), idle_ms: Date.now() - lastActivity };
 }
