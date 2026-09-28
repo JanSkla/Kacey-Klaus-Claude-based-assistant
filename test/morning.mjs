@@ -67,6 +67,15 @@ test('it counts down and ticks itself when none are left', () => {
   assert.equal(p.done_at, at(7, 9).toISOString());
 });
 
+test('it keeps the tally of accepted and rejected', () => {
+  const waiting = withProposals(ITEMS, { pending: 3, total: 3 }, at(7, 1));
+  const list = withProposals(waiting, { pending: 0, total: 3, accepted: 2, rejected: 1 }, at(7, 9));
+  const p = list.find((i) => i.key === 'proposals');
+  assert.equal(p.accepted, 2);
+  assert.equal(p.rejected, 1);
+  assert.equal(p.done, true);
+});
+
 test('active: every item ticked ends it as done', () => {
   const r = { ...freshRecord(D, ITEMS), state: 'active' };
   assert.deepEqual(morningStep(r, at(7, 20), {}), {});

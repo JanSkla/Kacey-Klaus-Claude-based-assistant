@@ -49,7 +49,7 @@ export function freshRecord(date, items) {
  * itself when none are left — it cannot be ticked by hand, because deciding
  * is what ticks it.
  */
-export function withProposals(items, { pending, total }, now = new Date()) {
+export function withProposals(items, { pending, total, accepted = 0, rejected = 0 }, now = new Date()) {
   const list = items.filter((i) => i.key !== PROPOSALS_KEY);
   const had = items.find((i) => i.key === PROPOSALS_KEY);
   if (!had && pending === 0) return list;
@@ -58,7 +58,7 @@ export function withProposals(items, { pending, total }, now = new Date()) {
     key: PROPOSALS_KEY,
     label: `Projít návrhy od Kacey (${Math.max(total, pending)})`,
     auto: true,
-    pending, total: Math.max(total, pending),
+    pending, total: Math.max(total, pending), accepted, rejected,
     done,
     done_at: done ? (had && had.done_at) || now.toISOString() : null,
   });

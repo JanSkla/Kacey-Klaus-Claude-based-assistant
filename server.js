@@ -28,6 +28,7 @@ import {
   startRun as startNight_run, push as pushNight, extendNight, nightLog, runSummary, settings as nightSettings,
 } from './night.js';
 import * as morning from './morning.js';
+import * as screen from './screen.js';
 import { targetDate } from './sleep.js';
 import { kvGet, kvSet } from './db.js';
 import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
@@ -1034,9 +1035,18 @@ function nextUp() {
   return nextItem({ events, tasks, now });
 }
 
-const voicePayload = () => ({ ...voice.status(), next: nextUp() });
+const voicePayload = () => ({ ...voice.status(), keep: screen.keptOn(), next: nextUp() });
 
-app.use(['/api/voice', '/api/next', '/api/wake', '/api/presence'], voiceCors);
+app.use(['/api/voice', '/api/next', '/api/wake', '/api/presence', '/api/screen/keep'], voiceCors);
+
+/* "Nechat hrát vinyl": the music player (Kacey's header, the visual's corner)
+   keeps the bedside screen lit — no idle timeout until it is pressed again. */
+app.get('/api/screen/keep', (_req, res) => res.json({ keep: screen.keptOn() }));
+app.post('/api/screen/keep', express.json({ limit: '1kb' }), (req, res) => {
+  const on = req.body && req.body.on;
+  if (typeof on !== 'boolean') return res.status(400).json({ error: 'on musí být true nebo false' });
+  res.json({ keep: screen.setKeepOn(on, 'button') });
+});
 
 /* The mouse over the music visual: the same as over the kiosk page — wakes a
    dark screen and keeps a lit one lit (screen.js). A signal, not a request. */
@@ -1058,11 +1068,12 @@ app.get('/api/voice/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
   let next = nextUp();
-  const push = (s) => res.write(`data: ${JSON.stringify({ ...s, next })}\n\n`);
+  const push = (s) => res.write(`data: ${JSON.stringify({ ...s, keep: screen.keptOn(), next })}\n\n`);
   push(voice.status());
   const unsubscribe = voice.subscribe(push);
+  const unkeep = screen.onKeepChange(() => push(voice.status()));
   const minute = setInterval(() => { next = nextUp(); push(voice.status()); }, 60000);
-  req.on('close', () => { unsubscribe(); clearInterval(minute); });
+  req.on('close', () => { unsubscribe(); unkeep(); clearInterval(minute); });
 });
 
 app.post('/api/wake', (_req, res) => {

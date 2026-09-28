@@ -6,6 +6,9 @@
    sheet it renders per track. Controls go to its /api/player and /api/volume;
    nothing here ever talks to Spotify.
 
+   "Nechat hrát vinyl" keeps the bedside screen lit (Kacey's /api/screen/keep,
+   screen.js) until pressed again; on the kiosk it also puts the visual up.
+
    Collapsed it is a 250×34 bar before the Controller button: a window onto
    the live turntable, the title, and Pauza/Hrát. Tapped, it drops a panel
    with the turntable at full size, progress, transport and volume.
@@ -28,6 +31,7 @@ var status = null;         // nowplayingd's last status, or null while it is dow
 var playing = false;
 var progressBase = 0, progressAt = 0, duration = 0;
 var volumePending = null, volumeTimer = 0;
+var keep = false;          // the screen is kept lit ("Nechat hrát vinyl")
 
 /* ---- the turntable -------------------------------------------------------
    The same player as nowplayingd's own page (its web/index.html advance()):
@@ -191,6 +195,27 @@ function nudgeVolume(delta) {
   }, 300);
 }
 
+/* ---- "Nechat hrát vinyl" --------------------------------------------------- */
+
+function renderKeep() {
+  $('miniKeep').setAttribute('aria-pressed', String(keep));
+  $('miniKeep').textContent = keep ? 'Vinyl hraje · vypnout' : 'Nechat hrát vinyl';
+}
+
+function readKeep() {
+  fetch('/api/screen/keep').then(function (r) { return r.json(); })
+    .then(function (d) { keep = !!d.keep; renderKeep(); })
+    .catch(function () { /* the server's; the button just stays as it is */ });
+}
+
+function setKeep(on) {
+  return fetch('/api/screen/keep', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: on }),
+  }).then(function (r) { return r.json(); })
+    .then(function (d) { keep = !!d.keep; renderKeep(); })
+    .catch(function () { $('miniError').textContent = 'Kacey neodpovídá.'; $('miniError').hidden = false; });
+}
+
 function openVisual() {
   $('visualFrame').src = nowplayingUrl() + '/';
   $('visualOverlay').hidden = false;
@@ -216,11 +241,27 @@ export function initMiniPlayer() {
       openVisual();
     });
     window.addEventListener('message', function (ev) {
-      if (ev.origin === nowplayingUrl() && ev.data && ev.data.type === 'kacey-close-visual') closeVisual();
+      if (ev.origin !== nowplayingUrl() || !ev.data) return;
+      if (ev.data.type === 'kacey-close-visual') {
+        closeVisual();
+        // Nobody keeps a screen lit for a record they just closed.
+        if (keep) setKeep(false);
+      }
     });
   }
 
-  $('miniOpen').addEventListener('click', function () { setOpen($('miniDrop').hidden); });
+  $('miniKeep').addEventListener('click', function () {
+    var on = !keep;
+    setKeep(on).then(function () {
+      if (on && KIOSK) { setOpen(false); openVisual(); }
+    });
+  });
+
+  $('miniOpen').addEventListener('click', function () {
+    var open = $('miniDrop').hidden;
+    setOpen(open);
+    if (open) readKeep();              // the visual may have changed it
+  });
   $('miniClose').addEventListener('click', function () { setOpen(false); });
   $('miniPlay').addEventListener('click', toggle);
   $('miniToggle').addEventListener('click', toggle);

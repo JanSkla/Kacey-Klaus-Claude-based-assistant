@@ -300,6 +300,9 @@ Three of these rows exist because of how lightsd works:
 >   counts as the page: it posts `/api/presence` on mouse moves. On the kiosk
 >   the mini player shows it in a full-screen frame over Kacey's page (cage
 >   0.2 crashes on a second window), and "Otevřít Kacey" closes the frame.
+>   "Nechat hrát vinyl" (the mini player and the visual's corner) keeps the
+>   screen lit with no idle timeout; the button again, closing the visual,
+>   "Zpět do klidu" or the night winding down ends it.
 > - **The kiosk** only needs `KIOSK_URL=http://127.0.0.1:8082/?kiosk=1`.
 > - **The voice** will be XTTS on the laptop's GeForce 940MX (once the 580
 >   legacy driver replaces the 610 one that ignores it).

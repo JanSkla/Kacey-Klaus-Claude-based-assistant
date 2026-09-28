@@ -80,7 +80,7 @@ function apply(event, now = new Date()) {
     kvSet('night.sleep', sleep);
   }
   for (const effect of effects) {
-    if (effect.type === 'screen_off') screen.off('winding_down');
+    if (effect.type === 'screen_off') screen.off('winding_down', { release: true });
     else if (effect.type === 'start_run') startRun(effect.trigger, effect.at ? new Date(effect.at) : now);
   }
   if (changed) push();

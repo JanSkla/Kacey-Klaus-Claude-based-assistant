@@ -170,6 +170,7 @@ select:focus-visible, textarea:focus-visible {
 .mini__vol[hidden] { display: none; }
 .mini__step { width: 32px; height: 32px; padding: 0; }
 .mini__volnum { width: 44px; text-align: right; font-size: 13px; color: var(--ink2); }
+.mini__keep { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .mini__link {
   display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-top: 1px solid var(--line);
   color: var(--acc); font-size: 13px; font-weight: 600; text-decoration: none;

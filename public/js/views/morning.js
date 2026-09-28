@@ -105,6 +105,15 @@ function renderSegs(host, list) {
   fill(host, list.map(function (i) { return el('span.segbar__seg' + (i.done ? '.is-done' : '')); }));
 }
 
+/* "1 přijato · 1 zamítnuto", and while some wait, how many are decided. */
+function proposalSub(i) {
+  var tally = [];
+  if (i.accepted) tally.push(i.accepted + ' přijato');
+  if (i.rejected) tally.push(i.rejected + ' zamítnuto');
+  if (i.done) return tally.length ? tally.join(' · ') : i.total + ' / ' + i.total + ' rozhodnuto';
+  return [(i.total - i.pending) + ' / ' + i.total + ' rozhodnuto'].concat(tally, ['otevřít']).join(' · ');
+}
+
 function renderChecklist() {
   var list = items();
   var done = list.filter(function (i) { return i.done; }).length;
@@ -112,7 +121,7 @@ function renderChecklist() {
   renderSegs($('mSegs'), list);
   fill($('mCheck'), list.map(function (i) {
     var isProp = i.key === 'proposals';
-    var sub = isProp ? (i.done ? i.total + ' / ' + i.total + ' rozhodnuto' : (i.total - i.pending) + ' / ' + i.total + ' rozhodnuto · otevřít') : '';
+    var sub = isProp ? proposalSub(i) : '';
     return el('button.checkitem' + (i.done ? '.is-done' : '') + (isProp ? '.checkitem--wide' : '') + (isProp && !i.done ? '.is-open' : ''), {
       type: 'button', 'aria-pressed': String(!!i.done),
       onclick: function () {

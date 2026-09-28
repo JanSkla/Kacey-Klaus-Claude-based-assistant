@@ -23,6 +23,10 @@
  * mouse, taps or talks during the fade gets full brightness back at once, and
  * the fade is the warning that the screen is about to go.
  *
+ * "Nechat hrát vinyl" (the music player's button) keeps the panel lit: no idle
+ * fade, and the morning's own "back to sleep" is skipped. Only somebody saying
+ * so ends it — the button again, "Zpět do klidu", or the night winding down.
+ *
  * ONE owner decides when the panel sleeps: this module. Every change is
  * logged with its reason, because "why did the screen come on at three in the
  * morning" has to be answerable from the log alone.
@@ -58,6 +62,8 @@ let idleTimer = null;
 let idleMinutes = () => 2;
 let warned = false;
 let fade = null;                   // { timer } while the panel is dimming towards off
+let keepOn = false;                // "Nechat hrát vinyl": no idle timeout until released
+const keepListeners = new Set();
 
 function run(cmd, args) {
   return new Promise((resolve) => {
@@ -173,7 +179,42 @@ async function force(state, reason) {
 }
 
 export function on(reason) { return force('on', reason); }
-export function off(reason) { return force('off', reason); }
+
+/**
+ * Dark now. While the panel is kept lit this is skipped, unless `release`:
+ * an off somebody asked for ("Zpět do klidu", the night winding down) ends
+ * the keep; an automatic one (the morning is done) does not.
+ */
+export function off(reason, { release = false } = {}) {
+  if (keepOn) {
+    if (!release) { log(`off (${reason}) skipped — kept lit`); return Promise.resolve(false); }
+    setKeepOn(false, reason);
+  }
+  return force('off', reason);
+}
+
+/* ---- kept lit ("Nechat hrát vinyl") -------------------------------------- */
+
+export function keptOn() { return keepOn; }
+
+export function onKeepChange(fn) {
+  keepListeners.add(fn);
+  return () => keepListeners.delete(fn);
+}
+
+/** Keep the panel lit (and light it now), or hand it back to the idle timeout. */
+export function setKeepOn(value, reason = 'button') {
+  const next = !!value;
+  if (next === keepOn) return keepOn;
+  keepOn = next;
+  lastActivity = Date.now();          // released: the full timeout from now
+  log(keepOn ? `kept lit (${reason})` : `keep released (${reason})`);
+  if (keepOn) { cancelFade('kept lit'); if (current.state !== 'on') on('kept lit'); }
+  for (const fn of keepListeners) {
+    try { fn(keepOn); } catch { /* a closed stream must not stop the rest */ }
+  }
+  return keepOn;
+}
 
 /** Something happened that should keep a lit panel lit for another timeout. */
 export function noteActivity() { lastActivity = Date.now(); cancelFade('activity'); }
@@ -250,7 +291,7 @@ async function checkIdle() {
   if (panel === null) return;
   if (panel === 'off') { cancelFade('os'); set('off', current.state === 'off' ? current.reason : 'os'); return; }
   if (current.state !== 'on') set('on', 'os');        // woken by something else (X input, a person at the console)
-  if (speaking) return;
+  if (speaking || keepOn) return;
 
   const kaceyIdle = Date.now() - lastActivity;
   const xIdle = await xIdleMs();
@@ -278,5 +319,5 @@ export function stopScreen() {
 }
 
 export function status() {
-  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, fading: !!fade, lid: readLid(), idle_ms: Date.now() - lastActivity };
+  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, fading: !!fade, keep_on: keepOn, lid: readLid(), idle_ms: Date.now() - lastActivity };
 }

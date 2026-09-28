@@ -37,7 +37,21 @@ function save(rec) { kvSet('morning.today', rec); }
 
 function pendingCounts(date) {
   const all = nightstore.listProposals({ date, limit: 200 });
-  return { pending: all.filter((p) => p.status === 'pending').length, total: all.length };
+  const count = (...statuses) => all.filter((p) => statuses.includes(p.status)).length;
+  return { pending: count('pending'), total: all.length, accepted: count('accepted', 'edited'), rejected: count('rejected') };
+}
+
+/**
+ * Recount the "Projít návrhy" item. While the morning runs, and afterwards
+ * too when the item is on today's list: the screen still shows the checklist
+ * after the morning has ended, and proposals are decided then as well.
+ */
+function recountProposals(rec, now) {
+  if (rec.state !== 'active' && !rec.items.some((i) => i.key === PROPOSALS_KEY)) return false;
+  const next = withProposals(rec.items, pendingCounts(rec.logical_date), now);
+  if (JSON.stringify(next) === JSON.stringify(rec.items)) return false;
+  rec.items = next;
+  return true;
 }
 
 /* ---- the day ------------------------------------------------------------- */
@@ -196,7 +210,7 @@ export function tick(key, done, now = new Date()) {
 export function idle(now = new Date()) {
   const rec = record();
   clearTimeout(idleTimer);
-  screen.off('morning: zpět do klidu');
+  screen.off('morning: zpět do klidu', { release: true });
   if (rec && rec.state === 'active') end(rec, 'dismissed', now);
   return record();
 }
@@ -213,10 +227,7 @@ export function onTick(now) {
     const iso = peak ? peak.toISOString() : null;
     if (iso !== rec.peak_at) { rec.peak_at = iso; save(rec); }
   }
-  if (rec.state === 'active') {
-    const next = withProposals(rec.items, pendingCounts(rec.logical_date), now);
-    if (JSON.stringify(next) !== JSON.stringify(rec.items)) { rec.items = next; save(rec); push(); }
-  }
+  if (recountProposals(rec, now)) { save(rec); push(); }
 
   const step = morningStep(rec, now, { peak: rec.peak_at ? new Date(rec.peak_at) : null, morningEnd: s.morning_end });
   if (step.refresh && s.enabled !== false) refresh(rec, now);
@@ -234,9 +245,9 @@ export function onTick(now) {
  * the next tick, and end the morning if that was the last thing left.
  */
 export function syncProposals(now = new Date()) {
-  const rec = record();
-  if (!rec || rec.state !== 'active') return;
-  rec.items = withProposals(rec.items, pendingCounts(rec.logical_date), now);
+  const rec = today(now);
+  const changed = recountProposals(rec, now);
+  if (rec.state !== 'active') { if (changed) save(rec); return; }
   rec.last_interaction_at = now.toISOString();
   save(rec);
   if (morningStep(rec, now, {}).end === 'done') end(rec, 'done', now);
