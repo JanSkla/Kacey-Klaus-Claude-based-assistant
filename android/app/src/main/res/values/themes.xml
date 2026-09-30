@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kacey's palette (DESIGN.md §2): bg, l1, ink, acc at hue 193. -->
+    <color name="bg">#161616</color>
+    <color name="l1">#242424</color>
+    <color name="l2">#2f2f2f</color>
+    <color name="line2">#565656</color>
+    <color name="ink">#f4f4f4</color>
+    <color name="ink2">#c6c6c6</color>
+    <color name="ink3">#9a9a9a</color>
+    <color name="acc">#5cd4f5</color>
+    <color name="on_acc">#161616</color>
+    <color name="err">#fa4d56</color>
+    <color name="ok">#42be65</color>
+
+    <style name="Theme.Kacey" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:colorAccent">@color/acc</item>
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- ShareActivity: no window the owner ever sees. -->
+    <style name="Theme.Kacey.Invisible" parent="Theme.Kacey">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+</resources>

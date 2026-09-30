@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kacey</string>
+    <string name="share_label">Kacey</string>
+    <string name="tile_label">Kacey bublina</string>
+    <string name="channel_name">Bublina Kacey</string>
+    <string name="channel_desc">Plovoucí bublina, přes kterou se Kacey otevře nad jakoukoli aplikací.</string>
+    <string name="bubble_text">Klepni na bublinu</string>
+</resources>

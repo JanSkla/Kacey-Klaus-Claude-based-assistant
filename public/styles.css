@@ -597,6 +597,17 @@ button.task__due.is-empty { color: var(--ink3); }
 .allday--task, .colhead__allday--task { border-style: dashed; border-left: 4px solid var(--acc); }
 .colhead__allday--task { border: 1px dashed var(--line2); border-left: 3px solid var(--acc); }
 .allday--task.is-done, .colhead__allday--task.is-done { color: var(--ink3); text-decoration: line-through; }
+/* An unsure event ("?" — it might happen): dotted all round, flat, and a "?"
+   before the title. Dotted, not dashed, so it never reads as a task. The left
+   edge keeps the source colour; calendar.js makes it dotted inline. */
+.eblock.is-tentative { background: var(--l1); border: 2px dotted var(--line2); box-shadow: none; }
+.allday.is-tentative { background: var(--l1); border: 2px dotted var(--line2); }
+.colhead__allday.is-tentative { background: var(--l1); border: 1px dotted var(--line2); }
+.unsure {
+  display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 6px; vertical-align: 1px;
+  border: 1px dotted var(--warn); color: var(--warn); font-size: 11px; font-weight: 600; line-height: 1;
+}
+.eblock--col .unsure, .colhead__allday .unsure { width: 12px; height: 12px; margin-right: 3px; font-size: 9px; }
 .nowline { position: absolute; left: 0; right: 0; height: 2px; background: var(--acc); z-index: 3; }
 
 /* Renaming an event happens in place, over the lane. */

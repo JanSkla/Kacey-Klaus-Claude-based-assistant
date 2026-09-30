@@ -89,6 +89,7 @@ import { initCalendar } from './js/ui/calendar.js';
 import { initRouter } from './js/ui/router.js';
 import { initSheets } from './js/ui/psheet.js';
 import { initAttachments } from './js/ui/attachments.js';
+import { initShare } from './js/ui/share.js';
 import { initMain } from './js/views/main.js';
 import { initTasks } from './js/views/tasks.js';
 import { initJournal } from './js/views/journal.js';
@@ -174,6 +175,7 @@ initVoicecast();
 initMiniPlayer();
 initSheets();
 initRouter();
+initShare();          // after the router: a share lands in the chat view
 
 store.load();
 

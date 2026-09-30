@@ -164,6 +164,12 @@ All environment variables, all with working defaults — see `.env.example`.
 > localhost. Over plain http at a hostname the browser refuses speech
 > recognition and Kacey says so. To use voice from a phone, put TLS in front:
 > `tailscale serve --bg 8082` gives a real certificate on the tailnet.
+>
+> **On the phone.** Over that https address the page installs as an app
+> (Chrome → Add to home screen) and becomes a share target: share a screenshot
+> to Kacey and it lands in the composer. The Android app in
+> [android/](android/README.md) adds a floating bubble over every app, with the
+> same sharing.
 | `KACEY_MODEL`             | `claude-opus-5-5`                      |                                           |
 | `KACEY_EFFORT`            | `low`                                  | low · medium · high · xhigh · max         |
 | `KACEY_DREAM_EFFORT`      | = `KACEY_EFFORT`                       | The night run's reasoning pass and brief only |

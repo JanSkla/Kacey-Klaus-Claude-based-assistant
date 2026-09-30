@@ -65,6 +65,10 @@ Design principles stated in the stylesheet header: neutral greys, **one** accent
 monospace throughout, **no border radii** (only round status dots), surfaces never
 take the hue.
 
+**Installable.** [manifest.webmanifest](public/manifest.webmanifest) (standalone, `--bg` background and theme colour, icons in `public/icons/`: the `.top__mark` square in `--acc` at hue 193 on `--bg`) makes the page an installable app and an Android share target; [sw.js](public/sw.js) only catches shares and caches nothing.
+
+**Android app.** [android/](android/) wraps this same page in a WebView, as a floating bubble and full screen; its only native screen is the launcher/settings screen (`activity_main.xml`), drawn in the tokens from §2 (`bg`, `l1`, `l2`, `line2`, `ink*`, `acc`), monospace, square controls. See [android/README.md](android/README.md).
+
 **Out of scope:** [voicelab/public/](voicelab/public/) is a separate dev tool (port
 8788) with its own, unrelated palette, sans-serif font and 12px radii. Nothing below
 applies to it.
@@ -298,15 +302,16 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.monthgrid` | calendar.js | 7-col month | — |
 | `.lane` / `.tick` / `.eblock` / `.rblock` / `.sleepband` / `.nowline` / `.allday` / `.legend` | calendar.js | Day timeline: hour ticks, events, routine blocks, sleep hatch | `.eblock.is-short`/`.is-past`, `.rblock.is-short` |
 | `.eblock--task` / `.allday--task` / `.colhead__allday--task` + `.eblock__check` | calendar.js | A task in the calendar: dashed, `--l1`, accent left edge, its own 13px checkbox. Timed → lane block `duration` tall; date only → all-day chip. Tap ticks it off | `.is-done` (struck, dimmed), `.eblock--task.is-late` (red edge), `aria-pressed` |
+| `.is-tentative` + `.unsure` | calendar.js | An unsure event (Kacey's own flag, `tentative` from /api/calendar): 2px dotted `--line2` outline on `--l1`, no shadow, the source-colour left edge dotted too, and a 15px dotted `--warn` "?" (`.unsure`, 12px in columns) before the title; meta starts "nejisté ·". On `.eblock`, `.eblock--col`, `.allday`, `.colhead__allday`, and `.rowbtn` (Today panel: the "?" only). Dotted, never dashed, so it is not read as a task | — |
 | `.colheads` / `.colhead` / `.lanecols` / `.lanecol` + `.eblock--col` / `.rblock--col` | calendar.js | Multi-day lane (2–7 days): sticky day heads (`__day` button focuses one day, `__meta` count, `__allday` chips), shared hour ruler, one column per day. ≥5 columns drop times/labels | `.colhead__day.is-today` |
-| `.eventedit` | calendar.js | Inline rename/delete card over the lane, at the event's top | `--col` (340px, over its column) |
+| `.eventedit` | calendar.js | Inline rename/delete card over the lane, at the event's top. "S otazníkem" (`.btn--sm`) makes the event unsure; on an unsure one it is "Potvrdit" (`.btn--outlineaccent`) and the meta line carries the note | `--col` (340px, over its column) |
 | `.grid` / `.weektotals` / `.wtrow` | routine.js | Routine planner grid (`__row` holds 44px `.cell`s plus `__label` block names, pointer-events none) and week totals | `.grid__day.is-today` |
 | `.noteedit` | routine.js | Block note editor, opens under the block, clamped inside the row; saves on Hotovo/Enter/next pick | — |
 | `.timercard` / `.presetgrid` / `.savedgrid` / `.customtimer` | [timers.js](public/js/views/timers.js) | Timers | `.timercard.is-done` |
 | `.runitem` | tasks.js | Big checklist item in runner | `.is-done` |
 | `.readout` | [telemetry.js](public/js/ui/telemetry.js) | `dl` key/value rows | `dd[data-warn]`, `dd[data-bad]` |
 | `.srow` | controller.js | Setting row: text, state, switch — or `__step` (− `__value` +) | `__state.is-planned`, `__state.is-on` (ok) |
-| `.attach` / `.attachstrip` | [attachments.js](public/js/ui/attachments.js) | Image attachment chip with thumb and × | `:hover` on × |
+| `.attach` / `.attachstrip` | [attachments.js](public/js/ui/attachments.js) | Image attachment chip with thumb and ×. A screenshot shared from the phone lands here too ([share.js](public/js/ui/share.js)), with the chat view opened and the composer focused | `:hover` on × |
 | `.vw__*` | [wake-panel.js](public/js/voice/wake-panel.js) | Voiceprint sheet: list items, play/delete, score bar, sensitivity | `data-playing`, `data-match`, `data-outlier`, `data-hit` |
 | Text helpers | styles.css | `.big` (20 acc), `.strong`, `.muted`, `.muted-3`, `.label`, `.rule`, `.clock` (`--sm`), `.num`, `.is-acc` | — |
 
@@ -380,7 +385,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 | `tasks` | wide | [index.html](public/index.html) `data-view="tasks"` | [views/tasks.js](public/js/views/tasks.js), [core/due.js](public/js/core/due.js) | card, groups (Po termínu · Dnes · Tento týden, then Později · Bez termínu · Hotové dřív when not empty), subhead, task, taskwhen, check, bar, input--when (add form: label, date, time), fnlist, btn--back |
 | `journal` | triple | [index.html:176](public/index.html:176) | [views/journal.js](public/js/views/journal.js) | clock, bubbles/msg, tagstrip/tag, prose__area, btn .dot, fnlist |
 | `library` | wide | [index.html:228](public/index.html:228) | [views/library.js](public/js/views/library.js) | card__sub input, chips/chip--filter, cards/entry |
-| `calendar` | triple | [index.html](public/index.html) `data-view="calendar"` | [ui/calendar.js](public/js/ui/calendar.js) | monthgrid/day (drag range), seg (Den · 3 dny · Po–Pá · Týden), ‹ › range step, legend/swatch, lane/tick/eblock/rblock/sleepband/nowline/allday, eblock--task/allday--task (tasks with a due date; "úkoly" in Zdroje), colheads/lanecols (multi-day), eventedit, chip--filter month jump, fnlist |
+| `calendar` | triple | [index.html](public/index.html) `data-view="calendar"` | [ui/calendar.js](public/js/ui/calendar.js) | is-tentative/unsure (unsure events), monthgrid/day (drag range), seg (Den · 3 dny · Po–Pá · Týden), ‹ › range step, legend/swatch, lane/tick/eblock/rblock/sleepband/nowline/allday, eblock--task/allday--task (tasks with a due date; "úkoly" in Zdroje), colheads/lanecols (multi-day), eventedit, chip--filter month jump, fnlist |
 | `brief` | triple | [index.html](public/index.html) `data-view="brief"` | [views/brief.js](public/js/views/brief.js), [views/lineplayer.js](public/js/views/lineplayer.js) | tiles/tile, brieflines/briefline, timeline (the real night + sunrise ±15), injected, prompt, bar |
 | `morning` | bleed | [index.html](public/index.html) `data-view="morning"` | [views/morning.js](public/js/views/morning.js) | bleedbar, clockbig, briefline--big, segbar, checkgrid/checkitem, ruletask, morningdone |
 | `proposals` | bleed | [index.html](public/index.html) `data-view="proposals"` | [views/proposals.js](public/js/views/proposals.js) | bleedbar, segbar--inline, propcard, confbar, seg (when), propacts, propview--final/propresult |
@@ -395,6 +400,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 | Sheet: routine planner | sheet xwide | [index.html](public/index.html) `#routinePanel` | [views/routine.js](public/js/views/routine.js) | sheet__bar, chips (brushes), revert btn, dirty, confirm, btn--step, grid/cell/grid__label, noteedit, weektotals/wtrow |
 | Sheet: voiceprint | sheet wide | [index.html:657](public/index.html:657) | [voice/wake-panel.js](public/js/voice/wake-panel.js) | vw__* |
 | Toast | global | [index.html:709](public/index.html:709) | [ui/toast.js](public/js/ui/toast.js) | toast |
+| Android: launcher screen | native | [activity_main.xml](android/app/src/main/res/layout/activity_main.xml) | [MainActivity.kt](android/app/src/main/java/cz/klaus/kacey/MainActivity.kt) | status block (`l1`), accent button, `.btn`-style buttons, `.input`-style URL field, `.label`-style "SERVER" |
 | Header: mini player | global (desktop) | [index.html](public/index.html) `#mini` in `.top__end` | [views/miniplayer.js](public/js/views/miniplayer.js) | mini, bar, btn--step, btn--sm |
 
 ---
@@ -460,6 +466,9 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 One line per feature that changes the UI. Newest first. Format: `YYYY-MM-DD — what changed (tokens / components / screens touched) [design: pending|synced]`.
 `pending` means Claude Design hasn't picked the change up yet; see [§0](#0-design-implementation-loop).
 
+- 2026-09-30 — **Unsure events**: an event Kacey marks unsure (poster, "maybe", "?") is drawn with a dotted outline and a `--warn` "?" in the lane, the columns, the all-day strip and the Today panel (`.is-tentative`, `.unsure`); the event editor gets "S otazníkem" / "Potvrdit". Also fixed: an event ending at midnight no longer hangs off the bottom of the lane. [design: pending]
+- 2026-09-30 — **Sharing to Kacey**: the page is installable (`manifest.webmanifest`, icons, `sw.js`) and an Android share target; a shared screenshot opens the chat view with the image in `.attachstrip` and the composer focused for an optional note. No new component. [design: pending]
+- 2026-09-30 — **Android app** ([android/](android/)): the page in a WebView as a floating bubble (Android Bubbles API) and full screen, "Sdílet → Kacey" into the bubble, a Quick Settings tile. One native screen, the launcher/settings screen, built from the §2 tokens without a design first. [design: pending]
 - 2026-09-28 — Morning checklist: the "Projít návrhy od Kacey" item's sub line tallies the decisions ("1 přijato · 1 zamítnuto"), and it also recounts after the morning has ended (`.checkitem__sub`, text only). [design: pending]
 - 2026-09-27 — "Nechat hrát vinyl" in the mini player's panel (`.mini__keep`, an existing `.btn--sm` with `aria-pressed`): keeps the bedside screen lit until pressed again, and on the kiosk opens the visual. The visual's corner widget has the same toggle. [design: pending]
 - 2026-09-26 — On the kiosk, the mini player's "Otevřít vizuál" shows the music visual in a full-screen frame over the page (`.visualover`, z-index 50) instead of a new window. A new tab covered Kacey with no way back, and a second window crashes cage. [design: pending]

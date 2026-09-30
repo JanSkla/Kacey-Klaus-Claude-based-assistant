@@ -178,6 +178,17 @@ CREATE TABLE IF NOT EXISTS kacey_proposal (
   created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS kacey_proposal_status_idx ON kacey_proposal (status, logical_date);
+
+/* What Kacey knows about a calendar event that klaus_memory has no column for.
+   Keyed by klaus_memory's event_id, never a foreign key: the event lives in
+   its table, and a row here for an event that has since gone is ignored.
+   Today that is one thing — the event is not settled yet ("?" on a poster). */
+CREATE TABLE IF NOT EXISTS kacey_event_flag (
+  event_id   TEXT PRIMARY KEY,
+  tentative  INTEGER NOT NULL DEFAULT 1 CHECK (tentative IN (0,1)),
+  note       TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL
+);
 `;
 
 export function now() { return new Date().toISOString(); }

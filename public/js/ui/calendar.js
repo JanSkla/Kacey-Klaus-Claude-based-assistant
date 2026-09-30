@@ -21,6 +21,9 @@
    refreshCalendar() when one of her calendar tools finishes; otherwise an open
    view would sit on rows that are no longer true.
 
+   An event can be unsure (Kacey's own flag, `tentative` in the payload): it is
+   drawn dotted with a "?" before its title, and the editor settles it.
+
    Titles come from the model and from external calendars, so every one of them
    reaches the DOM through textContent.
    ========================================================================= */
@@ -105,6 +108,17 @@ function colourFor(source) {
   if (i === -1) { sourceOrder.push(source); i = sourceOrder.length - 1; }
   return SOURCE_COLOURS[i % SOURCE_COLOURS.length];
 }
+
+/* An unsure event ("?" on a poster, "maybe Saturday") — Kacey's own flag, sent
+   by /api/calendar. Dotted instead of solid, and a "?" before the title. */
+function unsure(e) { return !!(e && e.tentative); }
+function unsureMark(e) {
+  return unsure(e) ? el('span.unsure', { title: 'nejisté', 'aria-label': 'nejisté' }, '?') : null;
+}
+function edge(width, e) {
+  return 'border-left:' + width + 'px ' + (unsure(e) ? 'dotted ' : 'solid ') + colourFor(sourceOf(e));
+}
+function unsureWord(e) { return unsure(e) ? 'nejisté · ' : ''; }
 
 function sourceEnabled(source) {
   var on = store.data.settings.calOn || {};
@@ -423,8 +437,13 @@ function laneBounds(dates) {
   dates.forEach(function (date) {
     eventsOn(date).forEach(function (e) {
       if (e.all_day) return;
-      start = Math.min(start, Math.floor(minutesOf(e.starts_at) / 60) * 60);
-      if (e.ends_at) end = Math.max(end, Math.ceil(minutesOf(e.ends_at) / 60) * 60);
+      var s = minutesOf(e.starts_at);
+      start = Math.min(start, Math.floor(s / 60) * 60);
+      // Same end as the block gets: one ending at midnight (or with no end) is
+      // drawn 30 minutes long, and the lane must reach that far.
+      var en = e.ends_at ? minutesOf(e.ends_at) : s + 30;
+      if (en <= s) en = s + 30;
+      end = Math.max(end, Math.ceil(en / 60) * 60);
     });
     timedTasksOn(date).forEach(function (x) {
       start = Math.min(start, Math.floor(x.p.minutes / 60) * 60);
@@ -511,17 +530,15 @@ function renderDay() {
     var tall = h >= 62;
     var running = isToday && nowMin >= s && nowMin < en;
     var past = isToday ? nowMin >= en : selected < payload.today;
-    var colour = colourFor(sourceOf(e));
-
-    nodes.push(el('button.eblock' + (tall ? '' : '.is-short') + (past ? '.is-past' : ''), {
+    nodes.push(el('button.eblock' + (tall ? '' : '.is-short') + (past ? '.is-past' : '') + (unsure(e) ? '.is-tentative' : ''), {
       type: 'button',
-      style: 'top:' + top(s) + 'px;height:' + h + 'px;border-left:4px solid ' + colour +
-             (running ? ';border-color:var(--line2)' : ''),
+      style: 'top:' + top(s) + 'px;height:' + h + 'px;' + edge(4, e) +
+             (running && !unsure(e) ? ';border-color:var(--line2)' : ''),
       onclick: function () { openEvent(e, top(s)); }
     }, [
-      el('p', clockOf(e.starts_at) + '  ' + (e.title || '(bez názvu)')),
+      el('p', [unsureMark(e), clockOf(e.starts_at) + '  ' + (e.title || '(bez názvu)')]),
       el('em', { style: running ? 'color:var(--acc)' : '' },
-        sourceOf(e) + ' · ' + clockOf(e.starts_at) + '–' + clockOf(e.ends_at))
+        unsureWord(e) + sourceOf(e) + ' · ' + clockOf(e.starts_at) + '–' + clockOf(e.ends_at))
     ]));
   });
 
@@ -535,11 +552,11 @@ function renderDay() {
   fill(host, nodes);
 
   fill($('dayAllDay'), allDay.map(function (e) {
-    return el('button.allday', {
+    return el('button.allday' + (unsure(e) ? '.is-tentative' : ''), {
       type: 'button',
-      style: 'border-left:4px solid ' + colourFor(sourceOf(e)),
+      style: edge(4, e),
       onclick: function () { openEvent(e, 0); }
-    }, 'celý den · ' + (e.title || '(bez názvu)'));
+    }, [unsureMark(e), 'celý den · ' + (e.title || '(bez názvu)')]);
   }).concat(dayTasks.map(function (x) { return dayTaskChip(x, 'allday'); })));
 
   var p = selected.split('-').map(Number);
@@ -593,11 +610,11 @@ function renderMulti() {
       ]),
       el('span.colhead__meta', count ? count + (narrow ? '' : ' položek') : '—'),
       allDay.map(function (e) {
-        return el('button.colhead__allday', {
-          type: 'button', title: e.title || '(bez názvu)',
-          style: 'border-left-color:' + colourFor(sourceOf(e)),
+        return el('button.colhead__allday' + (unsure(e) ? '.is-tentative' : ''), {
+          type: 'button', title: unsureWord(e) + (e.title || '(bez názvu)'),
+          style: edge(3, e),
           onclick: function () { openEvent(e, 0, ci); }
-        }, e.title || '(bez názvu)');
+        }, [unsureMark(e), e.title || '(bez názvu)']);
       }),
       dayTasks.map(function (x) { return dayTaskChip(x, 'colhead__allday'); })
     ]));
@@ -622,14 +639,14 @@ function renderMulti() {
       var tall = h >= 44;
       var past = isToday ? nowMin >= en : date < today;
       var title = e.title || '(bez názvu)';
-      nodes.push(el('button.eblock.eblock--col' + (tall ? '' : '.is-short') + (past ? '.is-past' : ''), {
+      nodes.push(el('button.eblock.eblock--col' + (tall ? '' : '.is-short') + (past ? '.is-past' : '') + (unsure(e) ? '.is-tentative' : ''), {
         type: 'button',
-        title: clockOf(e.starts_at) + ' ' + title + ' · ' + sourceOf(e),
-        style: 'top:' + top(s) + 'px;height:' + h + 'px;border-left:3px solid ' + colourFor(sourceOf(e)) +
+        title: clockOf(e.starts_at) + ' ' + title + ' · ' + unsureWord(e) + sourceOf(e),
+        style: 'top:' + top(s) + 'px;height:' + h + 'px;' + edge(3, e) +
                (narrow ? ';left:6px' : ''),
         onclick: function () { openEvent(e, top(s), ci); }
       }, [
-        el('p', (narrow ? '' : clockOf(e.starts_at) + ' ') + title),
+        el('p', [unsureMark(e), (narrow ? '' : clockOf(e.starts_at) + ' ') + title]),
         tall ? el('em', clockOf(e.starts_at) + (narrow ? '' : ' · ' + sourceOf(e))) : null
       ]));
     });
@@ -676,13 +693,21 @@ function openEvent(e, topPx, col) {
   var box = el('div.card.card--pad.eventedit' + (span > 1 ? '.eventedit--col' : ''), {
     style: place
   }, [
-    el('p.muted-3', clockOf(e.starts_at) + '–' + clockOf(e.ends_at) + ' · ' + sourceOf(e)),
+    el('p.muted-3', clockOf(e.starts_at) + '–' + clockOf(e.ends_at) + ' · ' + unsureWord(e) + sourceOf(e) +
+      (unsure(e) && e.tentative_note ? ' · ' + e.tentative_note : '')),
     input,
     el('div.row', { style: 'margin-top:8px' }, [
       el('button.btn.btn--accent.btn--sm', {
         type: 'button',
         onclick: async function () { await writeEvent(e.event_id, 'update', { title: input.value }); }
       }, 'Uložit název'),
+      /* Settling an unsure event (or making one unsure) is Kacey's own flag, so
+         it can happen here as well as in the conversation. */
+      el('button.btn.btn--sm' + (unsure(e) ? '.btn--outlineaccent' : ''), {
+        type: 'button',
+        title: unsure(e) ? 'Událost je jistá' : 'Zatím nejisté — v kalendáři tečkovaně',
+        onclick: function () { writeEvent(e.event_id, 'tentative', { tentative: !unsure(e) }); }
+      }, unsure(e) ? 'Potvrdit' : 'S otazníkem'),
       el('button.btn.btn--sm.btn--dangerghost', {
         type: 'button',
         onclick: function (ev) {
@@ -721,7 +746,9 @@ async function writeEvent(id, action, body) {
     var out = await res.json();
     if (!res.ok || out.ok === false) throw new Error(out.error || ('HTTP ' + res.status));
     closeSheet();
-    say(action === 'delete' ? 'Událost smazána.' : 'Název uložen.');
+    say(action === 'delete' ? 'Událost smazána.'
+      : action === 'tentative' ? (body.tentative ? 'Zatím s otazníkem.' : 'Potvrzeno.')
+      : 'Název uložen.');
     refreshCalendar();
   } catch (err) {
     say('Nepovedlo se: ' + err.message);
@@ -750,15 +777,15 @@ export function renderTodayAgenda() {
     var s = minutesOf(e.starts_at), en = e.ends_at ? minutesOf(e.ends_at) : s + 30;
     var running = !e.all_day && nowMin >= s && nowMin < en;
     var past = !e.all_day && nowMin >= en;
-    return el('button.rowbtn' + (running ? '.is-now' : '') + (past ? '.is-past' : ''), {
+    return el('button.rowbtn' + (running ? '.is-now' : '') + (past ? '.is-past' : '') + (unsure(e) ? '.is-tentative' : ''), {
       type: 'button',
       onclick: function () { selected = today; go('calendar'); }
     }, [
       el('span.rowbtn__time', e.all_day ? 'celý den' : clockOf(e.starts_at)),
-      el('span.rowbtn__title', e.title || '(bez názvu)'),
-      el('span.rowbtn__meta', running
+      el('span.rowbtn__title', [unsureMark(e), e.title || '(bez názvu)']),
+      el('span.rowbtn__meta', unsureWord(e) + (running
         ? (en - nowMin) + ' min zbývá · ' + sourceOf(e)
-        : sourceOf(e) + (e.all_day ? '' : ' · ' + clockOf(e.starts_at) + '–' + clockOf(e.ends_at)))
+        : sourceOf(e) + (e.all_day ? '' : ' · ' + clockOf(e.starts_at) + '–' + clockOf(e.ends_at))))
     ]);
   }));
 }
@@ -770,7 +797,7 @@ export function nextUp() {
   var upcoming = eventsOn(payload.today)
     .filter(function (e) { return !e.all_day && minutesOf(e.starts_at) >= nowMin; })
     .map(function (e) {
-      return { at: minutesOf(e.starts_at), title: e.title || '(bez názvu)', meta: clockOf(e.starts_at) + ' · ' + sourceOf(e), event: e };
+      return { at: minutesOf(e.starts_at), title: (unsure(e) ? '? ' : '') + (e.title || '(bez názvu)'), meta: clockOf(e.starts_at) + ' · ' + unsureWord(e) + sourceOf(e), event: e };
     })
     // A task with a time is as much "next" as a meeting is.
     .concat(timedTasksOn(payload.today)

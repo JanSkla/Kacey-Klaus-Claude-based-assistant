@@ -26,6 +26,7 @@ import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
 import { CATEGORY_KEYS } from './public/js/core/routine-cats.js';
 import * as nightstore from './nightstore.js';
+import * as eventflags from './eventflags.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -567,11 +568,54 @@ const rulePreview = tool(
   },
 );
 
+/* ---- unsure calendar events ---------------------------------------------
+   klaus_memory's calendar has no "maybe", so Kacey keeps it (eventflags.js).
+   The name says "calendar" on purpose: protocol.js refreshes the calendar
+   view after any tool whose name does. */
+
+function describeUnsure(e) {
+  // Local time: the calendar stores UTC ("…+00:00"), and she says the hour aloud.
+  const d = new Date(e.starts_at);
+  const when = isNaN(d) ? String(e.starts_at || '')
+    : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ` +
+      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `- (${e.event_id}) ${e.title || '(bez názvu)'} — ${when}${e.source ? ` · ${e.source}` : ''}${e.note ? ` · ${e.note}` : ''}`;
+}
+
+const calendarTentative = tool(
+  'app_calendar_tentative',
+  'Nejisté události v kalendáři. action "mark" označí existující událost jako nejistou ' +
+  '(„?“, „možná“, „k rozhodnutí“, plakát, na který pán možná půjde) — v kalendáři je pak ' +
+  'čárkovaně. Událost nejdřív založ přes calendar_create a id vezmi z výsledku. ' +
+  '"confirm" z ní udělá běžnou (pán jde / je to jisté). "list" vypíše všechny nejisté. ' +
+  'Nejistá zůstane jen v Kacey — Google ani TimeTree ji neoznačí.',
+  {
+    action: z.enum(['mark', 'confirm', 'list']),
+    event_id: z.string().optional().describe('Id události (ev_…) pro mark a confirm.'),
+    note: z.string().max(300).optional().describe('Na čem to záleží, např. "podle počasí" nebo "zeptat se Petra".'),
+  },
+  async ({ action, event_id, note }) => {
+    try {
+      if (action === 'list') {
+        const rows = eventflags.listTentative();
+        return ok(rows.length ? `Nejisté události:\n${rows.map(describeUnsure).join('\n')}` : 'Žádné nejisté události.');
+      }
+      if (!event_id) return fail('Chybí event_id. Nic se nezměnilo.');
+      const ev = eventflags.setTentative(event_id, action === 'mark', note || '');
+      return ok(action === 'mark'
+        ? `Označeno jako nejisté: ${describeUnsure({ ...ev, note })}`
+        : `Potvrzeno, už není nejisté: ${describeUnsure(ev)}`);
+    } catch (err) {
+      return fail(`${err.message}. Nic se nezměnilo.`);
+    }
+  },
+);
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, taskAdd, taskUpdate, journalAdd,
-  rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview,
+  rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
@@ -579,6 +623,7 @@ export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours',
   'app_task_add', 'app_task_update', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
+  'app_calendar_tentative',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 export function makeAppServer() {
@@ -588,6 +633,7 @@ export function makeAppServer() {
     instructions:
       'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly, deník, ' +
       'a pravidla nočního plánování (rules_*, rule_*), podle kterých se v noci samy zakládají úkoly. ' +
+      'Nejisté události kalendáře označuje app_calendar_tentative. ' +
       'Rutina je tvar běžného týdne (opakující se bloky), NE konkrétní události — ' +
       'ty patří do kalendáře přes klaus-memory. Před úpravou si přečti stav přes app_read. ' +
       'Když uživatel pošle obrázek rozvrhu, přečti ho a natři přes app_routine_paint ' +

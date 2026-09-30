@@ -31,6 +31,7 @@ import * as morning from './morning.js';
 import * as screen from './screen.js';
 import { targetDate } from './sleep.js';
 import { kvGet, kvSet } from './db.js';
+import { tentativeMap, setTentative, dropFlag } from './eventflags.js';
 import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
 import { BRIEF_AUDIO_DIR } from './dream.js';
 
@@ -822,6 +823,10 @@ app.get('/api/calendar', async (req, res) => {
     const today = logicalDayOf(new Date().toISOString());
     const month = wantMonth || today.slice(0, 7);
 
+    // Unsure events are Kacey's own flag (eventflags.js); klaus_memory has no column for it.
+    let unsure = new Map();
+    try { unsure = tentativeMap(); } catch (err) { log(`calendar: unsure flags unreadable (${err.message})`); }
+
     /* Resolve each event once to the range of days it covers. Ranges rather
        than a single bucket: an event that runs from July to August belongs on
        every day in between, and used to appear only on the day it started —
@@ -855,6 +860,8 @@ app.get('/api/calendar', async (req, res) => {
           ...s.row,
           source_meta: parseSourceMeta(s.row.source_meta),
           all_day: s.allDay,
+          tentative: unsure.has(s.row.event_id),
+          tentative_note: unsure.get(s.row.event_id) || '',
           // Which slice of the event this day is, so the row can say so rather
           // than repeating the full time range on every day it covers.
           span: { index, count, first: index === 1, last: index === count },
@@ -964,7 +971,23 @@ app.post('/api/calendar/:id/delete', express.json({ limit: '4kb' }), async (req,
 
   const r = await calendarWrite({ action: 'delete', event_id: id });
   log(`calendar delete ${id}: ${r.ok ? 'ok' : 'FAILED ' + r.error}`);
+  if (r.ok) dropFlag(id);
   res.status(r.ok ? 200 : 400).json(r);
+});
+
+/* Unsure or settled. Kacey's own flag, so no klaus_memory process: the event
+   in Google and TimeTree does not change. */
+app.post('/api/calendar/:id/tentative', express.json({ limit: '4kb' }), (req, res) => {
+  const id = String(req.params.id || '');
+  if (!EVENT_ID_RE.test(id)) return res.status(400).json({ error: 'neplatné event_id' });
+  try {
+    const on = req.body?.tentative !== false;
+    setTentative(id, on, typeof req.body?.note === 'string' ? req.body.note : '');
+    log(`calendar ${id}: ${on ? 'unsure' : 'settled'}`);
+    res.json({ ok: true, tentative: on });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 
 /**
@@ -1178,6 +1201,11 @@ app.post('/api/tts', express.json({ limit: '64kb' }), async (req, res) => {
 });
 
 // The frontend agent owns public/ exclusively.
+/* The installed web app's share target is caught by public/sw.js. This only
+   answers when the worker is not running yet (first launch after install), so
+   the share opens Kacey instead of a 404 — the image itself is lost then. */
+app.post('/share-target', (_req, res) => res.redirect(303, '/#main'));
+
 app.use(express.static(PUBLIC_DIR));
 app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 

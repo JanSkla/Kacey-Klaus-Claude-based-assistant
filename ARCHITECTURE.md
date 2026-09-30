@@ -407,7 +407,7 @@ have.
 | `config.js`            | Every knob from the environment, all with working defaults; `MCP_SERVERS` and `MEMORY_TOOLS` |
 | Persona loading        | `persona/kacey.md` read at startup, `{{TODAY}}`/`{{NOW}}` rendered per connection |
 | `KaceySession`         | One WebSocket == one continuous `query()` in streaming-input mode |
-| HTTP routes            | `/api/health` `/api/voices` `/api/calendar` (+ update/delete) `/api/tts`, then static `public/` |
+| HTTP routes            | `/api/health` `/api/voices` `/api/calendar` (+ update/delete/tentative) `/api/tts`, `/share-target` (fallback only — `public/sw.js` catches shares), then static `public/` |
 | WebSocket              | `/ws`, JSON frames, one `KaceySession` per connection        |
 
 Two things about `KaceySession` that the frame protocol does not show:
@@ -457,6 +457,13 @@ happening rather than only to months where something *starts*.
 event came from; `source_meta` is free-form JSON from whatever produced it, so it
 is parsed defensively and sent as `null` when it is absent, unparseable, or
 empty — the UI then has nothing to decide.
+
+`tentative` and `tentative_note` say the event is **unsure** — a poster, a
+"maybe". klaus_memory has no column for that and syncs to Google and TimeTree,
+so it is Kacey's own flag: `kacey_event_flag`, keyed by `event_id`
+([eventflags.js](eventflags.js)). Kacey sets it with `app_calendar_tentative`,
+the event editor with `POST /api/calendar/:id/tentative`; confirming deletes the
+row, and deleting the event drops it. Outside Kacey the event looks ordinary.
 
 ### The night routine (D.R.E.A.M.)
 
