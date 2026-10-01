@@ -123,14 +123,15 @@ function readJournal() {
 }
 
 function readRoutine() {
-  const grid = {}, notes = {};
+  const grid = {}, notes = {}, info = {};
   for (const r of open().prepare('SELECT * FROM kacey_routine_block').all()) {
     const key = r.day + '-' + r.slot;
     grid[key] = r.category;
     if (r.note) notes[key] = r.note;
+    if (r.room || r.who) info[key] = { ...(r.room ? { room: r.room } : {}), ...(r.who ? { who: r.who } : {}) };
   }
   const hours = kvGet('routine.hours', { wake: 420, sleep: 1350 });
-  return { grid, notes, wake: hours.wake, sleep: hours.sleep };
+  return { grid, notes, info, wake: hours.wake, sleep: hours.sleep };
 }
 
 /* ---- writing ------------------------------------------------------------- */
@@ -246,10 +247,13 @@ function writeJournal(value) {
 function writeRoutine(value) {
   const grid = (value && value.grid) || {};
   const notes = (value && value.notes) || {};
+  const info = (value && value.info) || {};
+  /* Short free text; anything else (an object, a number) is dropped. */
+  const text = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : null);
   transact((h) => {
     h.prepare('DELETE FROM kacey_routine_block').run();
     const insert = h.prepare(
-      'INSERT INTO kacey_routine_block (day, slot, category, note) VALUES (?, ?, ?, ?)',
+      'INSERT INTO kacey_routine_block (day, slot, category, note, room, who) VALUES (?, ?, ?, ?, ?, ?)',
     );
     for (const key of Object.keys(grid)) {
       const parts = key.split('-');
@@ -257,7 +261,8 @@ function writeRoutine(value) {
       // Skip anything malformed rather than letting a CHECK abort the whole write.
       if (!Number.isInteger(day) || !Number.isInteger(slot)) continue;
       if (day < 0 || day > 6 || slot < 0 || slot > 95) continue;
-      insert.run(day, slot, String(grid[key]), notes[key] ? String(notes[key]) : null);
+      const i = info[key] || {};
+      insert.run(day, slot, String(grid[key]), notes[key] ? String(notes[key]) : null, text(i.room), text(i.who));
     }
   });
   kvSet('routine.hours', {

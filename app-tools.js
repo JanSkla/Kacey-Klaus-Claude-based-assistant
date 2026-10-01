@@ -109,7 +109,9 @@ function describeRoutine(routine) {
     if (cur) blocks.push(cur);
     const text = blocks.map((b) => {
       const note = routine.notes[day + '-' + b.i];
-      return `${hhmm(b.i * 15)}-${hhmm((b.i + b.n) * 15)} ${b.cat}${note ? ` "${note}"` : ''}`;
+      const i = (routine.info || {})[day + '-' + b.i] || {};
+      const where = [i.room, i.who].filter(Boolean).join(', ');
+      return `${hhmm(b.i * 15)}-${hhmm((b.i + b.n) * 15)} ${b.cat}${note ? ` "${note}"` : ''}${where ? ` (${where})` : ''}`;
     }).join(', ');
     lines.push(`${DAYS[day]}: ${text || '(prázdné)'}`);
   }
@@ -162,7 +164,9 @@ const routinePaint = tool(
       to: z.string().describe('Konec "HH:MM".'),
       category: z.enum(CATEGORIES)
         .describe('Kategorie bloku.'),
-      note: z.string().optional().describe('Volitelný popisek bloku, např. "Laborka".'),
+      note: z.string().optional().describe('Volitelný popisek bloku, např. "Laborka" nebo název předmětu.'),
+      room: z.string().max(80).optional().describe('Místnost, jak ji píše rozvrh, např. "T2:C2-85".'),
+      who: z.string().max(80).optional().describe('Vyučující, např. "Fischer J."; víc lidí čárkou.'),
     })).describe('Bloky k natření.'),
     replace: z.boolean().optional()
       .describe('true = nejdřív smaž celou stávající rutinu (import celého rozvrhu). ' +
@@ -170,10 +174,11 @@ const routinePaint = tool(
   },
   async ({ blocks, replace }) => {
     const doc = appstate.get();
-    const before = { grid: { ...doc.routine.grid }, notes: { ...doc.routine.notes } };
+    const before = { grid: { ...doc.routine.grid }, notes: { ...doc.routine.notes }, info: { ...doc.routine.info } };
 
     const grid = replace ? {} : { ...doc.routine.grid };
     const notes = replace ? {} : { ...doc.routine.notes };
+    const info = replace ? {} : { ...doc.routine.info };
 
     let painted = 0;
     const skipped = [];
@@ -199,6 +204,9 @@ const routinePaint = tool(
             painted++;
           }
           if (block.note && first !== null) notes[d + '-' + first] = block.note;
+          if ((block.room || block.who) && first !== null) {
+            info[d + '-' + first] = { ...(block.room ? { room: block.room } : {}), ...(block.who ? { who: block.who } : {}) };
+          }
         }
       }
     } catch (err) {
@@ -216,7 +224,7 @@ const routinePaint = tool(
       );
     }
 
-    appstate.setSection('routine', { ...doc.routine, grid, notes });
+    appstate.setSection('routine', { ...doc.routine, grid, notes, info });
     onWrite('routine', { ...doc.routine, ...before });
 
     const hours = Math.round(painted / 4 * 10) / 10;
@@ -224,7 +232,7 @@ const routinePaint = tool(
       `Natřeno ${painted} patnáctiminutových bloků (${hours} h)` +
       (replace ? ', stará rutina smazána' : '') + '.' +
       (skipped.length ? ` Přeskočeno ${skipped.length} slotů ve spánku (${skipped.slice(0, 4).join(', ')}${skipped.length > 4 ? '…' : ''}) — když je potřebuješ, posuň vstávání/spánek přes app_routine_hours.` : '') +
-      '\n\nNový stav:\n' + describeRoutine({ grid, notes }),
+      '\n\nNový stav:\n' + describeRoutine({ grid, notes, info }),
     );
   },
 );
@@ -240,10 +248,10 @@ const routineErase = tool(
   },
   async ({ all, days, from, to }) => {
     const doc = appstate.get();
-    const before = { grid: { ...doc.routine.grid }, notes: { ...doc.routine.notes } };
+    const before = { grid: { ...doc.routine.grid }, notes: { ...doc.routine.notes }, info: { ...doc.routine.info } };
 
     if (all) {
-      appstate.setSection('routine', { ...doc.routine, grid: {}, notes: {} });
+      appstate.setSection('routine', { ...doc.routine, grid: {}, notes: {}, info: {} });
       onWrite('routine', { ...doc.routine, ...before });
       return ok('Celá rutina smazána.');
     }
@@ -254,6 +262,7 @@ const routineErase = tool(
 
     const grid = { ...doc.routine.grid };
     const notes = { ...doc.routine.notes };
+    const info = { ...doc.routine.info };
     let removed = 0;
     try {
       const f = minutesOf(from), t = minutesOf(to);
@@ -263,13 +272,14 @@ const routineErase = tool(
           const key = d + '-' + (m / 15);
           if (key in grid) { delete grid[key]; removed++; }
           delete notes[key];
+          delete info[key];
         }
       }
     } catch (err) {
       return fail(`Nesmazáno: ${err.message}. Nic se nezměnilo.`);
     }
 
-    appstate.setSection('routine', { ...doc.routine, grid, notes });
+    appstate.setSection('routine', { ...doc.routine, grid, notes, info });
     onWrite('routine', { ...doc.routine, ...before });
     return ok(`Smazáno ${removed} bloků.`);
   },
@@ -637,7 +647,7 @@ export function makeAppServer() {
       'Rutina je tvar běžného týdne (opakující se bloky), NE konkrétní události — ' +
       'ty patří do kalendáře přes klaus-memory. Před úpravou si přečti stav přes app_read. ' +
       'Když uživatel pošle obrázek rozvrhu, přečti ho a natři přes app_routine_paint ' +
-      's replace: true.',
+      's replace: true; u každé hodiny vyplň note (předmět), room (místnost) a who (vyučující).',
     tools: APP_TOOLS,
   });
 }

@@ -573,6 +573,10 @@ button.task__due.is-empty { color: var(--ink3); }
 .rblock em { display: block; font-size: 12px; font-style: normal; color: var(--ink3); }
 .rblock.is-short { padding: 2px 8px 2px 14px; }
 .rblock.is-short em { display: none; }
+/* Room and teacher of a class: a line of its own, a step brighter than the time. */
+.rblock em.rblock__where { color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rblock em.rblock__where span + span::before { content: " · "; }
+.rblock--col em.rblock__where { font-size: 10px; }
 .eblock {
   position: absolute; left: 118px; right: 10px; overflow: hidden; padding: 8px 12px;
   background: var(--l2); border: 1px solid var(--line); box-shadow: 0 2px 6px rgb(0 0 0 / .35);
@@ -810,6 +814,8 @@ button.task__due.is-empty { color: var(--ink3); }
   box-shadow: 0 2px 6px rgb(0 0 0 / .5); font-size: 12px;
 }
 .noteedit .row { flex-wrap: nowrap; gap: 6px; }
+.noteedit__info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.noteedit__info .input { min-width: 0; }
 
 /* Unsaved-since-open strip, with the undo beside it. */
 .dirty { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 20px; background: var(--acc-dim); border-bottom: 1px solid var(--acc); }
@@ -1377,6 +1383,9 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .rblock { padding: 4px 6px 4px 10px; }
   .rblock b { width: 74px; font-size: 12px; }
   .rblock em { width: 74px; font-size: 11px; overflow: hidden; white-space: nowrap; }
+  /* Room over teacher: the 74px strip has no room for both on one line. */
+  .rblock em.rblock__where span { display: block; overflow: hidden; text-overflow: ellipsis; }
+  .rblock em.rblock__where span + span::before { content: none; }
   .colheads { top: -12px; margin: -12px 0 8px -50px; padding: 8px 0 6px 50px; background: var(--bg); }
   .colheads__grid, .lanecols { gap: 3px; }
   .colhead__day { min-height: 44px; justify-content: center; padding: 2px 0; background: var(--l1); }

@@ -34,6 +34,7 @@ var DAYS = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
 var brush = 'work';
 var noteSel = null;
 var noteDraft = null;      // the note being typed, kept across re-renders
+var infoDraft = null;      // { room, who } being typed, the same way
 var painting = false;
 var lastSlot = -1;         // where the current drag was last seen
 var sheet = null;
@@ -53,6 +54,7 @@ export function dayIndexOfDate(date) {
 export function blocksFor(day) {
   var grid = store.data.routine.grid || {};
   var notes = store.data.routine.notes || {};
+  var info = store.data.routine.info || {};
   var out = [], cur = null;
 
   for (var i = 0; i < 96; i++) {
@@ -67,7 +69,9 @@ export function blocksFor(day) {
 
   return out.map(function (b) {
     var key = day + '-' + b.i;
-    return { cat: b.cat, key: key, s: b.i * 15, e: (b.i + b.n) * 15, note: notes[key] || '' };
+    var i = info[key] || {};
+    return { cat: b.cat, key: key, s: b.i * 15, e: (b.i + b.n) * 15, note: notes[key] || '',
+             room: i.room || '', who: i.who || '' };
   });
 }
 
@@ -90,7 +94,7 @@ function paint(day, slot) {
     var hit = blocksFor(day).filter(function (b) { return minute >= b.s && minute < b.e; })[0];
     saveNote();
     noteSel = hit ? hit.key : null;
-    noteDraft = null;
+    noteDraft = null; infoDraft = null;
     render();
     return;
   }
@@ -268,6 +272,7 @@ function renderGrid() {
     var labels = blocks.map(function (b) {
       var len = b.e - b.s;
       return el('span.grid__label', {
+        title: [b.note || CATS[b.cat].label, b.room, b.who].filter(Boolean).join(' · '),
         style: 'left:calc(' + ((b.s - gStart) / span * 100) + '% + 1px);' +
                'width:calc(' + (len / span * 100) + '% - 2px);border-left-color:' + CATS[b.cat].color
       }, [
@@ -293,7 +298,18 @@ function renderGrid() {
 /* ---- naming a block -----------------------------------------------------
    Opens under the block it names. The note is saved on Hotovo, on Enter, or
    when another block is picked — not per keystroke: every store write
-   rebuilds the grid, and the field would be rebuilt under the cursor. */
+   rebuilds the grid, and the field would be rebuilt under the cursor.
+   Room and teacher (a class in the timetable) are saved the same way. */
+
+function infoField(key, saved, placeholder, label) {
+  var input = el('input.input', {
+    type: 'text', autocomplete: 'off', maxlength: '80',
+    value: infoDraft && infoDraft[key] != null ? infoDraft[key] : saved,
+    placeholder: placeholder, 'aria-label': label,
+    oninput: function () { infoDraft = Object.assign({}, infoDraft); infoDraft[key] = input.value; }
+  });
+  return input;
+}
 
 function noteEditor(day, block, leftPct, inline) {
   var saved = (store.data.routine.notes || {})[block.key] || '';
@@ -302,24 +318,48 @@ function noteEditor(day, block, leftPct, inline) {
     placeholder: 'Poznámka — „Laborka“…', 'aria-label': 'Poznámka k bloku',
     oninput: function () { noteDraft = input.value; }
   });
+  var where = el('span.noteedit__info', [
+    infoField('room', block.room, 'Místnost', 'Místnost'),
+    infoField('who', block.who, 'Vyučující', 'Vyučující')
+  ]);
   return el('form.noteedit' + (inline ? '.noteedit--inline' : ''), {
     style: (inline ? '' : 'left:clamp(0px, calc(' + leftPct + '% - 0px), calc(100% - 300px));') +
            'border-left-color:' + CATS[block.cat].color,
     onsubmit: function (ev) { ev.preventDefault(); closeNote(); }
   }, [
     el('span.is-acc', DAYS[day] + ' ' + hhmm(block.s) + '–' + hhmm(block.e) + ' · ' + CATS[block.cat].label),
-    el('span.row', [input, el('button.btn.btn--accent.btn--sm', { type: 'submit' }, 'Hotovo')])
+    el('span.row', [input, el('button.btn.btn--accent.btn--sm', { type: 'submit' }, 'Hotovo')]),
+    where
   ]);
 }
 
 function saveNote() {
-  if (!noteSel || noteDraft == null) return;
-  var notes = Object.assign({}, store.data.routine.notes);
-  var value = noteDraft.trim();
-  noteDraft = null;
-  if ((notes[noteSel] || '') === value) return;
-  if (value) notes[noteSel] = value; else delete notes[noteSel];
-  store.patch('routine', Object.assign({}, store.data.routine, { notes: notes }));
+  if (!noteSel || (noteDraft == null && infoDraft == null)) return;
+  var r = store.data.routine;
+  var notes = Object.assign({}, r.notes), info = Object.assign({}, r.info);
+  var changed = false;
+
+  if (noteDraft != null) {
+    var value = noteDraft.trim();
+    if ((notes[noteSel] || '') !== value) {
+      if (value) notes[noteSel] = value; else delete notes[noteSel];
+      changed = true;
+    }
+  }
+  if (infoDraft != null) {
+    var was = info[noteSel] || {};
+    var next = {};
+    ['room', 'who'].forEach(function (k) {
+      var v = infoDraft[k] != null ? infoDraft[k].trim() : (was[k] || '');
+      if (v) next[k] = v;
+    });
+    if ((was.room || '') !== (next.room || '') || (was.who || '') !== (next.who || '')) {
+      if (next.room || next.who) info[noteSel] = next; else delete info[noteSel];
+      changed = true;
+    }
+  }
+  noteDraft = null; infoDraft = null;
+  if (changed) store.patch('routine', Object.assign({}, r, { notes: notes, info: info }));
 }
 
 function closeNote() {
@@ -331,7 +371,7 @@ function closeNote() {
 /* ---- undo to the state at open ------------------------------------------ */
 
 function shape(r) {
-  return JSON.stringify({ grid: r.grid || {}, notes: r.notes || {}, wake: r.wake, sleep: r.sleep });
+  return JSON.stringify({ grid: r.grid || {}, notes: r.notes || {}, info: r.info || {}, wake: r.wake, sleep: r.sleep });
 }
 
 function isDirty() {
@@ -349,7 +389,7 @@ function renderDirty() {
 
 function revert() {
   if (!isDirty()) return;
-  noteSel = null; noteDraft = null;
+  noteSel = null; noteDraft = null; infoDraft = null;
   $('confirmClear').hidden = true;
   store.patch('routine', Object.assign({}, store.data.routine, JSON.parse(shape(snapshot))));
   say('Rutina vrácena do stavu při otevření.');
@@ -498,7 +538,7 @@ export function openRoutine(open) {
   if (!open) saveNote();
   sheet.hidden = !open;
   snapshot = open ? JSON.parse(shape(store.data.routine)) : null;
-  noteSel = null; noteDraft = null;
+  noteSel = null; noteDraft = null; infoDraft = null;
   $('confirmClear').hidden = true;
   if (open) render();
 }
@@ -553,9 +593,9 @@ export function initRoutine() {
   $('askClearGrid').addEventListener('click', function () { $('confirmClear').hidden = false; });
   $('cancelClearGrid').addEventListener('click', function () { $('confirmClear').hidden = true; });
   $('clearGrid').addEventListener('click', function () {
-    noteSel = null; noteDraft = null;
+    noteSel = null; noteDraft = null; infoDraft = null;
     $('confirmClear').hidden = true;
-    store.patch('routine', Object.assign({}, store.data.routine, { grid: {}, notes: {} }));
+    store.patch('routine', Object.assign({}, store.data.routine, { grid: {}, notes: {}, info: {} }));
     say('Rutina vymazána. Do zavření plánovače jde vrátit.');
   });
 

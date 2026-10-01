@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS kacey_routine_block (
   slot       INTEGER NOT NULL CHECK (slot BETWEEN 0 AND 95),
   category   TEXT NOT NULL,
   note       TEXT,
+  -- Where and with whom, for a class: "T2:C2-85", "Fischer J.". Like the
+  -- note, only the block's first slot carries them.
+  room       TEXT,
+  who        TEXT,
   PRIMARY KEY (day, slot)
 );
 
@@ -229,6 +233,12 @@ function migrate(h) {
      before this, when there is no source_key yet to index. */
   h.exec(`CREATE UNIQUE INDEX IF NOT EXISTS kacey_task_source_idx
             ON kacey_task (source_key) WHERE source_key IS NOT NULL`);
+
+  /* A routine block's room and teacher (a timetable imported from the
+     school's system). Nullable, so existing blocks simply have neither. */
+  const routineCols = h.prepare('PRAGMA table_info(kacey_routine_block)').all().map((c) => c.name);
+  if (!routineCols.includes('room')) h.exec('ALTER TABLE kacey_routine_block ADD COLUMN room TEXT');
+  if (!routineCols.includes('who')) h.exec('ALTER TABLE kacey_routine_block ADD COLUMN who TEXT');
 
   /* The learning loop (docs/DREAM.md §13) needs when the event started, to
      tell "the evening before" from "an hour before". */

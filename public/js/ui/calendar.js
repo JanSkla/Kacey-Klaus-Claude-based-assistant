@@ -155,6 +155,9 @@ function eventsOn(date) {
   return rec.events.filter(function (e) { return sourceEnabled(sourceOf(e)); });
 }
 
+/** A routine block's room and teacher, "T2:C2-85 · Fischer J.", or ''. */
+function whereOf(r) { return [r.room, r.who].filter(Boolean).join(' · '); }
+
 /* ---- tasks in the calendar ---------------------------------------------- */
 
 var TASKS = 'úkoly';       // their row in Zdroje, and their key in settings.calOn
@@ -509,12 +512,19 @@ function renderDay() {
     var cat = CATS[r.cat];
     if (!cat) return;
     var tall = (r.e - r.s) >= 45;
+    var where = whereOf(r);
     nodes.push(el('div.rblock' + (tall ? '' : '.is-short'), {
+      title: where || null,
       style: 'top:' + top(r.s) + 'px;height:' + Math.max(height(r.s, r.e), 18) + 'px;' +
              'background:' + cat.color + '1f;border-left:6px solid ' + cat.color
     }, [
       el('b', { style: 'color:' + cat.color }, r.note || cat.label),
-      el('em', fmtMin(r.s) + '–' + fmtMin(r.e) + (r.note ? ' · ' + cat.label : ''))
+      el('em', fmtMin(r.s) + '–' + fmtMin(r.e) + (r.note ? ' · ' + cat.label : '')),
+      // Where and with whom — a class from the timetable. Needs ~an hour of height.
+      // Two spans, so a phone can stack them in its narrow label strip.
+      where && (r.e - r.s) >= 60
+        ? el('em.rblock__where', [r.room ? el('span', r.room) : null, r.who ? el('span', r.who) : null])
+        : null
     ]));
   });
 
@@ -625,10 +635,16 @@ function renderMulti() {
       var cat = CATS[r.cat];
       if (!cat) return;
       covered += r.e - r.s;
+      var where = whereOf(r);
       nodes.push(el('div.rblock.rblock--col', {
+        title: [r.note || cat.label, where].filter(Boolean).join(' · '),
         style: 'top:' + top(r.s) + 'px;height:' + Math.max(height(r.s, r.e), 6) + 'px;' +
                'background:' + cat.color + '1f;border-left:4px solid ' + cat.color
-      }, (r.e - r.s) >= 45 && !narrow ? el('b', { style: 'color:' + cat.color }, r.note || cat.label) : null));
+      }, (r.e - r.s) >= 45 && !narrow ? [
+        el('b', { style: 'color:' + cat.color }, r.note || cat.label),
+        // The room only: a column has no width for the teacher as well.
+        r.room && (r.e - r.s) >= 75 ? el('em.rblock__where', r.room) : null
+      ] : null));
     });
 
     timed.forEach(function (e) {

@@ -25,7 +25,7 @@ var ready = false;
 export var data = {
   tasks: [],
   journal: { entries: [] },
-  routine: { grid: {}, notes: {}, wake: 420, sleep: 1350 },
+  routine: { grid: {}, notes: {}, info: {}, wake: 420, sleep: 1350 },
   timers: { presets: [] },
   checklists: {},
   /* Read-only, from the server: the tools refused by configuration. Not a
