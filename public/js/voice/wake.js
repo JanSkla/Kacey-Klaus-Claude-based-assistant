@@ -25,6 +25,7 @@ import { primeTTS } from './tts.js';
 import { playWakeChime, WAKE_CHIME_MS } from './chime.js';
 import { SR, nativeAvailable, startRecognition } from './recognition.js';
 import { noteInteraction } from '../net/activity.js';
+import { monitorOn, monitorLog, monitorEngine } from './wake-monitor.js';
 import {
   voiceWakePriority, voiceWakeSupervise, voiceWakeStop, voiceWakeActive,
   refreshVoiceStateLabel, wakeMode, voiceStatus
@@ -85,7 +86,7 @@ export function isWakePhrase(heard) {
 }
 
 function wakeShouldRun() {
-  return wakeEnabled && !wakeBlocked && nativeAvailable() &&
+  return (wakeEnabled || monitorOn()) && !wakeBlocked && nativeAvailable() &&
     !state.listening && !state.micDesired &&
     state.ttsPending === 0 &&            // never let it hear Kacey's own voice
     !state.streaming &&                  // her turn belongs to the barge listener
@@ -105,12 +106,28 @@ function buildWake() {
   r.onstart = function () { wakeRunning = true; };
 
   r.onresult = function (ev) {
-    var heard = '';
+    var heard = '', final = false;
     for (var i = ev.resultIndex; i < ev.results.length; i++) {
       var alt = ev.results[i][0];
       if (alt) heard += ' ' + alt.transcript;
+      if (ev.results[i].isFinal) final = true;
     }
-    if (!heard.trim() || !isWakePhrase(heard)) return;
+    var hit = !!heard.trim() && isWakePhrase(heard);
+
+    // The Controller's test bench: show what the recogniser heard, and on a
+    // match chime rather than open dictation.
+    if (monitorOn()) {
+      if (hit) {
+        monitorLog('hit', '„KC“ poznáno v přepisu · „' + heard.trim() + '“');
+        wakeHits++;
+        if (!state.muted) playWakeChime();
+        stopWake(true);              // a fresh result list, so it is not matched twice
+      } else if (final && heard.trim()) {
+        monitorLog('heard', 'přepis: „' + heard.trim() + '“');
+      }
+      return;
+    }
+    if (!hit) return;
 
     wakeHits++;
     noteInteraction('wake');
@@ -172,11 +189,26 @@ export function superviseWake() {
   if (voiceWakePriority()) {
     if (wakeRunning) stopWake(true);
     voiceWakeSupervise();
-    return;
+  } else {
+    voiceWakeStop();
+    if (wakeShouldRun()) startWake();
+    else if (wakeRunning) stopWake(true);
   }
-  voiceWakeStop();
-  if (wakeShouldRun()) startWake();
-  else if (wakeRunning) stopWake(true);
+  if (monitorOn()) monitorEngine(describeListener());
+}
+
+/* One line for the Controller's monitor: who holds the microphone, or the
+   first reason nobody does. */
+function describeListener() {
+  var v = voiceStatus();
+  if (v.running) return 'hlas · ' + v.samples + ' vzorků · práh ' + v.threshold.toFixed(2);
+  if (wakeRunning) return 'přepis (Web Speech)';
+  if (wakeBlocked) return 'nic — mikrofon zamítnut';
+  if (state.listening || state.micDesired) return 'pauza — mikrofon má diktování';
+  if (state.ttsPending > 0 || state.streaming) return 'pauza — Kacey mluví';
+  if (v.supported && !v.enrolled && !nativeAvailable()) return 'nic — nahraj aspoň 3 vzorky „KC“';
+  if (!v.supported && !nativeAvailable()) return 'nic — prohlížeč neumí ani hlas, ani přepis';
+  return 'spouštím…';
 }
 
 export function applyWakeUI() {

@@ -842,7 +842,7 @@ button.task__due.is-empty { color: var(--ink3); }
 .vw__mode[aria-pressed="true"] { border-color: var(--acc); background: var(--acc); color: var(--on-acc); }
 .vw__rec { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 20px 6px; }
 .vw__recNote { font-size: 14px; color: var(--ink2); }
-.vw__level { flex: 1 1 60px; height: 6px; background: var(--l3); }
+.vw__level { flex: 1 1 60px; height: 6px; background: linear-gradient(to right, var(--acc) calc(var(--lvl, 0) * 100%), var(--l3) 0); }
 .vw__list { list-style: none; margin: 0; padding: 10px 20px; display: flex; flex-direction: column; gap: 6px; }
 .vw__item { display: flex; align-items: center; gap: 14px; padding: 11px 14px; background: var(--l2); border: 1px solid var(--line); }
 .vw__item[data-playing] { border-color: var(--acc); }
@@ -869,6 +869,20 @@ button.task__due.is-empty { color: var(--ink3); }
 .vw__sens { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 20px; font-size: 13px; letter-spacing: .06em; color: var(--ink2); }
 .vw__sens input { flex: 1 1 160px; min-width: 0; accent-color: var(--acc); }
 .vw__foot { padding: 0 20px 8px; }
+
+/* The Controller's wake word test monitor (voice/wake-monitor.js). */
+.wakemon { margin-top: 14px; padding: 12px 14px; display: grid; gap: 8px; background: var(--l2); border: 1px solid var(--line); }
+.wakemon[data-hit] { border-color: var(--ok); }
+.wakemon__head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; letter-spacing: .06em; color: var(--ink3); }
+.wakemon__engine { font-size: 13px; letter-spacing: 0; color: var(--ink2); text-align: right; }
+.wakemon__level .bar__fill { transition: none; }
+.wakemon__note { margin: 0; font-size: 12px; color: var(--ink3); }
+.wakemon__log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 200px; overflow-y: auto; font-size: 13px; font-variant-numeric: tabular-nums; }
+.wakemon__row { display: flex; gap: 10px; color: var(--ink2); }
+.wakemon__row time { flex: none; color: var(--ink3); }
+.wakemon__row[data-kind="hit"] { color: var(--ok); font-weight: 600; }
+.wakemon__row[data-kind="quiet"] { color: var(--ink3); }
+.wakemon__empty { color: var(--ink3); font-size: 13px; }
 
 /* =======================================================================
    TOAST

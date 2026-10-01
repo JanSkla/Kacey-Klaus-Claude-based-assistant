@@ -312,7 +312,8 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.readout` | [telemetry.js](public/js/ui/telemetry.js) | `dl` key/value rows | `dd[data-warn]`, `dd[data-bad]` |
 | `.srow` | controller.js | Setting row: text, state, switch — or `__step` (− `__value` +) | `__state.is-planned`, `__state.is-on` (ok) |
 | `.attach` / `.attachstrip` | [attachments.js](public/js/ui/attachments.js) | Image attachment chip with thumb and ×. A screenshot shared from the phone lands here too ([share.js](public/js/ui/share.js)), with the chat view opened and the composer focused | `:hover` on × |
-| `.vw__*` | [wake-panel.js](public/js/voice/wake-panel.js) | Voiceprint sheet: list items, play/delete, score bar, sensitivity | `data-playing`, `data-match`, `data-outlier`, `data-hit` |
+| `.vw__*` | [wake-panel.js](public/js/voice/wake-panel.js) | Voiceprint sheet: list items, play/delete, score bar, sensitivity; `__level` fills from `--lvl` | `data-playing`, `data-match`, `data-outlier`, `data-hit` |
+| `.wakemon` | [wake-monitor.js](public/js/voice/wake-monitor.js) | Controller's wake word test monitor, under "Nahrát vzorky": `__head` (label + `__engine`: who holds the mic, or why nobody), `.bar` live level, `__note`, `__log` (newest first, 14 rows: time + segment length, score / threshold). While the Controller shows, a match chimes and logs instead of opening dictation | `data-hit` flashes `--ok`; rows `data-kind` = hit (`--ok`), miss, quiet (`--ink3`), heard |
 | Text helpers | styles.css | `.big` (20 acc), `.strong`, `.muted`, `.muted-3`, `.label`, `.rule`, `.clock` (`--sm`), `.num`, `.is-acc` | — |
 
 ---
@@ -430,7 +431,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 
 **Dead or orphaned**
 - theme.js looks up `#hueRing`, `#hueKnob`, `#hueValue`, `#settingsPanel`, `#settings`, `#settingsClose` — none exist in index.html (the hue dial sheet is gone; presets live in the controller). `?openSettings=1` does nothing.
-- `--amp` (orb.js) and `--lvl` (wake-panel.js) are written every frame but no CSS reads them, so the voiceprint level bar `.vw__level` never fills.
+- `--amp` (orb.js) is written every frame but no CSS reads it.
 - Classes set but unstyled: `.msg--preamble`, `.miczone__note`, `.btn--x` (only styled inside `.timercard .row`).
 - Many `…[hidden] { display:none }` rules are redundant with the global `[hidden]` rule.
 
@@ -473,6 +474,7 @@ One line per feature that changes the UI. Newest first. Format: `YYYY-MM-DD — 
 - 2026-09-30 — **Unsure events**: an event Kacey marks unsure (poster, "maybe", "?") is drawn with a dotted outline and a `--warn` "?" in the lane, the columns, the all-day strip and the Today panel (`.is-tentative`, `.unsure`); the event editor gets "S otazníkem" / "Potvrdit". Also fixed: an event ending at midnight no longer hangs off the bottom of the lane. [design: pending]
 - 2026-09-30 — **Sharing to Kacey**: the page is installable (`manifest.webmanifest`, icons, `sw.js`) and an Android share target; a shared screenshot opens the chat view with the image in `.attachstrip` and the composer focused for an optional note. No new component. [design: pending]
 - 2026-09-30 — **Android app** ([android/](android/)): the page in a WebView as a floating bubble (Android Bubbles API) and full screen, "Sdílet → Kacey" into the bubble, a Quick Settings tile. One native screen, the launcher/settings screen, built from the §2 tokens without a design first. [design: pending]
+- 2026-09-28 — Controller gets a wake word test monitor `.wakemon` (engine line, live level, a log of every segment with its score). A small test tool built from existing tokens, not designed. The voiceprint sheet's level bar `.vw__level` now actually fills (`--lvl`). [design: pending]
 - 2026-09-28 — Morning checklist: the "Projít návrhy od Kacey" item's sub line tallies the decisions ("1 přijato · 1 zamítnuto"), and it also recounts after the morning has ended (`.checkitem__sub`, text only). [design: pending]
 - 2026-09-27 — "Nechat hrát vinyl" in the mini player's panel (`.mini__keep`, an existing `.btn--sm` with `aria-pressed`): keeps the bedside screen lit until pressed again, and on the kiosk opens the visual. The visual's corner widget has the same toggle. [design: pending]
 - 2026-09-26 — On the kiosk, the mini player's "Otevřít vizuál" shows the music visual in a full-screen frame over the page (`.visualover`, z-index 50) instead of a new window. A new tab covered Kacey with no way back, and a second window crashes cage. [design: pending]

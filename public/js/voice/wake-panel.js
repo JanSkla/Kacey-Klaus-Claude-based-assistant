@@ -30,7 +30,8 @@ import { $ } from '../core/dom.js';
 import { primeTTS } from './tts.js';
 import { noteInteraction } from '../net/activity.js';
 import { playWakeChime, WAKE_CHIME_MS } from './chime.js';
-import { startRecognition } from './recognition.js';
+import { startRecognition, nativeAvailable } from './recognition.js';
+import { monitorOn, monitorLevel, monitorScore } from './wake-monitor.js';
 import {
   wakeIsEnabled, wakeIsBlocked, setWakeBlocked, applyWakeUI, superviseWake
 } from './wake.js';
@@ -63,10 +64,14 @@ function voiceWakeReady() { return voiceWakeUsable() && VW.enrolled(); }
    sample, because the transcript listener would be holding the microphone. */
 export function voiceWakePriority() {
   if (!voiceWakeUsable()) return false;
-  return vwPanelOpen || (mode === 'voice' && VW.enrolled());
+  return vwPanelOpen || (wantsVoice() && VW.enrolled());
 }
 
-export function voiceWakeActive() { return mode === 'voice' && voiceWakeReady(); }
+/* "přepis" needs Web Speech. Where there is none (the kiosk's Epiphany) that
+   choice meant nothing listened at all, with samples recorded and ready. */
+function wantsVoice() { return mode === 'voice' || !nativeAvailable(); }
+
+export function voiceWakeActive() { return wantsVoice() && voiceWakeReady(); }
 
 function voiceShouldRun() {
   if (!voiceWakeUsable() || Date.now() < voiceFailUntil) return false;
@@ -76,8 +81,9 @@ function voiceShouldRun() {
   // starts working, so that "ticho" is heard before she has said anything.
   if (state.ttsPending > 0 || state.streaming || document.hidden) return false;
   if (vwPanelOpen) return true;                 // tuning needs it live
-  if (!wakeIsEnabled() || wakeIsBlocked()) return false;
   if (state.listening || state.micDesired) return false;
+  if (monitorOn()) return VW.enrolled();        // the Controller's test bench
+  if (!wakeIsEnabled() || wakeIsBlocked()) return false;
   return VW.enrolled() && state.conn === 'online';
 }
 
@@ -120,6 +126,8 @@ export function onVoiceDetect(info) {
   // With the panel open this is a test bench, not a trigger: showing the score
   // is the whole point, and starting dictation would fight the tuning.
   if (vwPanelOpen) { flashVwHit(info); return; }
+  // The Controller is a test bench too: log it (onScore did) and chime, no dictation.
+  if (monitorOn()) { if (!state.muted) playWakeChime(); return; }
 
   noteInteraction('wake');
   voiceWakeStop();                    // release the device before recognition
@@ -133,7 +141,7 @@ function voiceStateLabel() {
   if (!voiceWakeUsable()) return 'nepodporováno';
   var n = VW.count();
   if (!VW.enrolled()) return n ? n + '/' + VW.minSamples + ' vzorků' : 'nenastaveno';
-  return mode === 'voice' ? n + ' vzorků · aktivní' : n + ' vzorků · vypnuto';
+  return wantsVoice() ? n + ' vzorků · aktivní' : n + ' vzorků · vypnuto';
 }
 
 /* ---- panel ----------------------------------------------------------- */
@@ -243,9 +251,11 @@ function renderVwList() {
 function applyVwModeUI() {
   if (!vwModeVoice || !vwModeAsr) return;
   var canVoice = voiceWakeReady();
-  vwModeVoice.setAttribute('aria-pressed', String(mode === 'voice'));
-  vwModeAsr.setAttribute('aria-pressed', String(mode !== 'voice'));
+  vwModeVoice.setAttribute('aria-pressed', String(wantsVoice()));
+  vwModeAsr.setAttribute('aria-pressed', String(!wantsVoice()));
   vwModeVoice.disabled = !canVoice;
+  vwModeAsr.disabled = !nativeAvailable();
+  vwModeAsr.title = nativeAvailable() ? 'Přepis řeči (Web Speech)' : 'Tento prohlížeč přepis řeči neumí';
   vwModeVoice.title = canVoice
     ? 'Porovnává zvuk s tvými nahrávkami — offline'
     : 'Nahraj nejdřív ' + (VW ? VW.minSamples : 3) + ' vzorky';
@@ -392,9 +402,13 @@ export function voiceStatus() {
 export function initVoiceWake() {
   if (VW) {
     VW.onDetect(onVoiceDetect);
-    VW.onScore(showScore);
+    VW.onScore(function (info) {
+      showScore(info);
+      if (!vwPanelOpen) monitorScore(info);
+    });
     VW.onLevel(function (v) {
       if (vwPanelOpen && vwLevel) vwLevel.style.setProperty('--lvl', v.toFixed(3));
+      monitorLevel(v);
     });
 
     try {

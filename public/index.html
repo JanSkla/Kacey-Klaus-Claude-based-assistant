@@ -587,6 +587,14 @@
         </div>
         <button type="button" class="btn btn--outlineaccent btn--block" id="vwOpen" aria-expanded="false" aria-controls="vwPanel">Nahrát vzorky budicího slova</button>
 
+        <!-- The wake listener as a test bench while the Controller shows (voice/wake-monitor.js). -->
+        <div class="wakemon" id="wakeMon">
+          <div class="wakemon__head"><span>TEST BUDICÍHO SLOVA</span><span class="wakemon__engine" id="wmEngine">—</span></div>
+          <span class="bar wakemon__level" aria-hidden="true"><span class="bar__fill" id="wmLevel"></span></span>
+          <p class="wakemon__note">Řekni „KC“. Tady se jen ukáže, jestli ho Kacey poznala — diktování se nespustí.</p>
+          <ol class="wakemon__log" id="wmLog" aria-live="polite"><li class="wakemon__empty">zatím nic</li></ol>
+        </div>
+
         <div class="meter" id="meter" aria-hidden="true">
           <span class="meter__bar"></span><span class="meter__bar"></span>
           <span class="meter__bar"></span><span class="meter__bar"></span>

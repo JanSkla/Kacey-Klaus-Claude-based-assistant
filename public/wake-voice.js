@@ -33,6 +33,15 @@
      long segments, so this alone removes the bulk of the false positives for
      free — while a wake word said in 0.15 s is still perfectly legal.
 
+    - The room is described by its last 3 s outside any segment: a floor (20th
+     percentile) and a usual loud level (80th). A segment opens above both,
+     closes when the level falls near the floor OR 15 dB under the word's own
+     peak, and is cut to the burst around that peak. A segment must also clear
+     the room's loud level by 8 dB (10 dB for a sample) to count at all: the
+     wake word is said at the device, over the TV, not under it.
+   - Calibration works from the median distance between the samples, so one
+     bad take does not loosen the threshold for all the others.
+
    Limits, stated plainly: a 300 ms word matched against a handful of samples
    will never be as sharp as a trained neural spotter. Expect it to want a
    sensitivity nudge, and expect a rare false trigger on a similar-sounding
@@ -75,6 +84,13 @@
   var TAIL_KEEP = 2;          // frames of that quiet kept in the segment
   var ON_DB = 7;              // dB above the tracked noise floor to open
   var OFF_DB = 5;             // ... and to stay open (hysteresis)
+  var PEAK_DROP_DB = 15;      // ... or this far below the segment's own peak closes it
+  var BG_MARGIN_DB = 3;       // to open, also this far above the room's usual loud level
+  var ENROL_SNR_DB = 10;      // a sample's peak must clear the room's loud level by this
+  var MATCH_SNR_DB = 8;       // ... and a live segment's, to be compared at all
+  var BRIDGE_FRAMES = 15;     // a dip this short inside a word (the stop in "ká-cé") is bridged
+  var ROOM_FRAMES = 300;      // 3 s of level history for the room statistics
+  var SMOOTH = 0.35;          // level smoothing for the open/close decisions
   var ABS_FLOOR_DB = -58;     // below this it is a dead mic, not speech
   var FLOOR_MIN_DB = -75;     // ... and the tracked floor never sits below this
   var FLOOR_WARMUP = 12;      // frames observed before the floor is trusted
@@ -272,7 +288,10 @@
      ===================================================================== */
 
   function dtw(a, na, b, nb, bandFrac, ceiling) {
-    var band = Math.max(10, Math.round(bandFrac * Math.max(na, nb)));
+    // The band must at least cover the length difference, or the path can never
+    // reach the corner and two takes of one word said at different speeds
+    // come out "infinitely" far apart (which also broke calibration).
+    var band = Math.max(10, Math.round(bandFrac * Math.max(na, nb)), Math.abs(na - nb) + 5);
     var INF = 1e18;
     var prev = new Float64Array(nb + 1), cur = new Float64Array(nb + 1);
     var i, j;
@@ -384,6 +403,13 @@
   var quiet = 0;
   var segStatics = [];
   var segAbs = [];            // absolute sample index of each frame in segStatics
+  var segDb = [];             // smoothed level of each frame in segStatics
+  var segPeak = -Infinity;    // the loudest smoothed frame of the open segment
+  var level = null;           // smoothed frame level, dB
+  var quietDb = [];           // levels of the frames counted as quiet so far
+  var room = [];              // smoothed levels of recent frames outside any segment
+  var roomLoud = null;        // 80th percentile of `room`: the room's usual loud level
+  var roomTick = 0;
   var preRoll = [];
   var preRollAbs = [];
   var analysisMutedUntil = 0; // set while a sample is being auditioned
@@ -428,9 +454,17 @@
     var sd = Math.sqrt(varc);
     var worst = Math.max.apply(null, best);
 
-    // Cover the observed spread with headroom, but never so wide that anything
-    // vaguely word-shaped gets in.
-    baseThr = Math.min(Math.max(mean + 1.5 * sd, worst * 1.08, mean * 1.15), mean * 2.1);
+    /* From the median, not the worst: one bad take (a cough, the room in the
+       background) otherwise stretches the tolerance to cover it, and the room's
+       own noises start to match. That take is still flagged as an outlier in
+       the panel, where it can be heard and deleted. Headroom over the median,
+       widened when the takes genuinely vary (MAD), capped at 1.8x. */
+    var sorted = best.slice().sort(function (a, b) { return a - b; });
+    var median = sorted[Math.floor(sorted.length / 2)];
+    if (sorted.length % 2 === 0) median = (median + sorted[sorted.length / 2 - 1]) / 2;
+    var dev = sorted.map(function (d) { return Math.abs(d - median); }).sort(function (a, b) { return a - b; });
+    var mad = dev[Math.floor(dev.length / 2)] * 1.4826;
+    baseThr = Math.min(Math.max(median * 1.25, median + 2.5 * mad), median * 1.8);
     selfSpread = { mean: mean, sd: sd, worst: worst };
   }
 
@@ -486,9 +520,11 @@
   function resetSeg() {
     pending = new Float32Array(0);
     inSpeech = false; quiet = 0;
-    segStatics = []; segAbs = []; preRoll = []; preRollAbs = [];
+    segStatics = []; segAbs = []; segDb = []; segPeak = -Infinity; quietDb = [];
+    preRoll = []; preRollAbs = [];
     suppressed = false;
     floorInit = [];
+    level = null;
     // Keep noiseFloor: the room does not change between two starts a second apart.
   }
 
@@ -566,15 +602,38 @@
   function deafen(ms) {
     analysisMutedUntil = Date.now() + (ms || 0);
     inSpeech = false; quiet = 0;
-    segStatics = []; segAbs = []; preRoll = []; preRollAbs = [];
+    segStatics = []; segAbs = []; segDb = []; segPeak = -Infinity; quietDb = [];
+    preRoll = []; preRollAbs = [];
     suppressed = false;
+  }
+
+  /* The room, from its recent history outside any segment: the floor is the
+     quiet end (20th percentile), roomLoud the usual loud end (80th). A single
+     slow floor cannot describe a room with a TV, music or traffic in it — the
+     floor sits in the lulls and every burst of background opens a segment. */
+  function noteRoom(db) {
+    room.push(db);
+    if (room.length > ROOM_FRAMES) room.shift();
+    // Sorting 300 numbers every 10 ms is waste; every tenth frame is plenty.
+    if (room.length < FLOOR_WARMUP || ++roomTick % 10) return;
+    var sorted = room.slice().sort(function (a, b) { return a - b; });
+    noiseFloor = Math.max(FLOOR_MIN_DB, sorted[Math.floor(sorted.length * 0.2)]);
+    roomLoud = sorted[Math.floor(sorted.length * 0.8)];
+  }
+
+  function openLine() {
+    return Math.max(noiseFloor + ON_DB, roomLoud === null ? -Infinity : roomLoud + BG_MARGIN_DB);
   }
 
   function handleFrame(samples, off, abs) {
     if (Date.now() < analysisMutedUntil) return;
 
     var f = fz.frame(samples, off);
-    var db = f.db;
+    /* Decisions run on a smoothed level. Room noise flickers frame to frame by
+       10 dB or more; unsmoothed, one loud frame in every 220 ms is enough to keep
+       a segment open for good. */
+    level = level === null ? f.db : level + SMOOTH * (f.db - level);
+    var db = level;
 
     /* Seed the floor from a short warmup rather than from the first frame.
        A capture stream often opens on digital silence, which is -120 dB: seeded
@@ -588,6 +647,7 @@
       if (floorInit.length < FLOOR_WARMUP) return;
       var sorted = floorInit.slice().sort(function (a, b) { return a - b; });
       noiseFloor = sorted[Math.floor(sorted.length * 0.25)];   // low quartile
+      room = floorInit.slice();
       floorInit = [];
     }
     // Belt and braces: clamped, the pathological case cannot come back by
@@ -595,10 +655,12 @@
     if (noiseFloor < FLOOR_MIN_DB) noiseFloor = FLOOR_MIN_DB;
 
     if (!inSpeech) {
-      // Track the floor while quiet. Falls fast, rises slowly: a passing noise
-      // must not drag the threshold up and deafen us for the next few seconds.
-      if (db < noiseFloor) noiseFloor = noiseFloor * 0.7 + db * 0.3;
-      else noiseFloor = noiseFloor * 0.99 + db * 0.01;
+      // Falls at once (a lull is real), otherwise follows the room's history.
+      // Not while a runaway is being waited out: that is somebody talking, and
+      // counted as "the room" it would raise the bar for the next few seconds
+      // so that a "KC" right after a sentence opened late and came out split.
+      if (db < noiseFloor) noiseFloor = Math.max(FLOOR_MIN_DB, db);
+      if (!suppressed) noteRoom(db);
 
       if (suppressed) {
         // A runaway was just abandoned mid-sentence. Refuse to open again until
@@ -606,18 +668,20 @@
         // speech forms a wake-word-sized segment and reaches the matcher, which
         // is precisely the false positive the length gate was meant to prevent.
         preRoll.length = 0; preRollAbs.length = 0;
-        if (db < noiseFloor + OFF_DB) { if (++quiet >= HANG_FRAMES) { suppressed = false; quiet = 0; } }
+        if (db < Math.max(noiseFloor + OFF_DB, roomLoud === null ? -Infinity : roomLoud)) { if (++quiet >= HANG_FRAMES) { suppressed = false; quiet = 0; } }
         else quiet = 0;
         return;
       }
 
-      if (db > noiseFloor + ON_DB && db > ABS_FLOOR_DB) {
+      if (db > openLine() && db > ABS_FLOOR_DB) {
         inSpeech = true;
-        quiet = 0;
+        quiet = 0; quietDb = [];
         segStatics = preRoll.slice();
         segAbs = preRollAbs.slice();
+        segDb = segStatics.map(function () { return noiseFloor; });
+        segPeak = db;
         preRoll = []; preRollAbs = [];
-        segStatics.push(f.c); segAbs.push(abs);
+        segStatics.push(f.c); segAbs.push(abs); segDb.push(db);
       } else {
         preRoll.push(f.c); preRollAbs.push(abs);
         if (preRoll.length > PRE_ROLL) { preRoll.shift(); preRollAbs.shift(); }
@@ -625,12 +689,19 @@
       return;
     }
 
-    segStatics.push(f.c); segAbs.push(abs);
+    segStatics.push(f.c); segAbs.push(abs); segDb.push(db);
+    if (db > segPeak) segPeak = db;
 
-    if (db < noiseFloor + OFF_DB) {
+    /* Quiet is "back near the floor" OR "well below this word's own peak". The
+       second half is what a real room needs: with a fan, traffic or music the
+       level after the word never gets within a few dB of the floor, so the
+       segment used to run on to the 3 s stop (enrolment) or the runaway guard
+       (detection) and a "KC" was never matched on its own. */
+    if (db < Math.max(noiseFloor + OFF_DB, segPeak - PEAK_DROP_DB)) {
+      quietDb.push(db);
       if (++quiet >= HANG_FRAMES) { closeSegment(true); return; }
     } else {
-      quiet = 0;
+      quiet = 0; quietDb = [];
     }
 
     // Enrolment is allowed to run long (someone may enrol a whole phrase); only
@@ -643,7 +714,8 @@
     // Runaway (continuous speech): abandon without matching. Cheap, and it is
     // the single biggest source of false positives in a normal conversation.
     if (segStatics.length > runawayCap() + HANG_FRAMES) {
-      inSpeech = false; segStatics = []; segAbs = []; preRoll = []; preRollAbs = []; quiet = 0;
+      inSpeech = false; segStatics = []; segAbs = []; segDb = []; segPeak = -Infinity; quietDb = [];
+      preRoll = []; preRollAbs = []; quiet = 0;
       suppressed = true;
     }
   }
@@ -657,9 +729,14 @@
   }
 
   function closeSegment(trimHangover) {
-    var statics = segStatics, absList = segAbs;
+    var statics = segStatics, absList = segAbs, dbs = segDb, peak = segPeak;
+    var quietLevels = quietDb;
     inSpeech = false; quiet = 0;
-    segStatics = []; segAbs = []; preRoll = []; preRollAbs = [];
+    segStatics = []; segAbs = []; segDb = []; segPeak = -Infinity; quietDb = [];
+    preRoll = []; preRollAbs = [];
+
+    // The quiet tail is room sound: it belongs in the room statistics.
+    for (var r = 0; r < quietLevels.length; r++) noteRoom(quietLevels[r]);
 
     if (trimHangover) {
       // Drop the trailing silence the hangover collected, keeping a couple of
@@ -668,13 +745,30 @@
       var keep = Math.max(0, statics.length - HANG_FRAMES + TAIL_KEEP);
       statics = statics.slice(0, keep);
       absList = absList.slice(0, keep);
+      dbs = dbs.slice(0, keep);
+    }
+
+    /* Keep the burst around the peak and nothing else: room sound before or
+       after the word (the segment may have opened on a noise, or hit the 3 s
+       stop) dilutes the comparison. Enrolment and detection are cut the same
+       way, so a live "KC" is compared like with like. */
+    if (dbs.length) {
+      var span = burstSpan(dbs, peak);
+      statics = statics.slice(span[0], span[1]);
+      absList = absList.slice(span[0], span[1]);
     }
 
     /* ENROLMENT: no length judgement. If the owner says a 0.15 s "KC", that is
        the wake word, and a threshold calibrated from those samples will match it
        on the way back. The only floor is arithmetic — deltas need a few frames. */
+    /* Loud enough to be addressed to her? The wake word is said at the device,
+       clearly over whatever the room is doing; a burst of the TV or of talk in
+       the next room is not. Without this the first background burst after
+       "nahrát vzorek" became the sample. */
+    var over = peak - (roomLoud === null ? noiseFloor : roomLoud);
+
     if (capturePending) {
-      if (statics.length < MIN_ENROL_FRAMES) return;
+      if (statics.length < MIN_ENROL_FRAMES || over < ENROL_SNR_DB) return;
       var done = capturePending;
       capturePending = null;
       // Audio is kept only for enrolment. A detection segment is thrown away a
@@ -684,7 +778,29 @@
     }
 
     if (statics.length < MIN_MATCH_FRAMES) return;
-    match(makeSample(statics, null));
+    if (over < MATCH_SNR_DB) {
+      if (cbScore) cbScore({ score: Infinity, threshold: threshold(), hit: false, ms: statics.length * 10, quiet: true, over: over });
+      return;
+    }
+    match(makeSample(statics, null), over);
+  }
+
+  /* [from, to) of the burst around the loudest frame: out from the peak while
+     the level stays within PEAK_DROP_DB of it, bridging dips up to
+     BRIDGE_FRAMES (the stop in "ká-cé"), plus a little either side. */
+  function burstSpan(dbs, peak) {
+    var n = dbs.length, top = 0;
+    for (var i = 1; i < n; i++) if (dbs[i] > dbs[top]) top = i;
+    var line = peak - PEAK_DROP_DB;
+    var lo = top, hi = top, gap = 0, j;
+    for (j = top - 1; j >= 0; j--) {
+      if (dbs[j] >= line) { lo = j; gap = 0; } else if (++gap > BRIDGE_FRAMES) break;
+    }
+    gap = 0;
+    for (j = top + 1; j < n; j++) {
+      if (dbs[j] >= line) { hi = j; gap = 0; } else if (++gap > BRIDGE_FRAMES) break;
+    }
+    return [Math.max(0, lo - 2), Math.min(n, hi + 1 + TAIL_KEEP)];
   }
 
   function makeSample(statics, absList) {
@@ -702,7 +818,7 @@
     return s;
   }
 
-  function match(sample) {
+  function match(sample, over) {
     if (templates.length < MIN_TEMPLATES || !baseThr) return;
 
     var thr = threshold();
@@ -731,7 +847,7 @@
     if (cbScore) {
       cbScore({
         score: best, threshold: thr, hit: hit, ms: sample.ms,
-        template: bestIdx, perTemplate: perTemplate
+        template: bestIdx, perTemplate: perTemplate, over: over
       });
     }
     if (hit) {
@@ -1012,6 +1128,7 @@
       effSr = sr || TARGET_SR;
       fz = new Featurizer(effSr);
       noiseFloor = null;
+      room = []; roomLoud = null;
       resetSeg();
     },
     _feed: function (samples) {
@@ -1025,6 +1142,7 @@
     _dtw: dtw,
     _finish: finishFeatures,
     _dim: DIM,
-    _sr: function () { return effSr; }
+    _sr: function () { return effSr; },
+    room: function () { return { floor: noiseFloor, loud: roomLoud, level: level }; }
   };
 })();

@@ -297,6 +297,54 @@ if (saved) {
   }
 }
 
+// ---- 12. a noisy room: background bursts only ~10 dB under the word ------
+// What kaceybody's bedroom actually sounds like (a TV or music next door): the
+// level between words never falls near the floor. Every enrolment used to run
+// on to the 3 s stop, and the templates were three seconds of room with a word
+// somewhere in them — so nothing ever matched.
+function murmur(ms, seed = 1) {
+  // Voiced-ish background: short vowel-like bursts at random pitch and level.
+  let x = seed;
+  const rnd = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+  const parts = [];
+  let left = ms;
+  while (left > 0) {
+    const len = 60 + Math.round(rnd() * 180);
+    parts.push(rnd() < 0.3 ? silence(len, 0.01)
+      : segment(len, 110 + rnd() * 120, 300 + rnd() * 600, 1000 + rnd() * 1500, 0.02 + rnd() * 0.03));
+    left -= len;
+  }
+  return join(parts);
+}
+function mix(a, b) { const o = new Float32Array(Math.max(a.length, b.length)); for (let i = 0; i < o.length; i++) o[i] = (a[i] || 0) + (b[i] || 0); return o; }
+const inRoom = (word, seed) => mix(join([silence(600, 0), word, silence(1500, 0)]), murmur(600 + word.length / 16 + 1500, seed));
+
+VW.clearSamples();
+VW._testInit(SR);
+VW._feed(murmur(2500, 7));                            // the room, before anything
+const roomLens = [];
+for (const [i, [f0, rate, gain]] of [[190, 1.00, 0.30], [204, 1.08, 0.26], [180, 0.94, 0.34]].entries()) {
+  const p = VW.captureOne(5000);
+  VW._feed(inRoom(utter(WORD_A, { f0, rate, gain, lead: 0, tail: 0 }), 11 + i));
+  let got = null;
+  try { got = await p; } catch { /* stayed open */ }
+  if (got) { roomLens.push(got.ms); VW.addSample(got); }
+}
+check('noisy room: every take closes', roomLens.length === 3, `captured ${roomLens.join('/')} ms`);
+check('noisy room: takes are the word, not the room', roomLens.length === 3 && roomLens.every((ms) => ms < 700),
+  `${roomLens.join('/')} ms (the word is ~300 ms)`);
+
+await new Promise((r) => setTimeout(r, 1300));
+detects = []; scores = [];
+VW._feed(inRoom(utter(WORD_A, { f0: 196, rate: 1.03, gain: 0.28, lead: 0, tail: 0 }), 21));
+check('noisy room: a fresh take is detected', detects.length === 1,
+  `score=${scores.map((x) => (isFinite(x.score) ? x.score.toFixed(2) : 'inf') + (x.hit ? '✓' : '')).join(' ')} thr=${VW.threshold().toFixed(2)}`);
+
+await new Promise((r) => setTimeout(r, 1300));
+detects = []; scores = [];
+VW._feed(murmur(6000, 31));
+check('noisy room: the room alone never triggers', detects.length === 0, `segments=${scores.length}`);
+
 // ---- report -------------------------------------------------------------
 let bad = 0;
 for (const r of results) {
