@@ -18,6 +18,7 @@
    ========================================================================= */
 
 import { $ } from '../core/dom.js';
+import { el, fill } from '../core/el.js';
 import { KIOSK } from '../core/state.js';
 
 var PORT = 8081;
@@ -199,7 +200,10 @@ function nudgeVolume(delta) {
 
 function renderKeep() {
   $('miniKeep').setAttribute('aria-pressed', String(keep));
-  $('miniKeep').textContent = keep ? 'Vinyl hraje · vypnout' : 'Nechat hrát vinyl';
+  // Pressed, it carries the accent dot like the app's other toggles (.btn .dot).
+  fill($('miniKeep'), keep
+    ? [el('span.dot', { 'aria-hidden': 'true' }), 'Vinyl hraje · vypnout']
+    : 'Nechat hrát vinyl');
 }
 
 function readKeep() {
@@ -242,7 +246,7 @@ export function initMiniPlayer() {
     });
     window.addEventListener('message', function (ev) {
       if (ev.origin !== nowplayingUrl() || !ev.data) return;
-      if (ev.data.type === 'kacey-close-visual') {
+      if (ev.data.type === 'kacey-close-visual' || ev.data.type === 'kacey:close-visual' || ev.data === 'kacey:close-visual') {
         closeVisual();
         // Nobody keeps a screen lit for a record they just closed.
         if (keep) setKeep(false);

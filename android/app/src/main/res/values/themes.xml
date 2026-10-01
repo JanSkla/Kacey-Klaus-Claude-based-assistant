@@ -4,11 +4,16 @@
     <color name="bg">#161616</color>
     <color name="l1">#242424</color>
     <color name="l2">#2f2f2f</color>
+    <color name="l3">#3a3a3a</color>
+    <color name="line">#414141</color>
+    <color name="divider">#2e2e2e</color>
     <color name="line2">#565656</color>
     <color name="ink">#f4f4f4</color>
     <color name="ink2">#c6c6c6</color>
     <color name="ink3">#9a9a9a</color>
     <color name="acc">#5cd4f5</color>
+    <!-- acc-press: hsl(193 88% 76%), the pressed accent fill -->
+    <color name="acc_press">#8ce0f8</color>
     <color name="on_acc">#161616</color>
     <color name="err">#fa4d56</color>
     <color name="ok">#42be65</color>

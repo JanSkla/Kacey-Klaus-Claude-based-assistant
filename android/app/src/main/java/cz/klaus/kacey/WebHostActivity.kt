@@ -191,16 +191,36 @@ abstract class WebHostActivity : Activity() {
         }
     }
 
-    /** No Kacey (no Tailscale, kaceybody asleep): say so, in Kacey's colours, with a way back. */
+    /**
+     * No Kacey (no Tailscale, kaceybody asleep). Claude Design "Kacey Android"
+     * 2b: a 52px bar with the state dot (as .bleedbar), the error as a .readout,
+     * what to check, and one accent action at the bottom, in thumb's reach.
+     * The accent is hue 193 baked in: this page has no --h (DESIGN.md §7).
+     */
     private fun offlinePage(why: String): String {
         val url = Prefs.url(this)
-        val esc = { s: String -> s.replace("&", "&amp;").replace("<", "&lt;").replace("\"", "&quot;") }
+        val esc = { s: String -> s.replace("&", "&amp;").replace("<", "&lt;").replace("\"", "&quot;").replace("'", "&#39;") }
+        val lbl = "font-size:12px;letter-spacing:.08em;color:#9a9a9a"
+        val hollow = "width:8px;height:8px;flex:none;border-radius:50%;border:1px solid #9a9a9a"
         return """<!doctype html><html lang="cs"><meta name="viewport" content="width=device-width,initial-scale=1">
-<body style="margin:0;padding:24px;background:#161616;color:#f4f4f4;font:15px/1.5 monospace">
-<p style="font-weight:600;font-size:17px">Kacey není k zastižení.</p>
-<p style="color:#c6c6c6">${esc(url)}<br>${esc(why)}</p>
-<p style="color:#9a9a9a">Je v telefonu zapnutý Tailscale a běží kaceybody?</p>
-<button onclick="location.href='${esc(url)}/#main'" style="font:inherit;font-weight:600;padding:12px 20px;border:0;background:#5cd4f5;color:#161616">Zkusit znovu</button>
+<body style="margin:0;min-height:100vh;display:flex;flex-direction:column;background:#161616;color:#f4f4f4;font:15px/1.5 Consolas,'SFMono-Regular',Menlo,ui-monospace,monospace;-webkit-font-smoothing:antialiased">
+<div style="height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;background:#242424;border-bottom:1px solid #414141">
+<span style="width:12px;height:12px;background:#5cd4f5"></span><b style="font-size:15px;font-weight:600;letter-spacing:.04em">Kacey</b>
+<span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.08em;color:#fa4d56"><span style="width:8px;height:8px;border-radius:50%;background:#fa4d56"></span>NEDOSTUPNÁ</span>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:14px;padding:20px 16px">
+<p style="margin:0;font-size:17px;font-weight:600">Kacey není k zastižení.</p>
+<div style="background:#242424;border:1px solid #414141;font-size:13px">
+<div style="display:grid;grid-template-columns:72px 1fr;gap:10px;padding:10px 14px;border-bottom:1px solid #2e2e2e"><span style="$lbl">ADRESA</span><span style="color:#c6c6c6;overflow-wrap:anywhere">${esc(url)}</span></div>
+<div style="display:grid;grid-template-columns:72px 1fr;gap:10px;padding:10px 14px"><span style="$lbl">CHYBA</span><span style="color:#c6c6c6;overflow-wrap:anywhere">${esc(why.ifBlank { "—" })}</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="$lbl">ZKONTROLUJ</span>
+<span style="display:flex;align-items:center;gap:10px;font-size:14px;color:#c6c6c6"><span style="$hollow"></span>Tailscale v telefonu je zapnutý</span>
+<span style="display:flex;align-items:center;gap:10px;font-size:14px;color:#c6c6c6"><span style="$hollow"></span>kaceybody běží</span>
+</div>
+<button onclick="location.href='${esc(url)}/#main'" style="margin-top:auto;height:52px;font:inherit;font-size:15px;font-weight:600;border:0;background:#5cd4f5;color:#161616">Zkusit znovu</button>
+</div>
 </body></html>"""
     }
 

@@ -305,10 +305,10 @@ function infoField(key, saved, placeholder, label) {
   var input = el('input.input', {
     type: 'text', autocomplete: 'off', maxlength: '80',
     value: infoDraft && infoDraft[key] != null ? infoDraft[key] : saved,
-    placeholder: placeholder, 'aria-label': label,
+    placeholder: placeholder,
     oninput: function () { infoDraft = Object.assign({}, infoDraft); infoDraft[key] = input.value; }
   });
-  return input;
+  return el('label.noteedit__field', [el('span', label.toUpperCase()), input]);
 }
 
 function noteEditor(day, block, leftPct, inline) {

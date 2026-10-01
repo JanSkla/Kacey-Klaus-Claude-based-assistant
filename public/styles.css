@@ -26,6 +26,7 @@
 
   --acc: hsl(var(--h) 88% 66%);
   --acc-dim: hsl(var(--h) 88% 66% / .16);
+  --acc-press: hsl(var(--h) 88% 76%);   /* a pressed accent fill */
   --on-acc: #161616;
 
   --ok: #42be65;
@@ -311,6 +312,7 @@ select:focus-visible, textarea:focus-visible {
 .btn--block { display: flex; width: 100%; }
 .btn--accent { background: var(--acc); border: 0; color: var(--on-acc); font-weight: 600; }
 .btn--accent:hover:not(:disabled) { background: var(--acc); filter: brightness(1.12); }
+.btn--accent:active:not(:disabled) { background: var(--acc-press); filter: none; }
 .btn--ghostaccent { color: var(--acc); }
 .btn--outlineaccent { border-color: var(--acc); color: var(--acc); font-weight: 600; }
 .btn--danger { border-color: var(--err); color: var(--err); }
@@ -426,6 +428,8 @@ select:focus-visible, textarea:focus-visible {
 }
 .composer__clip:hover { color: var(--acc); border-color: var(--line2); }
 .composer.is-dropping { border-color: var(--acc); background: var(--acc-dim); }
+/* The field itself has no ring (outline: none), so the bar carries it. */
+.composer:focus-within { outline: 2px solid var(--acc); outline-offset: 1px; }
 
 .dock { display: grid; grid-template-columns: minmax(200px, 1fr) auto; gap: var(--gap); }
 .composer { display: flex; align-items: center; gap: 10px; background: var(--l1); border: 1px solid var(--line2); padding: 0 6px 0 14px; height: 56px; }
@@ -576,7 +580,7 @@ button.task__due.is-empty { color: var(--ink3); }
 /* Room and teacher of a class: a line of its own, a step brighter than the time. */
 .rblock em.rblock__where { color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rblock em.rblock__where span + span::before { content: " · "; }
-.rblock--col em.rblock__where { font-size: 10px; }
+.rblock--col em.rblock__where { font-size: 11px; }
 .eblock {
   position: absolute; left: 118px; right: 10px; overflow: hidden; padding: 8px 12px;
   background: var(--l2); border: 1px solid var(--line); box-shadow: 0 2px 6px rgb(0 0 0 / .35);
@@ -815,6 +819,8 @@ button.task__due.is-empty { color: var(--ink3); }
 }
 .noteedit .row { flex-wrap: nowrap; gap: 6px; }
 .noteedit__info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.noteedit__field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.noteedit__field > span { font-size: 11px; letter-spacing: .08em; color: var(--ink3); }
 .noteedit__info .input { min-width: 0; }
 
 /* Unsaved-since-open strip, with the undo beside it. */

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .btn outline accent: no fill, 1dp acc border. Pressed: the acc-dim wash. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#295cd4f5" />
+            <stroke android:width="1dp" android:color="@color/acc" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke android:width="1dp" android:color="@color/acc" />
+        </shape>
+    </item>
+</selector>

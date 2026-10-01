@@ -105,13 +105,14 @@ function renderSegs(host, list) {
   fill(host, list.map(function (i) { return el('span.segbar__seg' + (i.done ? '.is-done' : '')); }));
 }
 
-/* "1 přijato · 1 zamítnuto", and while some wait, how many are decided. */
+/* "1 přijato · 1 zamítnuto"; while some wait, the decided counts first and
+   then how many are left: "1 přijato · zbývá 2". */
 function proposalSub(i) {
   var tally = [];
   if (i.accepted) tally.push(i.accepted + ' přijato');
   if (i.rejected) tally.push(i.rejected + ' zamítnuto');
   if (i.done) return tally.length ? tally.join(' · ') : i.total + ' / ' + i.total + ' rozhodnuto';
-  return [(i.total - i.pending) + ' / ' + i.total + ' rozhodnuto'].concat(tally, ['otevřít']).join(' · ');
+  return tally.concat(['zbývá ' + i.pending]).join(' · ');
 }
 
 function renderChecklist() {

@@ -700,6 +700,8 @@ function openEvent(e, topPx, col) {
   if (existing) existing.remove();
 
   var input = el('input.input', { type: 'text', value: e.title || '' });
+  // An all-day event has no hours to show ("00:00–00:00" says nothing).
+  var span = e.all_day ? 'celý den' : clockOf(e.starts_at) + '–' + clockOf(e.ends_at);
 
   /* Opens where the event is. In the column lane it sits over its own day,
      pulled left when that day is near the right edge. */
@@ -709,8 +711,12 @@ function openEvent(e, topPx, col) {
   var box = el('div.card.card--pad.eventedit' + (span > 1 ? '.eventedit--col' : ''), {
     style: place
   }, [
-    el('p.muted-3', clockOf(e.starts_at) + '–' + clockOf(e.ends_at) + ' · ' + unsureWord(e) + sourceOf(e) +
-      (unsure(e) && e.tentative_note ? ' · ' + e.tentative_note : '')),
+    /* An unsure event leads with its "?" and says so; Kacey's reason (the
+       note) gets a line of its own under the head. */
+    unsure(e)
+      ? el('p.label', [unsureMark(e), 'NEJISTÉ · ' + span.toUpperCase() + ' · ' + sourceOf(e).toUpperCase()])
+      : el('p.muted-3', span + ' · ' + sourceOf(e)),
+    unsure(e) && e.tentative_note ? el('p.muted', e.tentative_note) : null,
     input,
     el('div.row', { style: 'margin-top:8px' }, [
       el('button.btn.btn--accent.btn--sm', {
