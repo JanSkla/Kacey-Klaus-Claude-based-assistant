@@ -156,7 +156,14 @@ select:focus-visible, textarea:focus-visible {
 .mini__meta { display: grid; gap: 4px; }
 .mini__bigtitle { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .mini__meta .mini__artist { font-size: 13px; }
-.mini__progress { height: 4px; margin-top: 8px; }
+.mini__progress { height: 4px; }
+/* The progress bar is a seek slider: a 20px-tall hit area around the 4px bar,
+   and a square thumb at the playhead while hovered, focused or dragged. */
+.mini__seek { position: relative; display: flex; align-items: center; height: 20px; margin-top: 2px; cursor: pointer; touch-action: none; }
+.mini__seek .mini__progress { flex: 1 1 auto; }
+.mini__seek:hover .mini__progress, .mini__seek.is-seeking .mini__progress { height: 6px; }
+.mini__thumb { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--acc); opacity: 0; pointer-events: none; }
+.mini__seek:hover .mini__thumb, .mini__seek:focus-visible .mini__thumb, .mini__seek.is-seeking .mini__thumb { opacity: 1; }
 .mini__fill { transition: none; }
 .mini__times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink3); }
 .mini__error { font-size: 12px; color: var(--err); }

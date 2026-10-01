@@ -31,6 +31,8 @@ export function nowplayingUrl() {
 var status = null;         // nowplayingd's last status, or null while it is down
 var playing = false;
 var progressBase = 0, progressAt = 0, duration = 0;
+var seekingTo = null;       // ms under the pointer while the bar is dragged
+var SEEK_STEP = 10000;      // arrow keys move ten seconds
 var volumePending = null, volumeTimer = 0;
 var keep = false;          // the screen is kept lit ("Nechat hrát vinyl")
 
@@ -98,10 +100,16 @@ function frame(now) {
   if (status) {
     advance(now);
     if (!$('miniDrop').hidden && duration > 0) {
-      var elapsed = progressBase + (playing ? performance.now() - progressAt : 0);
-      $('miniFill').style.width = (Math.min(elapsed / duration, 1) * 100) + '%';
+      var elapsed = seekingTo !== null ? seekingTo : Math.min(progressBase + (playing ? performance.now() - progressAt : 0), duration);
+      var pct = (Math.min(elapsed / duration, 1) * 100) + '%';
+      $('miniFill').style.width = pct;
+      $('miniThumb').style.left = pct;
       $('miniNow').textContent = mmss(elapsed);
       $('miniEnd').textContent = mmss(duration);
+      var seek = $('miniSeek');
+      seek.setAttribute('aria-valuemax', String(Math.round(duration / 1000)));
+      seek.setAttribute('aria-valuenow', String(Math.round(elapsed / 1000)));
+      seek.setAttribute('aria-valuetext', mmss(elapsed) + ' z ' + mmss(duration));
     }
   }
   requestAnimationFrame(frame);
@@ -185,6 +193,54 @@ function post(path, body) {
 
 function toggle() { post('/api/player', { action: playing ? 'pause' : 'play' }); }
 
+/* ---- seeking ---------------------------------------------------------------
+   Drag shows where it will land; the jump is sent once, on release. The new
+   position is shown at once, and nowplayingd's broadcast confirms it. */
+
+function elapsedNow() {
+  return Math.min(progressBase + (playing ? performance.now() - progressAt : 0), duration);
+}
+
+function seekTo(ms) {
+  if (!(duration > 0)) return;
+  ms = Math.max(0, Math.min(Math.round(ms), duration - 1000));
+  progressBase = ms; progressAt = performance.now();
+  post('/api/seek', { position_ms: ms });
+}
+
+function initSeek() {
+  var bar = $('miniSeek');
+  function at(ev) {
+    var r = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * duration;
+  }
+  bar.addEventListener('pointerdown', function (ev) {
+    if (!(duration > 0) || ev.button !== 0) return;
+    ev.preventDefault();
+    bar.setPointerCapture(ev.pointerId);
+    bar.classList.add('is-seeking');
+    seekingTo = at(ev);
+  });
+  bar.addEventListener('pointermove', function (ev) { if (seekingTo !== null) seekingTo = at(ev); });
+  function end(ev, commit) {
+    if (seekingTo === null) return;
+    var target = ev && ev.clientX !== undefined ? at(ev) : seekingTo;
+    seekingTo = null;
+    bar.classList.remove('is-seeking');
+    if (commit) seekTo(target);
+  }
+  bar.addEventListener('pointerup', function (ev) { end(ev, true); });
+  bar.addEventListener('pointercancel', function () { end(null, false); });
+  bar.addEventListener('keydown', function (ev) {
+    if (!(duration > 0)) return;
+    var step = { ArrowLeft: -SEEK_STEP, ArrowDown: -SEEK_STEP, ArrowRight: SEEK_STEP, ArrowUp: SEEK_STEP }[ev.key];
+    if (ev.key === 'Home') { ev.preventDefault(); seekTo(0); return; }
+    if (!step) return;
+    ev.preventDefault();
+    seekTo(elapsedNow() + step);
+  });
+}
+
 function nudgeVolume(delta) {
   var base = volumePending !== null ? volumePending : (status && status.volume_percent) || 0;
   volumePending = Math.max(0, Math.min(100, Math.round((base + delta) / VOLUME_STEP) * VOLUME_STEP));
@@ -266,6 +322,16 @@ export function initMiniPlayer() {
     setOpen(open);
     if (open) readKeep();              // the visual may have changed it
   });
+  /* Double-click goes straight to the vinyl, full screen: over this page on
+     the kiosk (no second window there), a tab of its own elsewhere. The two
+     clicks before it have opened and closed the panel, so it ends closed. */
+  $('miniOpen').addEventListener('dblclick', function (ev) {
+    ev.preventDefault();
+    setOpen(false);
+    if (KIOSK) openVisual();
+    else window.open(nowplayingUrl(), 'kacey-vinyl');
+  });
+  initSeek();
   $('miniClose').addEventListener('click', function () { setOpen(false); });
   $('miniPlay').addEventListener('click', toggle);
   $('miniToggle').addEventListener('click', toggle);

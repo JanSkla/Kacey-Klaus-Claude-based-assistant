@@ -57,7 +57,8 @@
     <!-- What is playing on kaceybody (nowplayingd, :8081): views/miniplayer.js -->
     <span class="mini" id="mini" hidden>
       <span class="mini__bar">
-        <button type="button" class="mini__open" id="miniOpen" aria-expanded="false" aria-controls="miniDrop">
+        <button type="button" class="mini__open" id="miniOpen" aria-expanded="false" aria-controls="miniDrop"
+                title="Klepnutím ovládání, dvojklikem vinyl přes celou obrazovku">
           <span class="mini__win" aria-hidden="true"><canvas class="mini__deck" id="miniDeck" width="400" height="225"></canvas></span>
           <span class="mini__text"><b id="miniTitle"></b> <span class="mini__artist" id="miniArtist"></span></span>
         </button>
@@ -72,7 +73,12 @@
         <div class="mini__row mini__meta">
           <b class="mini__bigtitle" id="miniBigTitle"></b>
           <span class="mini__artist" id="miniBigArtist"></span>
-          <span class="bar mini__progress"><span class="bar__fill mini__fill" id="miniFill"></span></span>
+          <!-- Seek: tap or drag anywhere on the bar, or arrows ±10 s (views/miniplayer.js). -->
+          <span class="mini__seek" id="miniSeek" role="slider" tabindex="0" aria-label="Pozice ve skladbě"
+                aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+            <span class="bar mini__progress"><span class="bar__fill mini__fill" id="miniFill"></span></span>
+            <span class="mini__thumb" id="miniThumb" aria-hidden="true"></span>
+          </span>
           <span class="mini__times num"><span id="miniNow">0:00</span><span id="miniEnd">0:00</span></span>
           <span class="mini__error" id="miniError" hidden></span>
         </div>
