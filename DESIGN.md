@@ -381,7 +381,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 
 | Route (`#hash`) | Template | Markup | Logic | Components |
 |---|---|---|---|---|
-| `main` | triple | [index.html:58](public/index.html:58) | [views/main.js](public/js/views/main.js), [ui/log.js](public/js/ui/log.js), [ui/attachments.js](public/js/ui/attachments.js) | card, rowbtn (agenda), task, msg, composer, attach, btn--talk, status strips, big/muted, fnlist |
+| `main` | triple | [index.html:58](public/index.html:58) | [views/main.js](public/js/views/main.js), [ui/log.js](public/js/ui/log.js), [ui/attachments.js](public/js/ui/attachments.js), [ui/share.js](public/js/ui/share.js) (a shared screenshot lands here: attached, composer focused) | card, rowbtn (agenda), task, msg, composer, attach, btn--talk, status strips, big/muted, fnlist |
 | `tasks` | wide | [index.html](public/index.html) `data-view="tasks"` | [views/tasks.js](public/js/views/tasks.js), [core/due.js](public/js/core/due.js) | card, groups (Po termínu · Dnes · Tento týden, then Později · Bez termínu · Hotové dřív when not empty), subhead, task, taskwhen, check, bar, input--when (add form: label, date, time), fnlist, btn--back |
 | `journal` | triple | [index.html:176](public/index.html:176) | [views/journal.js](public/js/views/journal.js) | clock, bubbles/msg, tagstrip/tag, prose__area, btn .dot, fnlist |
 | `library` | wide | [index.html:228](public/index.html:228) | [views/library.js](public/js/views/library.js) | card__sub input, chips/chip--filter, cards/entry |
@@ -400,6 +400,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 | Sheet: routine planner | sheet xwide | [index.html](public/index.html) `#routinePanel` | [views/routine.js](public/js/views/routine.js) | sheet__bar, chips (brushes), revert btn, dirty, confirm, btn--step, grid/cell/grid__label, noteedit, weektotals/wtrow |
 | Sheet: voiceprint | sheet wide | [index.html:657](public/index.html:657) | [voice/wake-panel.js](public/js/voice/wake-panel.js) | vw__* |
 | Toast | global | [index.html:709](public/index.html:709) | [ui/toast.js](public/js/ui/toast.js) | toast |
+| Android: bubble / full screen | WebView | — (this page) | [WebHostActivity.kt](android/app/src/main/java/cz/klaus/kacey/WebHostActivity.kt) | The phone layout (≤760px) inside the system's bubble window or full screen; no app chrome of its own. Bubble face: the `.top__mark` square on `--bg`. Offline page: inline HTML in the same tokens, one accent "Zkusit znovu" button |
 | Android: launcher screen | native | [activity_main.xml](android/app/src/main/res/layout/activity_main.xml) | [MainActivity.kt](android/app/src/main/java/cz/klaus/kacey/MainActivity.kt) | status block (`l1`), accent button, `.btn`-style buttons, `.input`-style URL field, `.label`-style "SERVER" |
 | Header: mini player | global (desktop) | [index.html](public/index.html) `#mini` in `.top__end` | [views/miniplayer.js](public/js/views/miniplayer.js) | mini, bar, btn--step, btn--sm |
 
@@ -416,6 +417,8 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 - Three shadow alphas (.35/.4/.5) for the same `0 2px 6px` shadow.
 - `.bar__fill` repeats `--motion`'s easing with 150ms instead of using a token.
 - Routine category colours ([routine.js:25](public/js/views/routine.js:25)) and calendar source colours ([calendar.js:83](public/js/ui/calendar.js:83)) are separate JS palettes that share three hexes (`#d2a106`, `#ee5396`, `#a56eff`), so a source and a category can look identical.
+- The installed-app icons (`public/icons/`), the Android mark (`ic_kacey.xml`, `#5cd4f5`) and `themes.xml`'s `acc` are the accent at the **default** hue 193, baked in: they do not follow `--h` when the hue preset changes.
+- Android drawables use literals for pressed states that have no web token: `#8fe2f8` (pressed accent fill, `btn_accent.xml`) and `#3a3a3a` (pressed `.btn`, = `--l3`).
 - `<meta name="theme-color">` is `#161616` in HTML but theme.js rewrites it to `hsl(h 62% 3%)`, which is neither `--bg` nor `--l1`.
 
 **Inline styles in JS that bypass CSS**
