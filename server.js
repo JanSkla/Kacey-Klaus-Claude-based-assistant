@@ -33,7 +33,8 @@ import { targetDate } from './sleep.js';
 import { kvGet, kvSet } from './db.js';
 import { tentativeMap, setTentative, dropFlag } from './eventflags.js';
 import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
-import { BRIEF_AUDIO_DIR } from './dream.js';
+import { BRIEF_AUDIO_DIR, makeSdkRunner } from './dream.js';
+import * as notifications from './notifications.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -990,6 +991,109 @@ app.post('/api/calendar/:id/tentative', express.json({ limit: '4kb' }), (req, re
   }
 });
 
+/* ---------------------------------------------------------------------------
+ * The phone's notifications (notifications.js).
+ *
+ * The Android app's relay posts here: a copy of what the phone's notification
+ * shade shows, never anything fetched from the apps' servers. Like the rest
+ * of the API there is no token — the server is reachable only on loopback and
+ * the tailnet (HOST in config.js).
+ * ------------------------------------------------------------------------- */
+
+app.post('/api/notify', express.json({ limit: '1mb' }), (req, res) => {
+  let out;
+  try {
+    out = notifications.ingest(req.body);
+  } catch (err) {
+    const msg = err?.issues ? err.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') : err.message;
+    return res.status(400).json({ ok: false, error: msg });
+  }
+  if (out.fresh.length || out.removed) {
+    /* Only what a page needs to decide whether to say something; it fetches
+       the rows themselves. Sensitive text stays out of the frame. */
+    broadcast({
+      type: 'notifications',
+      fresh: out.fresh.map((n) => ({
+        id: n.notif_id, package: n.package, app: n.app_label, kind: n.kind,
+        conversation: n.conversation, sender: n.sender, posted_at: n.posted_at,
+        sensitive: n.sensitivity === 'local_only',
+      })),
+      removed: out.removed,
+      unread: notifications.unreadCounts(),
+    });
+  }
+  if (out.fresh.length) log(`notify: ${out.fresh.length} new (${[...new Set(out.fresh.map((n) => n.app_label))].join(', ')})`);
+  res.json({ ok: true, stored: out.fresh.length, duplicate: out.duplicate, removed: out.removed });
+});
+
+const isoOrNull = (v) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : null);
+
+app.get('/api/notifications', (req, res) => {
+  res.json({
+    notifications: notifications.list({
+      package: typeof req.query.package === 'string' ? req.query.package : undefined,
+      kind: ['message', 'notification'].includes(req.query.kind) ? req.query.kind : undefined,
+      unread: req.query.unread === '1' || req.query.unread === 'true',
+      since: isoOrNull(req.query.since),
+      before: isoOrNull(req.query.before),
+      limit: Number(req.query.limit) || 100,
+    }),
+    unread: notifications.unreadCounts(),
+  });
+});
+
+app.get('/api/notifications/apps', (req, res) => {
+  res.json({ apps: notifications.apps({ since: isoOrNull(req.query.since) }), unread: notifications.unreadCounts() });
+});
+
+/* The Instagram DM window: threads, then one thread. `package` is there so
+   another messaging app can get the same window later. */
+app.get('/api/notifications/threads', (req, res) => {
+  const pkg = typeof req.query.package === 'string' ? req.query.package : notifications.INSTAGRAM;
+  res.json({ package: pkg, threads: notifications.threads(pkg, { limit: Number(req.query.limit) || 60 }) });
+});
+
+app.get('/api/notifications/thread', (req, res) => {
+  const pkg = typeof req.query.package === 'string' ? req.query.package : notifications.INSTAGRAM;
+  const conversation = typeof req.query.conversation === 'string' ? req.query.conversation : '';
+  if (!conversation) return res.status(400).json({ error: 'chybí conversation' });
+  res.json({ package: pkg, conversation, messages: notifications.thread(pkg, conversation, { limit: Number(req.query.limit) || 200 }) });
+});
+
+app.post('/api/notifications/read', express.json({ limit: '64kb' }), (req, res) => {
+  const b = req.body || {};
+  const changed = notifications.markRead({
+    ids: Array.isArray(b.ids) ? b.ids : undefined,
+    package: typeof b.package === 'string' ? b.package : undefined,
+    conversation: typeof b.conversation === 'string' ? b.conversation : undefined,
+    all: b.all === true,
+  });
+  const unread = notifications.unreadCounts();
+  // Every other open page clears the same badges.
+  if (changed) broadcast({ type: 'notifications', fresh: [], removed: 0, unread });
+  res.json({ ok: true, changed, unread });
+});
+
+/* A model-written summary of what is unread: everything, or the Instagram
+   DMs. One call per distinct set of unread rows (cached in notifications.js);
+   two pages asking at once share it. */
+const summaryRunner = makeSdkRunner({ timeoutMs: 120000 });
+const summariesInFlight = new Map();
+app.post('/api/notifications/summary', express.json({ limit: '1kb' }), async (req, res) => {
+  const scope = req.body?.scope === 'dm' ? 'dm' : 'all';
+  const force = req.body?.force === true;
+  try {
+    if (!summariesInFlight.has(scope)) {
+      summariesInFlight.set(scope, notifications.summarize({ scope, force, runner: summaryRunner })
+        .finally(() => summariesInFlight.delete(scope)));
+    }
+    res.json({ ok: true, ...(await summariesInFlight.get(scope)) });
+  } catch (err) {
+    log(`notification summary failed: ${err?.message || err}`);
+    res.status(502).json({ ok: false, error: explainError(null, err?.message) });
+  }
+});
+
 /**
  * Normalise text for XTTS.
  *
@@ -1296,7 +1400,7 @@ wss.on('connection', (ws) => {
      so a newer page must not send `interaction` to an older server. */
   session.send({
     type: 'ready', version: VERSION, model: MODEL, mcpServers: Object.keys(MCP_SERVERS),
-    features: ['night', 'voicecast'],
+    features: ['night', 'voicecast', 'notifications'],
   });
   session.send({ type: 'night_state', ...nightState() });
 

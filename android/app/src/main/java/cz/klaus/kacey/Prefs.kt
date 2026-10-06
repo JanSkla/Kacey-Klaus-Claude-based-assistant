@@ -32,6 +32,13 @@ object Prefs {
 
     fun host(ctx: Context): String? = Uri.parse(url(ctx)).host
 
+    /** The notification relay's last attempt, for the launcher's status row. */
+    fun noteRelay(ctx: Context, ok: Boolean, error: String?) {
+        prefs(ctx).edit().putString("relay_error", if (ok) null else error).apply()
+    }
+
+    fun relayError(ctx: Context): String? = prefs(ctx).getString("relay_error", null)
+
     var Context.bubbleWanted: Boolean
         get() = prefs(this).getBoolean("bubble", false)
         set(v) { prefs(this).edit().putBoolean("bubble", v).apply() }

@@ -465,6 +465,29 @@ so it is Kacey's own flag: `kacey_event_flag`, keyed by `event_id`
 the event editor with `POST /api/calendar/:id/tentative`; confirming deletes the
 row, and deleting the event drops it. Outside Kacey the event looks ordinary.
 
+### The phone's notifications
+
+The Android app's `NotificationRelayService` ([NotificationRelay.kt](android/app/src/main/java/cz/klaus/kacey/NotificationRelay.kt))
+reads every notification the phone shows and posts a copy to `POST /api/notify`.
+It only reads the shade, the way a smartwatch does: nothing logs into Instagram
+or any other account, which is what got a server-side bridge (Beeper) flagged
+for automation. The phone queues to a file while kaceybody is out of reach.
+
+[notifications.js](notifications.js) stores them in `kacey_notification`, **one
+row per thing said**. A messaging app updates one notification with the recent
+conversation in it, so the phone sends each MessagingStyle message as its own
+item and `dedupe_key` (a hash of app, thread, sender, time and text) makes every
+re-send a no-op. `kind` is `message` for something a person wrote, `notification`
+for the rest; `conversation` is the thread (a group's name, else the other
+person). A removal on the phone sets `removed_at`; reading in Kacey sets `read_at`.
+Rows older than `KACEY_NOTIFY_KEEP_DAYS` go.
+
+A login code, or a notification the app marked secret, is `local_only`: shown,
+but the summary (`POST /api/notifications/summary`, one headless `query()` via
+dream.js's runner, cached until the unread set changes) and Kacey's
+`app_notifications` tool see only that it exists. Every new row is broadcast as a
+`notifications` frame with no text in it; a page fetches what it shows.
+
 ### The night routine (D.R.E.A.M.)
 
 **Spec: [docs/DREAM.md](docs/DREAM.md).** Read it before touching anything to do

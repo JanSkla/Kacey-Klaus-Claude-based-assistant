@@ -8,6 +8,16 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- The notification relay names each app ("Instagram", not
+         com.instagram.android). Android 11+ hides other apps' labels unless
+         they are declared visible; every app with a launcher icon is. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".KaceyApp"
         android:label="@string/app_name"
@@ -89,6 +99,18 @@
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Copies the phone's notifications to Kacey (NotificationRelay.kt).
+             Android binds it once notification access is granted. -->
+        <service
+            android:name=".NotificationRelayService"
+            android:exported="true"
+            android:label="@string/relay_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
 

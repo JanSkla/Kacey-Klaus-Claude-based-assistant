@@ -193,6 +193,45 @@ CREATE TABLE IF NOT EXISTS kacey_event_flag (
   note       TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL
 );
+
+/* The phone's notifications, relayed by the Android app (notifications.js).
+   One row per thing said: a messaging app's notification carries several
+   messages, and each is its own row. dedupe_key is what makes the phone's
+   re-sends harmless. Kept NOTIFY_KEEP_DAYS, then deleted. */
+CREATE TABLE IF NOT EXISTS kacey_notification (
+  notif_id       TEXT PRIMARY KEY,
+  dedupe_key     TEXT NOT NULL UNIQUE,
+  device         TEXT NOT NULL DEFAULT 'phone',
+  package        TEXT NOT NULL,                   -- com.instagram.android
+  app_label      TEXT NOT NULL,                   -- Instagram
+  channel        TEXT,
+  category       TEXT,
+  android_key    TEXT,                            -- StatusBarNotification.key
+  kind           TEXT NOT NULL DEFAULT 'notification'
+                 CHECK (kind IN ('message','notification')),
+  -- A message's thread: the group's name, else who wrote. A plain
+  -- notification's title.
+  conversation   TEXT NOT NULL DEFAULT '',
+  is_group       INTEGER NOT NULL DEFAULT 0 CHECK (is_group IN (0,1)),
+  sender         TEXT,
+  title          TEXT NOT NULL DEFAULT '',
+  body           TEXT NOT NULL DEFAULT '',
+  sub_text       TEXT,
+  posted_at      TEXT NOT NULL,                   -- when it was said / posted
+  received_at    TEXT NOT NULL,                   -- when Kacey got it
+  read_at        TEXT,                            -- read in Kacey
+  removed_at     TEXT,                            -- gone from the phone
+  removed_reason INTEGER,                         -- NotificationListenerService.REASON_*
+  -- A login code or a notification the app marked secret is local_only:
+  -- shown, but never given to the model.
+  sensitivity    TEXT NOT NULL DEFAULT 'cloud_safe'
+                 CHECK (sensitivity IN ('cloud_safe','local_only')),
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS kacey_notification_posted_idx ON kacey_notification (posted_at);
+CREATE INDEX IF NOT EXISTS kacey_notification_thread_idx ON kacey_notification (package, kind, conversation, posted_at);
+CREATE INDEX IF NOT EXISTS kacey_notification_key_idx ON kacey_notification (android_key) WHERE android_key IS NOT NULL;
 `;
 
 export function now() { return new Date().toISOString(); }

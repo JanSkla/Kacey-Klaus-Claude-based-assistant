@@ -104,6 +104,7 @@ are used. Cloning a real person's voice would need that person's consent.
 | Path                 | What it is                                                    |
 | -------------------- | ------------------------------------------------------------- |
 | `server.js`          | The backend: HTTP, WebSocket, SDK session, MCP                 |
+| `notifications.js`   | The phone's relayed notifications: storage, threads, summaries |
 | `config.js`          | Every knob, the MCP launch command and the tool allow-list      |
 | `persona/kacey.md`   | Kacey's system prompt — edit and restart, no code change      |
 | `.env.example`       | Every configuration knob with explanation                     |
@@ -177,6 +178,7 @@ All environment variables, all with working defaults — see `.env.example`.
 | `KACEY_BRIEF_AUDIO_DIR`   | `./data/brief-audio`                   | The morning brief rendered to audio at night, one WAV per line |
 | `KACEY_NOWPLAYING_URL`    | `http://127.0.0.1:8081`                | nowplayingd (the music visual): ducking goes through its `/api/volume` |
 | `KACEY_DUCK_PERCENT`      | `20`                                   | Music volume while Kacey listens (and through her answer) |
+| `KACEY_NOTIFY_KEEP_DAYS`  | `30`                                   | How long the phone's relayed notifications are kept ([notifications.js](notifications.js)) |
 | `KACEY_PERSONA_PATH`      | `./persona/kacey.md`                   | Missing file → built-in default + warning |
 | `PYTHON_BIN`              | `python`                               | Launches the MCP server                   |
 | `KLAUS_DB`                | `<PYTHONPATH>\klaus.db`                | Passed as `--db`                          |
@@ -260,6 +262,8 @@ Server → client:
 { "type": "night_state", "sleep": { "state": "winding_down", "since": "…", "until": "…" },
   "screen": { … }, "lightsd": { "mode": "ws", … }, "run": { "last": …, "next": … }, "morning": { … } }   // on connect and on every change
 { "type": "morning", "logical_date": "…", "lines": ["…"], "checklist": [ … ], "peak_at": "…", "manual": false }   // the sunrise peaked: open the morning
+{ "type": "notifications", "fresh": [{ "id": "nt_…", "package": "com.instagram.android", "app": "Instagram", "kind": "message",
+  "conversation": "…", "sender": "…", "posted_at": "…", "sensitive": false }], "removed": 0, "unread": { "all": 3, "dm": 1 } }   // the phone relayed something, or something was read
 ```
 
 `features` lists the optional client frames the server understands. The server
@@ -296,6 +300,11 @@ HTTP:
 - `GET /api/screen/keep` → `{ keep }` · `POST /api/screen/keep { on }` → keep the bedside screen lit with no idle timeout ("Nechat hrát vinyl"), or release it
 - `GET /api/next` → the next timed event or task (`label` e.g. `zítra 07:30 · Běh`) · `GET /api/voice` → `{ available, listening, transcript, next }` · `GET /api/voice/events` → the same as a server-sent event stream · `POST /api/wake` → asks the kiosk page to listen (409 when none can) · `POST /api/voice/stop`. For nowplayingd's corner widget ([voicebridge.js](voicebridge.js)); these few answer CORS for loopback, `kaceybody` and the tailnet
 - `GET /api/night/cycle` → the night's timeline · `POST /api/night/sunrise { minutes }` → moves lightsd's "morning" routine
+- `POST /api/notify { device?, items: [{ key, package, app, channel, category, posted_at, title, text, sub_text, conversation, sender, group, message, secret }], removed: [{ key, reason, at }] }`
+  → the Android app's notification relay ([notifications.js](notifications.js)); re-sends are dropped by `dedupe_key`
+- `GET /api/notifications?package&kind=message|notification&unread=1&since&before&limit` · `GET /api/notifications/apps` (per app: total, unread, last)
+- `GET /api/notifications/threads?package=` (default Instagram) · `GET /api/notifications/thread?conversation=&package=` → a DM thread, oldest first
+- `POST /api/notifications/read { ids? | package, conversation? | all: true }` · `POST /api/notifications/summary { scope: all|dm, force? }` → a model-written summary of what is unread, cached until that changes; sensitive rows never reach the model
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)
 

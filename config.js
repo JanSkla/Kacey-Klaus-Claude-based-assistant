@@ -290,6 +290,14 @@ export const TTS_DOTS = process.env.KACEY_TTS_DOTS || 'comma';
 export const LOGICAL_DAY_START_HOUR = 4;
 
 // ---------------------------------------------------------------------------
+// The phone's notifications — notifications.js
+// ---------------------------------------------------------------------------
+
+/* How long relayed notifications are kept. They are a copy of what the
+   phone showed, not a record anyone asked for, so a month is plenty. */
+export const NOTIFY_KEEP_DAYS = Number(process.env.KACEY_NOTIFY_KEEP_DAYS) || 30;
+
+// ---------------------------------------------------------------------------
 // The night routine — docs/DREAM.md
 // ---------------------------------------------------------------------------
 

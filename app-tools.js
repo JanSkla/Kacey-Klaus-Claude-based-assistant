@@ -27,6 +27,7 @@ import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './pu
 import { CATEGORY_KEYS } from './public/js/core/routine-cats.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
+import * as notifications from './notifications.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -621,11 +622,62 @@ const calendarTentative = tool(
   },
 );
 
+/* The phone's notifications (notifications.js), read only — except marking
+   them read, which is what "díky, to stačí" after a readout means. Sensitive
+   rows (login codes, secret notifications) come back without their text. */
+const notificationsRead = tool(
+  'app_notifications',
+  'Oznámení z pánova telefonu (přeposílá je aplikace Kacey na Androidu). ' +
+  '"unread" = co je nepřečtené, ze všech aplikací. "apps" = přehled po aplikacích. ' +
+  '"dm" = konverzace ze soukromých zpráv Instagramu; s conversation vrátí celé vlákno. ' +
+  '"mark_read" označí jako přečtené (s conversation jen to vlákno, s app_package jen tu aplikaci, ' +
+  'bez nich všechno) — jen když to pán chce nebo když jsi mu je právě přečetla. ' +
+  'Nečti zprávy doslova, pokud o to pán nepožádá; řekni kdo píše a o co jde.',
+  {
+    action: z.enum(['unread', 'apps', 'dm', 'mark_read']),
+    conversation: z.string().max(300).optional().describe('Název vlákna (jméno nebo skupina), jak ho vrátil "dm".'),
+    app_package: z.string().max(200).optional().describe('Balíček aplikace, např. "com.instagram.android".'),
+    limit: z.number().int().min(1).max(200).optional(),
+  },
+  async ({ action, conversation, app_package, limit }) => {
+    try {
+      if (action === 'apps') {
+        const rows = notifications.apps();
+        return ok(rows.length
+          ? rows.map((a) => `- ${a.app} (${a.package}): ${a.unread} nepřečtených z ${a.total}, poslední ${a.last_at.slice(0, 16)}`).join('\n')
+          : 'Z telefonu zatím žádná oznámení nepřišla.');
+      }
+      if (action === 'unread') {
+        const rows = notifications.list({ unread: true, package: app_package, limit: limit || 60 });
+        return ok(rows.length ? `Nepřečtené (${rows.length}), nejnovější nahoře:\n${rows.map(notifications.describe).join('\n')}` : 'Nic nepřečteného.');
+      }
+      if (action === 'dm') {
+        const pkg = app_package || notifications.INSTAGRAM;
+        if (conversation) {
+          const rows = notifications.thread(pkg, conversation, { limit: limit || 60 });
+          return ok(rows.length ? `Vlákno „${conversation}“, nejstarší nahoře:\n${rows.map(notifications.describe).join('\n')}` : `Vlákno „${conversation}“ neznám.`);
+        }
+        const rows = notifications.threads(pkg, { limit: limit || 30 });
+        return ok(rows.length
+          ? rows.map((t) => `- „${t.conversation}“${t.group ? ' (skupina)' : ''}: ${t.unread} nepřečtených, poslední ${notifications.describe(t.last).slice(2)}`).join('\n')
+          : 'Žádné zprávy z Instagramu.');
+      }
+      const changed = notifications.markRead(conversation || app_package
+        ? { package: app_package || notifications.INSTAGRAM, conversation }
+        : { all: true });
+      return ok(`Označeno jako přečtené: ${changed}.`);
+    } catch (err) {
+      return fail(`${err.message}. Nic se nezměnilo.`);
+    }
+  },
+);
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, taskAdd, taskUpdate, journalAdd,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative,
+  notificationsRead,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
@@ -633,7 +685,7 @@ export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours',
   'app_task_add', 'app_task_update', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
-  'app_calendar_tentative',
+  'app_calendar_tentative', 'app_notifications',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 export function makeAppServer() {
@@ -644,6 +696,7 @@ export function makeAppServer() {
       'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly, deník, ' +
       'a pravidla nočního plánování (rules_*, rule_*), podle kterých se v noci samy zakládají úkoly. ' +
       'Nejisté události kalendáře označuje app_calendar_tentative. ' +
+      'Oznámení z telefonu a zprávy z Instagramu čte app_notifications. ' +
       'Rutina je tvar běžného týdne (opakující se bloky), NE konkrétní události — ' +
       'ty patří do kalendáře přes klaus-memory. Před úpravou si přečti stav přes app_read. ' +
       'Když uživatel pošle obrázek rozvrhu, přečti ho a natři přes app_routine_paint ' +

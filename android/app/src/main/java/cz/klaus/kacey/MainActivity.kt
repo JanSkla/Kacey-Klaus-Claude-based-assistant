@@ -84,6 +84,19 @@ class MainActivity : Activity() {
         startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_BUBBLE_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
     }
 
+    /* Straight to Kacey's switch where Android allows it (11+), else the list.
+       A sideloaded app may first need "Allow restricted settings" in its App
+       info (README, "Notifications"). */
+    private fun openRelaySettings() {
+        val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+            .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, Relay.component(this).flattenToString())
+        try { startActivity(detail) } catch (e: android.content.ActivityNotFoundException) {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+    }
+
+    private fun refreshSoon() = findViewById<View>(R.id.root).postDelayed({ refresh() }, 1500)
+
     /* ---- drawing ----------------------------------------------------------- */
 
     private fun refresh() {
@@ -100,6 +113,17 @@ class MainActivity : Activity() {
             (if (bubbles) "Otevřít" else "Nastavit") to { openBubbleSettings() }, ghost = bubbles)
         row(R.id.rowBubble, "Bublina", if (showing) Dot.ACC else Dot.HOLLOW, if (showing) "na obrazovce" else "skrytá",
             null, current = showing)
+        /* The notification relay: access first, then whether the queue is
+           getting through to kaceybody. */
+        val relay = Relay.granted(this)
+        val waiting = if (relay) Relay.pending(this) else 0
+        val relayError = Prefs.relayError(this)
+        when {
+            !relay -> row(R.id.rowRelay, "Čtení oznámení", Dot.ERR, "vypnuté", "Povolit" to { openRelaySettings() })
+            waiting > 0 -> row(R.id.rowRelay, "Čtení oznámení", Dot.HOLLOW,
+                "čeká $waiting" + (relayError?.let { " · $it" } ?: ""), "Odeslat" to { Relay.flush(this); refreshSoon() })
+            else -> row(R.id.rowRelay, "Čtení oznámení", Dot.OK, "posílá do Kacey", "Nastavit" to { openRelaySettings() }, ghost = true)
+        }
 
         val primary = findViewById<Button>(R.id.bubble)
         if (showing) {

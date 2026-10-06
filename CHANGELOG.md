@@ -19,6 +19,24 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The phone's notifications in Kacey**
+- The Android app copies every notification the phone shows to kaceybody
+  (`NotificationRelayService`, `POST /api/notify`). It only reads the shade,
+  so Instagram never sees anything unusual. It queues to a file while
+  kaceybody is out of reach. A new **Čtení oznámení** row on the launcher
+  grants the access and shows whether the copies are getting through.
+- They're stored in a new table, `kacey_notification`: one row per message
+  for messaging apps, with re-sends dropped. They're kept 30 days
+  (`KACEY_NOTIFY_KEEP_DAYS`).
+- New API: `/api/notifications` (list, per app, Instagram DM threads, read
+  state) and a model-written summary of what is unread. There's a new
+  `notifications` frame for open pages.
+- Kacey can read them with her new `app_notifications` tool ("co mi kdo psal
+  na Instagramu?"). Login codes and secret notifications never reach the
+  model.
+- The notifications page and the Instagram DM window are waiting for Claude
+  Design ([docs/design-brief-notifications.md](docs/design-brief-notifications.md)).
+
 **Voice on the bedside laptop**
 - XTTS runs on kaceybody's GeForce 940MX in half precision (it has 2 GB). It
   speaks about 2× slower than real time, so the night run now also renders

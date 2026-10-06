@@ -18,6 +18,7 @@ folder.
 | Share | `ShareActivity`, `ShareStore.kt` | Takes images and text from the share sheet, shrinks each image to 1568 px PNG, and opens the bubble. The page picks the share up with `KaceyNative.takeShare()` ([public/js/ui/share.js](../public/js/ui/share.js)), puts it in the composer, and waits for your optional note. |
 | Tile | `BubbleTileService` | The "Kacey bublina" Quick Settings tile brings back a bubble you dismissed. |
 | Boot | `BootReceiver` | Brings the bubble back after a reboot or an update, if it was on. |
+| Notifications | `NotificationRelay.kt` | Copies every notification the phone shows to Kacey (`POST /api/notify`), one item per message for messaging apps. Queues to a file while kaceybody is out of reach. Never dismisses anything. |
 
 ## Requirements
 
@@ -80,3 +81,47 @@ it.
 
 Each window (the bubble, full screen, the desktop) has its own conversation
 with Kacey, as each browser tab does. Memory and the calendar are shared.
+
+## Notifications
+
+Kacey gets a copy of every notification the phone shows: all apps on her
+notifications page, and Instagram's DMs in a window of their own. That way
+Instagram doesn't have to buzz, and you don't have to open it.
+
+**Why this is safe for the Instagram account.** The relay is a notification
+listener, the same mechanism a smartwatch uses. Instagram's own app receives
+its notifications as usual, and Kacey only reads the phone's notification
+shade. Nothing logs into the account and nothing talks to Instagram's servers.
+Beeper was flagged for automation because its bridge *logged in* from its own
+servers. This never does.
+
+**Switching it on**
+
+1. On the launcher screen, the **Čtení oznámení** row → **Povolit**, and switch
+   Kacey on.
+   - If Android greys the switch out with *Restricted setting*, the app was
+     installed from a file. Open Settings → Apps → Kacey → ⋮ → **Allow
+     restricted settings**, then try again. An `adb install` doesn't have this
+     problem.
+2. The row reads **posílá do Kacey** when everything is working. If it reads
+   **čeká N**, kaceybody is out of reach (Tailscale off?). The queue is sent
+   when it's back, or straight away with **Odeslat**.
+
+**Instagram without the buzz.** An app whose notifications are *off* in
+Android posts nothing, so there would be nothing for Kacey to read. Instead:
+
+1. In Instagram: Settings → Notifications → **Messages** on. Switch off
+   everything you don't want (likes, reels, suggestions).
+2. In Android: Settings → Apps → Instagram → Notifications. Set the message
+   categories to **Silent** and switch off showing them on the lock screen.
+   Switch the other categories off.
+
+The DMs then arrive quietly in the shade, and Kacey has them. Reading a
+notification preview doesn't mark the message as seen.
+
+**What gets through.** Ongoing notifications (music, navigation, downloads)
+and group summaries are skipped. Photos arrive as "[obrázek]", and long
+messages only as far as the notification shows them. Android 15 already hides
+one-time codes from listeners. Kacey also keeps any that get through, and
+anything an app marks secret, away from the model.
+
