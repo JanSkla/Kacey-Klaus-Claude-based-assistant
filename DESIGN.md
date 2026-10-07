@@ -8,6 +8,8 @@ code as it is. Where the code disagrees with itself, the disagreement is listed 
 screens and changelog sections in the same commit.
 
 > **Claude Design sync:** synced through `2026-10-01` (every pending entry from 2026-09-24 to 2026-10-01, drawn into Kacey Desktop, Kacey Phone, Kacey Night and Morning and MiniVinyl; new Kacey Android) — see [§0](#0-design-implementation-loop). The design files, start page **Kacey Index**: **Kacey Desktop** (was "Kacey Redesign"), **Kacey Phone** + **Kacey Phone App** (was "Kacey Mobile"), **Kacey Night and Morning** (was "Kacey DREAM"), **Kacey Android**, MiniVinyl, MusicCorner, Kacey Music, Kacey Lights.
+>
+> **Waiting to be designed:** the `notifications` page and the Instagram `dms` window. The backend, the API and the Android relay are built; the screens are not. The brief is [docs/design-brief-notifications.md](docs/design-brief-notifications.md), and the two rows marked *planned* in §6.
 
 ---
 
@@ -67,7 +69,7 @@ take the hue.
 
 **Installable.** [manifest.webmanifest](public/manifest.webmanifest) (standalone, `--bg` background and theme colour, icons in `public/icons/`: the `.top__mark` square in `--acc` at hue 193 on `--bg`) makes the page an installable app and an Android share target; [sw.js](public/sw.js) only catches shares and caches nothing.
 
-**Android app.** [android/](android/) wraps this same page in a WebView, as a floating bubble and full screen; its only native screen is the launcher/settings screen (`activity_main.xml`), drawn in the tokens from §2 (`bg`, `l1`, `l2`, `line2`, `ink*`, `acc`), monospace, square controls. See [android/README.md](android/README.md).
+**Android app.** [android/](android/) wraps this same page in a WebView, as a floating bubble and full screen; its only native screen is the launcher/settings screen (`activity_main.xml`), drawn in the tokens from §2 (`bg`, `l1`, `l2`, `line2`, `ink*`, `acc`), monospace, square controls. It also runs a notification relay (`NotificationRelay.kt`): a copy of every phone notification goes to the server, which feeds the planned `notifications` and `dms` screens (§6). The relay has no UI of its own beyond a launcher status row. See [android/README.md](android/README.md).
 
 **Out of scope:** [voicelab/public/](voicelab/public/) is a separate dev tool (port
 8788) with its own, unrelated palette, sans-serif font and 12px radii. Nothing below
@@ -404,6 +406,8 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 | Toast | global | [index.html:709](public/index.html:709) | [ui/toast.js](public/js/ui/toast.js) | toast |
 | Android: bubble / full screen | WebView | — (this page) | [WebHostActivity.kt](android/app/src/main/java/cz/klaus/kacey/WebHostActivity.kt) | The phone layout (≤760px) inside the system's bubble window or full screen; no app chrome of its own. Bubble face: the `.top__mark` square on `--bg`. Offline page (2b): 52px `l1` bar (mark, "Kacey", `err` dot + NEDOSTUPNÁ), 17px title, an ADRESA / CHYBA readout, ZKONTROLUJ with two hollow-dot lines, a full-width 52px accent "Zkusit znovu" at the bottom |
 | Android: launcher screen | native | [activity_main.xml](android/app/src/main/res/layout/activity_main.xml), [status_row.xml](android/app/src/main/res/layout/status_row.xml) | [MainActivity.kt](android/app/src/main/java/cz/klaus/kacey/MainActivity.kt) | Claude Design "Kacey Android" 1a–1c: `.label` STAV over an `l1` status list (five 52dp rows: 8dp dot · name · state word · optional `.btn` / ghost action; the bubble row is current when shown, `l2` + 4dp `acc` edge; the last, **Čtení oznámení**, is the notification relay: `err` "vypnuté" + Povolit, hollow "čeká N" + Odeslat, `ok` "posílá do Kacey" + ghost Nastavit), the primary 56dp accent "Zobrazit bublinu" (disabled .45 + note while bubbles are off; outline-accent "Skrýt bublinu" while shown), a `.btn` "Otevřít na celou obrazovku", `.label` SERVER with an `.input`-style URL (2dp `acc` while focused) and "Uložit" (accent only when changed), a footer above a `line` rule |
+| `notifications` *(planned)* | — | not built | data: `/api/notifications`, `/api/notifications/apps`, `POST /api/notifications/summary`, frame `notifications` ([notifications.js](notifications.js)) | Waiting for Claude Design: [brief](docs/design-brief-notifications.md), screen 1. Everything the phone showed, summary first, grouped by app, read state, sensitive rows |
+| `dms` *(planned)* | — | not built | data: `/api/notifications/threads`, `/api/notifications/thread`, `POST /api/notifications/read`, `POST /api/notifications/summary { scope: dm }` | Waiting for Claude Design: [brief](docs/design-brief-notifications.md), screen 2. Instagram DM threads + one thread, read-only, no reply |
 | Header: mini player | global (desktop) | [index.html](public/index.html) `#mini` in `.top__end` | [views/miniplayer.js](public/js/views/miniplayer.js) | mini, bar, btn--step, btn--sm |
 
 ---
