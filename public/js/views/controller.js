@@ -205,8 +205,60 @@ function runNow(force) {
   });
 }
 
+/* ---- the second monitor (monitor.js) ---------------------------------------
+   The kiosk is hidden behind Moonlight while it runs, so this is mostly read
+   from another screen: polled while the Controller shows. */
+
+var monitor = null;          // GET /api/monitor, or null before the first answer
+var monitorBusy = false;
+
+function loadMonitor() {
+  return fetch('/api/monitor').then(function (r) { return r.json(); })
+    .then(function (d) { monitor = d; renderMonitor(); })
+    .catch(function () { /* offline: keep the last answer */ });
+}
+
+function setMonitor(on) {
+  monitorBusy = true;
+  renderMonitor();
+  fetch('/api/monitor', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ on: on })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    monitor = d;
+    if (d.error) say(d.error);
+    else say(on ? 'Druhý monitor zapnutý — obrazovka u postele teď patří počítači.' : 'Druhý monitor vypnutý — zpátky Kacey.');
+  }).catch(function (e) { say('Druhý monitor nejde přepnout: ' + e.message); })
+    .then(function () { monitorBusy = false; renderMonitor(); });
+}
+
+function renderMonitor() {
+  if (!$('ctrlMonitor')) return;
+  var m = monitor || {};
+  var on = m.state === 'on';
+  var usable = on || !!m.available;
+  var meta = !monitor ? 'zjišťuji…'
+    : !usable ? (m.why || 'tady nejde')
+    : 'Moonlight ← ' + m.host + ' · ' + m.app;
+  fill($('ctrlMonitor'), [
+    el('div.srow', [
+      el('span.srow__text', [el('b', 'Obrazovka u postele jako monitor'), el('em', meta)]),
+      el('span.srow__state' + (on ? '.is-on' : !usable && monitor ? '.is-planned' : ''),
+        monitorBusy ? '…' : on ? 'zapnuto' : usable ? 'vypnuto' : 'nenastaveno'),
+      el('button.switch', {
+        type: 'button', 'aria-pressed': String(on), 'aria-label': 'Přepnout druhý monitor',
+        disabled: !usable || monitorBusy,
+        onclick: function () { setMonitor(!on); }
+      }, el('span.switch__knob'))
+    ]),
+    m.error && !on ? el('p.muted-3', 'Naposledy: ' + m.error) : null
+  ]);
+}
+
 function render() {
   if (!$('ctrlSources')) return;
+  renderMonitor();
+  loadMonitor();
   fill($('ctrlSources'), SOURCES.map(function (r) { return toggleRow('sources', r); }));
   fill($('ctrlMemory'), MEMORY.map(function (r) { return toggleRow('memory', r); }));
   renderTools();
@@ -232,6 +284,7 @@ export function initController(restartSession) {
   $('ctrlRunNight').addEventListener('click', function () { runNow(false); });
 
   onEnter('controller', render);
+  setInterval(function () { if (currentView() === 'controller' && !monitorBusy) loadMonitor(); }, 5000);
   store.onChange(function () { if (currentView() === 'controller') render(); });
   onNight(function (what) { if (what === 'state' && currentView() === 'controller') renderNightState(); });
 }

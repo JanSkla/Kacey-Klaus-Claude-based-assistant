@@ -19,6 +19,28 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The bedside screen as a second monitor**
+- A new switch in the Controller, **Druhý monitor**, turns kaceybody's panel
+  into a second monitor for the PC. Apollo on the PC adds a virtual display for
+  the stream; Kacey starts Moonlight over the kiosk to show it
+  ([monitor.js](monitor.js)). When the stream ends (the switch, Ctrl+Alt+Shift+Q
+  on the laptop, or the PC dropping it) Moonlight exits and the kiosk shows
+  Kacey again.
+- The screen is held lit while it runs. Kacey keeps listening behind it.
+- It opens Apollo's **Virtual Display** app at the panel's 1920×1080, and
+  closes the session on the PC when the stream ends, so the extra display
+  goes away. When Moonlight reports an error (not paired, PC away), the error
+  shows under the switch and Moonlight is closed. Before, its dialog stayed
+  over the kiosk.
+- Found on the real kiosk: SDL's libdecor/GTK window frame kept the stream
+  window from ever appearing, so Kacey turns it off. And the snap launcher
+  rebuilt its MIME cache on every start (minutes) until
+  `~/.config/user-dirs.dirs` existed.
+- New API: `GET/POST /api/monitor` (`{"on": true|false}`). New settings:
+  `KACEY_MONITOR_HOST`, `_APP`, `_CMD`, `_ARGS`, `KACEY_WAYLAND_DISPLAY`,
+  `KACEY_RUNTIME_DIR`. Setup is in
+  [docs/RUNBOOK-kaceybody.md](docs/RUNBOOK-kaceybody.md) (P2.6).
+
 **The phone's notifications in Kacey**
 - The Android app copies every notification the phone shows to kaceybody
   (`NotificationRelayService`, `POST /api/notify`). It only reads the shade,

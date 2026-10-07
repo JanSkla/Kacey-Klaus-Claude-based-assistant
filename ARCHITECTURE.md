@@ -498,7 +498,9 @@ What exists so far is sleep detection. `night.js` holds the one copy of the slee
 state (in `kacey_kv`) and runs a 30 s tick. `sleep.js` is the pure state machine
 it drives (awake → winding_down → asleep). `lightsd.js` reads lightsd's `/ws`,
 polling `/api/status` when that is down, and `screen.js` turns the kiosk panel
-off. The two pure modules are what `test/sleep.mjs` and `test/lightsd-diff.mjs`
+off. (`monitor.js` holds it lit through `screen.hold()` while the panel is the
+PC's second monitor: Moonlight runs over the kiosk then, so the page sees no
+input.) The two pure modules are what `test/sleep.mjs` and `test/lightsd-diff.mjs`
 cover. `server.js` starts `night.js` after it listens, and feeds it every
 `user_message` and `interaction` frame.
 

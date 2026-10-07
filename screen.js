@@ -63,6 +63,7 @@ let idleMinutes = () => 2;
 let warned = false;
 let fade = null;                   // { timer } while the panel is dimming towards off
 let keepOn = false;                // "Nechat hrát vinyl": no idle timeout until released
+const holds = new Set();           // other owners keeping it lit (the second monitor), by name
 const keepListeners = new Set();
 
 function run(cmd, args) {
@@ -216,6 +217,18 @@ export function setKeepOn(value, reason = 'button') {
   return keepOn;
 }
 
+/* ---- held lit (the second monitor) ----------------------------------------
+   Like the keep, but owned by code rather than a button, so it never shows as
+   "Nechat hrát vinyl" pressed. While Moonlight has the screen the page gets no
+   input, so nothing else would tell the idle check somebody is looking. */
+
+export function hold(name, value) {
+  if (!!value === holds.has(name)) return;
+  if (value) { holds.add(name); cancelFade(`held: ${name}`); if (current.state !== 'on') on(`held: ${name}`); }
+  else { holds.delete(name); lastActivity = Date.now(); }
+  log(value ? `held lit (${name})` : `hold released (${name})`);
+}
+
 /** Something happened that should keep a lit panel lit for another timeout. */
 export function noteActivity() { lastActivity = Date.now(); cancelFade('activity'); }
 
@@ -291,7 +304,7 @@ async function checkIdle() {
   if (panel === null) return;
   if (panel === 'off') { cancelFade('os'); set('off', current.state === 'off' ? current.reason : 'os'); return; }
   if (current.state !== 'on') set('on', 'os');        // woken by something else (X input, a person at the console)
-  if (speaking || keepOn) return;
+  if (speaking || keepOn || holds.size) return;
 
   const kaceyIdle = Date.now() - lastActivity;
   const xIdle = await xIdleMs();
@@ -319,5 +332,5 @@ export function stopScreen() {
 }
 
 export function status() {
-  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, fading: !!fade, keep_on: keepOn, lid: readLid(), idle_ms: Date.now() - lastActivity };
+  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, fading: !!fade, keep_on: keepOn, held: [...holds], lid: readLid(), idle_ms: Date.now() - lastActivity };
 }

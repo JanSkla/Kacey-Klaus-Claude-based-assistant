@@ -313,6 +313,30 @@ export const KACEY_DISPLAY = process.env.KACEY_DISPLAY || ':0';
 export const KACEY_XAUTHORITY =
   process.env.KACEY_XAUTHORITY || path.join(os.homedir(), '.Xauthority');
 
+// ---------------------------------------------------------------------------
+// The second monitor — monitor.js
+// ---------------------------------------------------------------------------
+
+/* The PC whose desktop kaceybody's panel extends, as Moonlight knows it (a
+   tailnet name or an address), and the Apollo app to open on it. Empty host =
+   the switch says it is not set up. "Virtual Display" is Apollo's app that
+   adds a display for the stream; its "Desktop" shows the screens already
+   there. */
+export const MONITOR_HOST = process.env.KACEY_MONITOR_HOST || '';
+export const MONITOR_APP = process.env.KACEY_MONITOR_APP || 'Virtual Display';
+/* The Moonlight command (`flatpak run com.moonlight_stream.Moonlight` for the
+   flatpak) and what follows `stream <host> <app>`. Audio stays on the PC by
+   default: the kiosk's plain ALSA is Kacey's voice. 1080p is kaceybody's
+   panel: Apollo sizes the virtual display to what the client asks for. */
+export const MONITOR_CMD = process.env.KACEY_MONITOR_CMD || 'moonlight';
+export const MONITOR_ARGS = (process.env.KACEY_MONITOR_ARGS ?? '--display-mode fullscreen --audio-on-host --resolution 1920x1080')
+  .split(/\s+/).filter(Boolean);
+/* The kiosk compositor's Wayland socket: cage under kiosk.service. The runtime
+   dir defaults to Kacey's own /run/user/<uid>, which is right when the kiosk
+   runs as the same user. */
+export const KIOSK_WAYLAND_DISPLAY = process.env.KACEY_WAYLAND_DISPLAY || 'wayland-0';
+export const KIOSK_RUNTIME_DIR = process.env.KACEY_RUNTIME_DIR || '';
+
 /* How often night.js re-evaluates the stored sleep state. Everything is
    computed from stored instants, so this is a resolution, not a timer. */
 export const NIGHT_TICK_MS = 30000;

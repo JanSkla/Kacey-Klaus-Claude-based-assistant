@@ -188,6 +188,88 @@ With the backlight backend the page should never go hidden, because the
 compositor doesn't know the panel is off. If a `page visibility: hidden` line
 shows up anyway, tell Claude.
 
+### 6. The screen as the PC's second monitor (Windows, then root)
+
+The Controller's **Druhý monitor** switch ([monitor.js](../monitor.js)) starts
+Moonlight over the kiosk. On the PC, Apollo adds a virtual display for as long
+as the stream runs. cage puts Moonlight on top of Epiphany, and when Moonlight
+exits the Kacey page is underneath again. To end it, use the switch, press
+Ctrl+Alt+Shift+Q on the laptop, or disconnect the client in Apollo on the PC.
+
+**On the PC (Windows):**
+
+1. Install **Apollo** (github.com/ClassicOldSong/Apollo, releases). It brings
+   its own virtual display driver (SudoVDA). Open `https://localhost:47990` and
+   set a login.
+2. Keep the real monitors on: the virtual display should *extend* the desktop.
+   If your monitors go dark during a stream, set Apollo's display device
+   configuration (Configuration → Audio/Video) to leave the other displays
+   alone. Arrange the new display in Windows' Display settings once (Windows
+   remembers it per virtual display).
+3. Note the PC's Tailscale name (`tailscale status`). Kacey's host reaches it
+   over the tailnet.
+
+**On kaceybody (root):**
+
+Moonlight isn't in Ubuntu 26.04's apt (checked 2026-10-06). The snap is
+the packaged one, and it brings its own VA-API drivers for the HD 620:
+
+```bash
+sudo snap install moonlight
+printf 'KACEY_MONITOR_HOST=<pc tailscale name>\nKACEY_MONITOR_CMD=/snap/bin/moonlight\n' | sudo tee -a /etc/kacey.env
+sudo systemctl restart kacey
+```
+
+Checked on the real kiosk (2026-10-06): cage 0.2.1 runs a second client over
+Epiphany full screen, survives it closing, and Epiphany comes back still in
+full screen. The cage 0.2 assertion in `kiosk-session` is about Epiphany
+restoring several tabs at start, not about a second program.
+
+**Pair once:** pairing prints a PIN that you type into Apollo on the PC (Apollo
+web UI → PIN). Claude can run it over ssh, inside the kiosk's session (no root):
+
+```bash
+XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-0 QT_QPA_PLATFORM=wayland /snap/bin/moonlight pair <pc tailscale name>
+```
+
+The PIN shows on the bedside screen (light it first: move the mouse).
+Paired 2026-10-06 with PIN entry in Apollo. Apollo lists three apps for this
+client: `Desktop`, `Steam Big Picture` and `Virtual Display`. Kacey opens
+**Virtual Display**, the one that adds a display. `Desktop` would only show
+the PC's existing screens.
+
+**The snap launcher needs `~/.config/user-dirs.dirs` (done by Claude,
+2026-10-06, no root).** Without that file the snap's `desktop-launch`
+rebuilds its MIME cache on every start. On this disk that took 1–4 minutes,
+so a switch press seemed to do nothing. The file points every XDG folder at
+`$HOME`, so no new folders appear. With it, the launcher starts in about 1 s.
+
+**What a start costs:** about 10 s while Apollo creates the virtual display,
+then the picture. When Kacey ends the stream it also runs `moonlight quit`, so
+the PC closes the session and removes the display. If a session is still open
+on the PC (Moonlight killed some other way), the next start first spends ~30 s
+quitting it.
+
+**Two things Kacey sets for Moonlight** (monitor.js, nothing to configure):
+`SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR=0`, because SDL otherwise loads libdecor's
+GTK plugin for the window frame. That plugin aborts inside the snap (no icon
+theme), so the stream window is never shown: the stream runs, the decoder
+backs up ("Video decode unit queue overflow"), and the screen keeps showing
+Kacey. And `PKGSYSTEM_ENABLE_FSYNC=0`, so the MIME rebuild after a snap
+update takes seconds.
+
+**Check:** in the Controller, *Druhý monitor* says `vypnuto` with
+`Moonlight ← <pc> · Virtual Display` under it. Switch it on. About 10 s
+later the bedside screen shows the PC, and Windows lists a second display. Switch it off (or
+Ctrl+Alt+Shift+Q) and Kacey is back. `journalctl -u kacey | grep '\[monitor\]'`
+logs each start and end. If Moonlight dies at once, the line carries its
+last output and the Controller shows it as *Naposledy: …*.
+
+If the row says *Kiosk neběží nebo k němu Kacey nemá přístup*, cage runs as a
+different user than Kacey or under another socket name. Find it with
+`ls -l /run/user/*/wayland-*` and set `KACEY_RUNTIME_DIR` /
+`KACEY_WAYLAND_DISPLAY` in `/etc/kacey.env`.
+
 ---
 
 ## P3 and later — deploying a Kacey change
@@ -218,3 +300,4 @@ it shows `-> awake (interaction)`.
 | P2.3 kiosk shows Kacey | 2026-09-25 | incognito still on: see P2.4 |
 | P2.4 XTTS on the GPU, Whisper (Claude) | 2026-09-25 | float16, ~2× slower than real time; brief pre-rendered at night |
 | P2.5 listening in the dark |  |  |
+| P2.6 second monitor (Apollo, Moonlight, pairing) |  |  |

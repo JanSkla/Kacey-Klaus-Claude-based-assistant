@@ -188,6 +188,12 @@ All environment variables, all with working defaults — see `.env.example`.
 | `LIGHTSD_URL`             | `http://127.0.0.1:8080`                | lightsd, read for the sleep button ([docs/DREAM.md](docs/DREAM.md)) |
 | `KACEY_DISPLAY`           | `:0`                                   | The kiosk's X display, for `xset dpms`    |
 | `KACEY_XAUTHORITY`        | `~/.Xauthority`                        | Its cookie; GDM may use `/run/user/<uid>/gdm/Xauthority` |
+| `KACEY_MONITOR_HOST`      | *(empty: switch not set up)*           | The PC the bedside screen extends as a second monitor ([monitor.js](monitor.js)), as Moonlight knows it |
+| `KACEY_MONITOR_APP`       | `Virtual Display`                      | The Apollo app to open on it (`Desktop` shows the PC's existing screens instead) |
+| `KACEY_MONITOR_CMD`       | `moonlight`                            | e.g. `flatpak run com.moonlight_stream.Moonlight` |
+| `KACEY_MONITOR_ARGS`      | `--display-mode fullscreen --audio-on-host --resolution 1920x1080` | After `stream <host> <app>`; audio stays on the PC |
+| `KACEY_WAYLAND_DISPLAY`   | `wayland-0`                            | The kiosk compositor's (cage) socket      |
+| `KACEY_RUNTIME_DIR`       | `/run/user/<Kacey's uid>`              | Where that socket lives                   |
 
 `klaus_memory` is pure standard library (sqlite3/json/urllib) — there is nothing to
 `pip install`.

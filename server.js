@@ -35,6 +35,7 @@ import { tentativeMap, setTentative, dropFlag } from './eventflags.js';
 import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
 import { BRIEF_AUDIO_DIR, makeSdkRunner } from './dream.js';
 import * as notifications from './notifications.js';
+import * as monitor from './monitor.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -1182,6 +1183,25 @@ app.post('/api/presence', (_req, res) => {
   res.status(204).end();
 });
 
+/* The second monitor (monitor.js): Moonlight over the kiosk, showing the PC's
+   virtual display. Off again, the kiosk shows Kacey. Not CORS-open: the
+   Controller is same-origin, and a script on the PC can use curl. */
+app.get('/api/monitor', (_req, res) => res.json(monitor.status()));
+app.post('/api/monitor', express.json({ limit: '1kb' }), async (req, res) => {
+  const on = req.body && req.body.on;
+  if (typeof on !== 'boolean') return res.status(400).json({ error: 'on musí být true nebo false' });
+  if (on) monitor.start('switch');
+  else monitor.stop('switch');
+  /* Answer with how it went, not how it began. Started: not paired or the PC
+     away shows within a few seconds. Stopped: Moonlight takes a moment to exit. */
+  const until = Date.now() + (on ? 4000 : 5000);
+  while (Date.now() < until && monitor.status().state === 'on') {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  const s = monitor.status();
+  res.status(on && s.state !== 'on' ? 409 : 200).json(s);
+});
+
 app.get('/api/next', (_req, res) => res.json({ next: nextUp() }));
 
 app.get('/api/voice', (_req, res) => res.json(voicePayload()));
@@ -1527,6 +1547,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log(`${sig} — shutting down`);
     stopNight();
+    monitor.stop('shutdown');       // never leave a Moonlight over the kiosk with nobody owning it
     appstate.flushNow();            // close the database cleanly
     for (const ws of wss.clients) ws.close();
     loopback?.close();
