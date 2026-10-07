@@ -102,6 +102,47 @@ CREATE TABLE IF NOT EXISTS kacey_routine_block (
   PRIMARY KEY (day, slot)
 );
 
+/* The routine diverging on one date (routine-days.js, public/js/core/
+   routine-day.js): a run cancelled while sick, the gym moved to the evening.
+   The default week above is untouched; a date resolves to its weekday's
+   blocks minus its cancels plus its adds. A move is a cancel and an add with
+   one group_id, a sick range one whole-day cancel per date. Rows for a date
+   stay after it is cemented, as the record of what was changed. */
+CREATE TABLE IF NOT EXISTS kacey_routine_override (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  date       TEXT NOT NULL,                       -- 'YYYY-MM-DD', the clock day of the grid
+  kind       TEXT NOT NULL CHECK (kind IN ('cancel','add')),
+  slot_from  INTEGER NOT NULL CHECK (slot_from BETWEEN 0 AND 95),
+  slot_to    INTEGER NOT NULL CHECK (slot_to BETWEEN 1 AND 96),
+  category   TEXT,                                -- a cancel: NULL = every category
+  note       TEXT,
+  room       TEXT,
+  who        TEXT,
+  reason     TEXT,
+  group_id   INTEGER,
+  group_kind TEXT CHECK (group_kind IS NULL OR group_kind IN ('move','range')),
+  -- An add on top of a default block: 'pending' until Kacey decides.
+  overlap    TEXT CHECK (overlap IS NULL OR overlap IN ('pending','keep')),
+  origin     TEXT NOT NULL DEFAULT 'user' CHECK (origin IN ('user','kacey')),
+  created_at TEXT NOT NULL,
+  CHECK (slot_to > slot_from)
+);
+CREATE INDEX IF NOT EXISTS kacey_routine_override_date_idx ON kacey_routine_override (date);
+
+/* A finished day, cemented: what the routine actually was that date, written
+   once when the logical day ends and never again by the default week. Kacey
+   can amend it from the conversation ("I forgot, I was sick yesterday");
+   prev_blocks is the copy before her last amend. */
+CREATE TABLE IF NOT EXISTS kacey_routine_day (
+  date        TEXT PRIMARY KEY,
+  blocks      TEXT NOT NULL,                      -- JSON, routine-day.js's resolved blocks
+  altered     INTEGER NOT NULL DEFAULT 0 CHECK (altered IN (0,1)),
+  cemented_at TEXT NOT NULL,
+  source      TEXT NOT NULL CHECK (source IN ('rollover','catchup')),
+  amended_at  TEXT,
+  prev_blocks TEXT
+);
+
 /* Everything small and shapeless: wake/sleep times, timer presets, checklists,
    the controller's switches. A table each would be five tables of one row. */
 CREATE TABLE IF NOT EXISTS kacey_kv (

@@ -36,6 +36,8 @@ import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
 import { BRIEF_AUDIO_DIR, makeSdkRunner } from './dream.js';
 import * as notifications from './notifications.js';
 import * as monitor from './monitor.js';
+import * as routineDays from './routine-days.js';
+import { addDays } from './public/js/core/due.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -625,6 +627,42 @@ app.put('/api/app/:section', express.json({ limit: '1mb' }), (req, res) => {
 });
 
 /* ---------------------------------------------------------------------------
+ * The routine on concrete dates (routine-days.js): a day's divergences from
+ * the default week, and the cemented history of finished days. The calendar's
+ * buttons write through here; Kacey's app_routine_alter calls the same
+ * alter(), and is the only one allowed to amend a cemented day.
+ * ------------------------------------------------------------------------- */
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/* Each date between from and to (at most 62), as everything should see it:
+   cemented, live, or before the history began ('unrecorded'). */
+app.get('/api/routine/days', (req, res) => {
+  const from = String(req.query.from || ''), to = String(req.query.to || req.query.from || '');
+  if (!DATE_RE.test(from) || !DATE_RE.test(to) || to < from) return res.status(400).json({ error: 'from/to musí být YYYY-MM-DD' });
+  try {
+    routineDays.cementDue();
+    const days = {};
+    let n = 0;
+    for (let d = from; d <= to && n < 62; d = addDays(d, 1), n++) days[d] = routineDays.dayView(d);
+    res.json({ today: routineDays.today(), since: routineDays.historySince(), days });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/routine/alter', express.json({ limit: '16kb' }), (req, res) => {
+  try {
+    const out = routineDays.alter(req.body || {}, { origin: 'user' });
+    // The owner's own tap: other pages reload, nobody gets a "Kacey changed it" toast.
+    broadcast({ type: 'app_changed', section: 'routine_days', quiet: true });
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+/* ---------------------------------------------------------------------------
  * The night routine's rules (docs/DREAM.md §8) — for the rules editor. Kacey
  * edits the same rows through her rules_* tools; both paths validate with the
  * one zod schema in rules.js, and both broadcast app_changed { section:
@@ -878,6 +916,15 @@ app.get('/api/calendar', async (req, res) => {
       .map(([m, count]) => ({ month: m, count }))
       .sort((a, b) => (a.month < b.month ? -1 : 1));
 
+    /* The month's cemented routine days (routine-days.js). The lane draws a
+       finished day from its frozen copy; live days it resolves itself from
+       the app document's default week and overrides. */
+    let routine = { since: null, days: {} };
+    try {
+      routineDays.cementDue();
+      routine = { since: routineDays.historySince(), days: routineDays.snapshots(`${month}-01`, `${month}-31`) };
+    } catch (err) { log(`calendar: routine history unreadable (${err.message})`); }
+
     res.json({
       today,
       month,
@@ -885,6 +932,7 @@ app.get('/api/calendar', async (req, res) => {
       total: rows.length,
       monthsWithEvents,
       days,
+      routine,
     });
   } catch (err) {
     log(`calendar read failed: ${err.message}`);

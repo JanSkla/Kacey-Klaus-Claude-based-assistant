@@ -22,6 +22,7 @@ the file you actually need.
 - [The two import cycles](#the-two-import-cycles)
 - [Backend](#backend)
   - [The calendar day model](#the-calendar-day-model)
+  - [The routine on concrete dates](#the-routine-on-concrete-dates)
   - [The night routine (D.R.E.A.M.)](#the-night-routine-dream)
 - [Invariants](#invariants)
 - [Adding things](#adding-things)
@@ -407,7 +408,7 @@ have.
 | `config.js`            | Every knob from the environment, all with working defaults; `MCP_SERVERS` and `MEMORY_TOOLS` |
 | Persona loading        | `persona/kacey.md` read at startup, `{{TODAY}}`/`{{NOW}}` rendered per connection |
 | `KaceySession`         | One WebSocket == one continuous `query()` in streaming-input mode |
-| HTTP routes            | `/api/health` `/api/voices` `/api/calendar` (+ update/delete/tentative) `/api/tts`, `/share-target` (fallback only — `public/sw.js` catches shares), then static `public/` |
+| HTTP routes            | `/api/health` `/api/voices` `/api/calendar` (+ update/delete/tentative) `/api/routine/days` `/api/routine/alter` `/api/tts`, `/share-target` (fallback only — `public/sw.js` catches shares), then static `public/` |
 | WebSocket              | `/ws`, JSON frames, one `KaceySession` per connection        |
 
 Two things about `KaceySession` that the frame protocol does not show:
@@ -464,6 +465,50 @@ so it is Kacey's own flag: `kacey_event_flag`, keyed by `event_id`
 ([eventflags.js](eventflags.js)). Kacey sets it with `app_calendar_tentative`,
 the event editor with `POST /api/calendar/:id/tentative`; confirming deletes the
 row, and deleting the event drops it. Outside Kacey the event looks ordinary.
+
+### The routine on concrete dates
+
+The weekly routine (`kacey_routine_block`) is the **default week**: every date
+starts as its weekday's blocks. Two tables sit on top of it, drawn in
+[docs/routine-divergence.drawio](docs/routine-divergence.drawio):
+
+- **`kacey_routine_override`** changes one date and never the default. A row is a
+  `cancel` (every default block wholly inside its slot range, of its category or
+  of any when it has none) or an `add`. A move is a cancel plus an add sharing a
+  `group_id`; a sick range is one whole-day cancel per date, one group.
+- **`kacey_routine_day`** is a finished day, **cemented**: the night tick
+  (`cementDue()`, every 30 s, idempotent) writes each day that has ended at 04:00,
+  and a server that was off catches up. After that the default week cannot
+  reach it. History starts at `kacey_kv` `routine.history_since`, the first day
+  this ran: earlier dates were never recorded and are not invented now.
+
+One function decides what a date holds: `effectiveDay()` / `dayOf()` in
+[public/js/core/routine-day.js](public/js/core/routine-day.js), pure and shared
+by the browser and the server, like `due.js`. The calendar lane, the night run's
+rules (`routineOccurrences`) and the reasoning pass all go through it, so a
+cancelled gym is gone for all three at once. The rules see the active blocks
+only; a moved block's occurrence key changes with its slot, so its reminder
+follows it.
+
+**One write path.** [routine-days.js](routine-days.js) `alter()` is the only
+writer, validated by one zod schema. The calendar calls it through
+`POST /api/routine/alter` (origin `user`), Kacey through `app_routine_alter`
+(origin `kacey`). Same operations, one difference: a date before today is
+cemented, and only `kacey` may amend it ("I forgot, I was sick yesterday").
+Her amend rewrites the frozen copy and keeps the previous one in `prev_blocks`;
+the default week is never consulted again for that day.
+
+**Overlaps are not resolved in code.** An add on top of a default block is
+drawn beside it, `overlap = 'pending'`, until Kacey decides in a turn (cancel
+the default, or `keep_overlap`). A cancel whose block was repainted away is
+**stale**: kept and shown, not applied, so a repainted week cannot silently make
+an old cancel hit something else.
+
+The browser resolves live days itself from `routine.overrides` in the app
+document (seven days back onward); cemented days come with the month in
+`/api/calendar` as `routine: { since, days }`. Writes broadcast
+`app_changed { section: 'routine_days' }`; protocol.js reloads the document and
+the month.
 
 ### The phone's notifications
 

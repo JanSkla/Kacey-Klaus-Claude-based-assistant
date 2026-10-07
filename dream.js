@@ -30,7 +30,8 @@ import * as appstate from './appstate.js';
 import * as nightstore from './nightstore.js';
 import { transact, kvGet } from './db.js';
 import { addDays } from './public/js/core/due.js';
-import { previewRules, routineBlocks, logicalStart, hhmmOf } from './rules.js';
+import { previewRules, logicalStart, hhmmOf } from './rules.js';
+import { dayOf as routineDay, activeBlocks } from './public/js/core/routine-day.js';
 import {
   eligibleEvents, buildReasoningInput, parseReasoning, postValidate, briefInputHash,
   splitBriefLines, briefContext, OVERLAP_NOTE,
@@ -104,7 +105,7 @@ function collect(date, report) {
   const window = events.filter((e) => new Date(e.ends_at || e.starts_at) >= start && new Date(e.starts_at) < new Date(start.getTime() + 2 * DAY));
   report.collect = {
     events: window.length,
-    routine_blocks: routineBlocks(doc.routine, dayOf(date)).length + routineBlocks(doc.routine, dayOf(addDays(date, 1))).length,
+    routine_blocks: activeBlocks(routineDay(doc.routine, date)).length + activeBlocks(routineDay(doc.routine, addDays(date, 1))).length,
     open_tasks: doc.tasks.filter((t) => !t.done).length,
     rules: rules.length,
     // How many were held back from the cloud steps — a count, never titles.
@@ -112,11 +113,6 @@ function collect(date, report) {
       + doc.tasks.filter((t) => !t.done && t.sensitivity === 'local_only').length,
   };
   return { doc, events, history, rules, invalid };
-}
-
-function dayOf(date) {
-  const [y, m, d] = date.split('-').map(Number);
-  return (new Date(y, m - 1, d, 12).getDay() + 6) % 7;
 }
 
 /* ---- step 2: rules -> tasks ----------------------------------------------------
@@ -207,7 +203,8 @@ function rulesPass(ctx, date, now, report) {
 function routineDaysFor(routine, date) {
   const out = {};
   for (const d of [date, addDays(date, 1)]) {
-    out[d] = routineBlocks(routine, dayOf(d)).map((b) => ({ from: hhmmOf(b.s), to: hhmmOf(b.e % 1440), category: b.cat, note: b.note }));
+    // That date's routine: a cancelled or moved block is not what the day holds.
+    out[d] = activeBlocks(routineDay(routine, d)).map((b) => ({ from: hhmmOf(b.s), to: hhmmOf(b.e % 1440), category: b.cat, note: b.note }));
   }
   return out;
 }

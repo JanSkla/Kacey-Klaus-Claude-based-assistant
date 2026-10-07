@@ -25,7 +25,7 @@ import path from 'node:path';
 
 import { HERE, LOGICAL_DAY_START_HOUR } from './config.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
-import { dueFromGroup, normalizeDue, parseDue } from './public/js/core/due.js';
+import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
 export const LEGACY_STATE_PATH =
@@ -131,7 +131,24 @@ function readRoutine() {
     if (r.room || r.who) info[key] = { ...(r.room ? { room: r.room } : {}), ...(r.who ? { who: r.who } : {}) };
   }
   const hours = kvGet('routine.hours', { wake: 420, sleep: 1350 });
-  return { grid, notes, info, wake: hours.wake, sleep: hours.sleep };
+  /* The divergences from a week ago on (routine-days.js). Read-only here:
+     writeRoutine() ignores them, they change through routine-days.alter().
+     A week back covers a day not yet cemented when the server was off. */
+  const since = addDays(logicalToday(new Date(), LOGICAL_DAY_START_HOUR), -7);
+  return { grid, notes, info, wake: hours.wake, sleep: hours.sleep, overrides: readOverrides(since) };
+}
+
+/** Override rows from `since` on, in the shape public/js/core/routine-day.js reads. */
+export function readOverrides(since, until) {
+  const rows = until
+    ? open().prepare('SELECT * FROM kacey_routine_override WHERE date >= ? AND date <= ? ORDER BY date, id').all(since, until)
+    : open().prepare('SELECT * FROM kacey_routine_override WHERE date >= ? ORDER BY date, id').all(since);
+  return rows.map((r) => ({
+    id: r.id, date: r.date, kind: r.kind, slot_from: r.slot_from, slot_to: r.slot_to,
+    category: r.category || null, note: r.note || '', room: r.room || '', who: r.who || '',
+    reason: r.reason || '', group_id: r.group_id || null, group_kind: r.group_kind || null,
+    overlap: r.overlap || null, origin: r.origin, created_at: r.created_at,
+  }));
 }
 
 /* ---- writing ------------------------------------------------------------- */

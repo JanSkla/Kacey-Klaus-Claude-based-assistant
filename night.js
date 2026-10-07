@@ -23,6 +23,7 @@ import * as screen from './screen.js';
 import * as nightstore from './nightstore.js';
 import { runNight } from './dream.js';
 import { expiredProposals, decisionsForModel } from './nightplan.js';
+import { cementDue } from './routine-days.js';
 
 const log = (...a) => console.log('[night]', ...a);
 
@@ -161,6 +162,15 @@ function tick() {
       if (deps.onWrite) deps.onWrite('proposals');
       push();
     }
+
+    /* A day that has ended (04:00) is cemented into the routine's history.
+       Cheap when there is nothing to do; after a night the server was off,
+       every missed day is caught up here. Its own try: history must not stop
+       the rest of the tick, nor the tick stop history. */
+    try {
+      const cemented = cementDue(now);
+      if (cemented.length) log(`routine: cemented ${cemented.join(', ')}`);
+    } catch (err) { log(`routine cementing failed: ${err.message}`); }
 
     if (deps.onTick) deps.onTick(now);
   } catch (err) {

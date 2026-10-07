@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 import { addDays, dowOf } from './public/js/core/due.js';
 import { CATS, CATEGORY_KEYS } from './public/js/core/routine-cats.js';
+import { dayOf, activeBlocks } from './public/js/core/routine-day.js';
 import { dayRangeOf } from './calendar-days.js';
 import { LOGICAL_DAY_START_HOUR } from './config.js';
 
@@ -217,7 +218,9 @@ function routineOccurrences(trigger, routine, dates) {
   if (clockDays.length) clockDays.push(addDays(clockDays[clockDays.length - 1], 1));
   for (const date of clockDays) {
     const day = dowOf(date);
-    for (const b of routineBlocks(routine, day)) {
+    /* That date's routine, not just its weekday's: a gym cancelled for the
+       day makes no gym-bag reminder, a moved one makes it for the new time. */
+    for (const b of activeBlocks(dayOf(routine, date))) {
       if (b.cat !== trigger.routine_category) continue;
       if (trigger.routine_note_match && trigger.routine_note_match.length && !matchesAny(b.note, trigger.routine_note_match)) continue;
       if (sb !== null && logicalMin(b.s) >= sb) continue;

@@ -1,0 +1,412 @@
+<mxfile host="app.diagrams.net" version="24.7.17">
+  <!-- ============================================================ -->
+  <!-- PAGE 1 · DATA MODEL                                          -->
+  <!-- ============================================================ -->
+  <diagram id="p1" name="1 · Data model">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="860" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="t1" value="&lt;b&gt;Routine divergence · data model&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot; color=&quot;#666666&quot;&gt;The default week table stays as it is. Two new tables are added: alterations for specific dates, and cemented day history. Writes are on page 4.&lt;/font&gt;" style="text;html=1;fontSize=20;align=left;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="1000" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- A · template (existing) -->
+        <mxCell id="A" value="kacey_routine_block  ·  DEFAULT WEEK (existing)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;rounded=1;arcSize=5;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="300" height="238" as="geometry" />
+        </mxCell>
+        <mxCell id="A1" value="PK day      INTEGER 0–6 (Mon = 0)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="A"><mxGeometry y="30" width="300" height="24" as="geometry" /></mxCell>
+        <mxCell id="A2" value="PK slot     INTEGER 0–95 (15 min)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="A"><mxGeometry y="54" width="300" height="24" as="geometry" /></mxCell>
+        <mxCell id="A3" value="   category TEXT" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="A"><mxGeometry y="78" width="300" height="24" as="geometry" /></mxCell>
+        <mxCell id="A4" value="   note     TEXT" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="A"><mxGeometry y="102" width="300" height="24" as="geometry" /></mxCell>
+        <mxCell id="A5" value="   room     TEXT" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="A"><mxGeometry y="126" width="300" height="24" as="geometry" /></mxCell>
+        <mxCell id="A6" value="   who      TEXT" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="A"><mxGeometry y="150" width="300" height="24" as="geometry" /></mxCell>
+        <mxCell id="A7" value="&lt;i&gt;Prefills every date with its weekday's blocks. Written by the planner and by app_routine_paint. &lt;b&gt;Not changed by this feature.&lt;/b&gt;&lt;/i&gt;" style="text;strokeColor=none;fillColor=#f3f8fe;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=8;html=1;whiteSpace=wrap;fontSize=11;fontColor=#555555;" vertex="1" parent="A"><mxGeometry y="174" width="300" height="64" as="geometry" /></mxCell>
+
+        <!-- B · overrides (new) -->
+        <mxCell id="B" value="kacey_routine_override  ·  ALTERATIONS (new)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;rounded=1;arcSize=5;fillColor=#d5e8d4;strokeColor=#82b366;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="400" y="90" width="340" height="406" as="geometry" />
+        </mxCell>
+        <mxCell id="B1" value="PK id         INTEGER" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="30" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B2" value="   date       TEXT  logical YYYY-MM-DD" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="54" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B3" value="   kind       TEXT  cancel | add" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="78" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B4" value="   slot_from  INTEGER" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="102" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B5" value="   slot_to    INTEGER (exclusive)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="126" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B6" value="   category   TEXT  (cancel: NULL = any)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="150" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B7" value="   note / room / who  TEXT" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="174" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B8" value="   reason     TEXT  e.g. &quot;nemoc&quot;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="198" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B9" value="   group_id   INTEGER NULL" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="222" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B10" value="   group_kind TEXT  move | range" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="246" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B11" value="   overlap    TEXT NULL  pending | keep" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="270" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B12" value="   origin     TEXT  user | kacey" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="294" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B13" value="   created_at TEXT" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="B"><mxGeometry y="318" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="B14" value="&lt;i&gt;Changes for one specific date. A &lt;b&gt;move&lt;/b&gt; is a cancel plus an add. A &lt;b&gt;sick range&lt;/b&gt; is one cancel per day covering the whole day. The rows of a move or a range share a group_id, so they can be undone together.&lt;/i&gt;" style="text;strokeColor=none;fillColor=#f1f8ef;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=8;html=1;whiteSpace=wrap;fontSize=11;fontColor=#555555;" vertex="1" parent="B"><mxGeometry y="342" width="340" height="64" as="geometry" /></mxCell>
+
+        <!-- C · cemented history (new) -->
+        <mxCell id="C" value="kacey_routine_day  ·  CEMENTED HISTORY (new)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;rounded=1;arcSize=5;fillColor=#e1d5e7;strokeColor=#9673a6;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="790" y="90" width="340" height="262" as="geometry" />
+        </mxCell>
+        <mxCell id="C1" value="PK date        TEXT  logical YYYY-MM-DD" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="C"><mxGeometry y="30" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="C2" value="   blocks      JSON  [{cat,s,e,note,room,who,state}]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=11;" vertex="1" parent="C"><mxGeometry y="54" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="C3" value="     state = template | cancelled | moved_out | added | moved_in" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=11;fontColor=#666666;" vertex="1" parent="C"><mxGeometry y="78" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="C4" value="   cemented_at TEXT" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="C"><mxGeometry y="102" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="C5" value="   source      TEXT  rollover | catchup" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="C"><mxGeometry y="126" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="C6" value="   amended_at  TEXT NULL  (late Kacey change)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="C"><mxGeometry y="150" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="C7" value="   prev_blocks JSON NULL  (copy before last amend)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=8;html=1;fontFamily=Courier New;fontSize=12;" vertex="1" parent="C"><mxGeometry y="174" width="340" height="24" as="geometry" /></mxCell>
+        <mxCell id="C8" value="&lt;i&gt;A frozen copy of the day as it actually was, written once when the day ends. Edits to the default week never change it. &lt;b&gt;Only Kacey's chat can amend it later&lt;/b&gt;, and the amend is applied onto this copy, not onto the default week.&lt;/i&gt;" style="text;strokeColor=none;fillColor=#f7f2f9;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=8;html=1;whiteSpace=wrap;fontSize=11;fontColor=#555555;" vertex="1" parent="C"><mxGeometry y="198" width="340" height="64" as="geometry" /></mxCell>
+
+        <!-- R · resolver -->
+        <mxCell id="R" value="&lt;b&gt;blocksForDate(D)&lt;/b&gt;&lt;br&gt;if D is cemented → return its snapshot&lt;br&gt;otherwise → template[weekday(D)] − cancels + adds&lt;br&gt;&lt;i&gt;&lt;font color=&quot;#7a6a2a&quot;&gt;one shared module (core/), used by both server and client&lt;/font&gt;&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="400" y="540" width="330" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- consumers -->
+        <mxCell id="K1" value="&lt;b&gt;Calendar UI&lt;/b&gt; (.rblock)&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;cancelled = ghost · added = badge · ⚠ overlap&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="140" y="720" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="K2" value="&lt;b&gt;Night run rules&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;routineOccurrences: a cancelled gym block creates no task&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="450" y="720" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="K3" value="&lt;b&gt;Kacey&lt;/b&gt; (chat · Opus)&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;app_read (this week) · app_routine_alter&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="760" y="720" width="230" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="eAR" value="weekday blocks" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;fontSize=11;" edge="1" parent="1" source="A" target="R">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="190" y="585" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="eBR" value="overrides for D" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;fontSize=11;" edge="1" parent="1" source="B" target="R">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eRC" value="&lt;b&gt;cement&lt;/b&gt; once,&lt;br&gt;at 04:00 after the day" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#9673a6;strokeWidth=2;fontSize=11;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0.35;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="R" target="C">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eCR" value="past D:&lt;br&gt;read snapshot" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#9673a6;dashed=1;fontSize=11;exitX=0.65;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.7;entryDx=0;entryDy=0;" edge="1" parent="1" source="C" target="R">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eKC" value="late amend&lt;br&gt;(Kacey chat only)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#9673a6;strokeWidth=2;dashed=1;fontSize=11;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="K3" target="C">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1160" y="750" /><mxPoint x="1160" y="221" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="eR1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;" edge="1" parent="1" source="R" target="K1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eR2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;" edge="1" parent="1" source="R" target="K2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eR3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;" edge="1" parent="1" source="R" target="K3"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- legend -->
+        <mxCell id="L0" value="Legend" style="text;html=1;fontStyle=1;fontSize=11;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="820" width="60" height="20" as="geometry" /></mxCell>
+        <mxCell id="L1" value="existing" style="rounded=1;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1"><mxGeometry x="100" y="820" width="80" height="20" as="geometry" /></mxCell>
+        <mxCell id="L2" value="new · alterations" style="rounded=1;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1"><mxGeometry x="190" y="820" width="110" height="20" as="geometry" /></mxCell>
+        <mxCell id="L3" value="new · history" style="rounded=1;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1"><mxGeometry x="310" y="820" width="90" height="20" as="geometry" /></mxCell>
+        <mxCell id="L4" value="logic" style="rounded=1;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1"><mxGeometry x="410" y="820" width="60" height="20" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 2 · A WEEK, DAY BY DAY + LIFECYCLE                      -->
+  <!-- ============================================================ -->
+  <diagram id="p2" name="2 · Day lifecycle">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="830" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="t2" value="&lt;b&gt;One week, day by day&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot; color=&quot;#666666&quot;&gt;Example week 5.–9. 10., assuming today is Wednesday 7. 10.&lt;/font&gt;" style="text;html=1;fontSize=20;align=left;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="900" height="56" as="geometry" />
+        </mxCell>
+
+        <!-- phase: cemented -->
+        <mxCell id="P1" value="CEMENTED · history, read-only (Kacey can amend)" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fillColor=#e1d5e7;strokeColor=#9673a6;swimlaneFillColor=#f7f2f9;fontStyle=1;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="430" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" value="Mon 5. 10." style="swimlane;html=1;startSize=26;fillColor=#ffffff;strokeColor=#999999;fontStyle=1;collapsible=0;swimlaneFillColor=#ffffff;" vertex="1" parent="P1">
+          <mxGeometry x="10" y="40" width="200" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d1b1" value="work · 08:00–16:00" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d1"><mxGeometry x="10" y="36" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d1b2" value="gym · Posilovna · 17:00–18:30" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d1"><mxGeometry x="10" y="86" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d1f" value="🔒 snapshot written&lt;br&gt;Tue 6. 10. at 04:00&lt;br&gt;(nothing changed: template only)" style="text;html=1;whiteSpace=wrap;fontSize=10;fontColor=#7a5c8a;align=left;verticalAlign=top;fontStyle=2;" vertex="1" parent="d1"><mxGeometry x="10" y="214" width="180" height="66" as="geometry" /></mxCell>
+
+        <mxCell id="d2" value="Tue 6. 10." style="swimlane;html=1;startSize=26;fillColor=#ffffff;strokeColor=#999999;fontStyle=1;collapsible=0;swimlaneFillColor=#ffffff;" vertex="1" parent="P1">
+          <mxGeometry x="220" y="40" width="200" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d2b1" value="study · 08:00–11:30" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d2"><mxGeometry x="10" y="36" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d2b2" value="&lt;s&gt;gym · Běh · 18:00–19:00&lt;/s&gt;&lt;br&gt;✕ cancelled · &quot;nemoc&quot; ✎" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;fontColor=#9a3b36;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d2"><mxGeometry x="10" y="86" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d2f" value="🔒 cemented Wed 04:00 with the run in it.&lt;br&gt;✎ Wed 09:12 you told Kacey &quot;I forgot, I was sick yesterday&quot;, and she amended the snapshot." style="text;html=1;whiteSpace=wrap;fontSize=10;fontColor=#7a5c8a;align=left;verticalAlign=top;fontStyle=2;" vertex="1" parent="d2"><mxGeometry x="10" y="200" width="180" height="80" as="geometry" /></mxCell>
+
+        <!-- phase: today -->
+        <mxCell id="P2" value="TODAY · live, alterable" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fillColor=#fff2cc;strokeColor=#d6b656;swimlaneFillColor=#fffbea;fontStyle=1;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="490" y="80" width="220" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="Wed 7. 10." style="swimlane;html=1;startSize=26;fillColor=#ffffff;strokeColor=#d6b656;strokeWidth=2;fontStyle=1;collapsible=0;swimlaneFillColor=#ffffff;" vertex="1" parent="P2">
+          <mxGeometry x="10" y="40" width="200" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d3b1" value="work · 08:00–16:00" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d3"><mxGeometry x="10" y="36" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d3b2" value="&lt;s&gt;gym · Běh · 18:00–19:00&lt;/s&gt;&lt;br&gt;✕ cancel #12 · &quot;still sick&quot;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;fontColor=#9a3b36;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d3"><mxGeometry x="10" y="86" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d3f" value="Can still be undone, changed or reset (UI or Kacey).&lt;br&gt;Cements Thu 8. 10. at 04:00." style="text;html=1;whiteSpace=wrap;fontSize=10;fontColor=#8a7320;align=left;verticalAlign=top;fontStyle=2;" vertex="1" parent="d3"><mxGeometry x="10" y="214" width="180" height="66" as="geometry" /></mxCell>
+
+        <!-- phase: upcoming -->
+        <mxCell id="P3" value="UPCOMING · live, alterable" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fillColor=#dae8fc;strokeColor=#6c8ebf;swimlaneFillColor=#f3f8fe;fontStyle=1;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="730" y="80" width="430" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" value="Thu 8. 10." style="swimlane;html=1;startSize=26;fillColor=#ffffff;strokeColor=#999999;fontStyle=1;collapsible=0;swimlaneFillColor=#ffffff;" vertex="1" parent="P3">
+          <mxGeometry x="10" y="40" width="200" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d4b1" value="study&lt;br&gt;08:00–12:00" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d4"><mxGeometry x="10" y="36" width="86" height="56" as="geometry" /></mxCell>
+        <mxCell id="d4b1x" value="＋ free · Doktor&lt;br&gt;10:00–11:00&lt;br&gt;&lt;b&gt;⚠ overlap&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;spacingLeft=6;fontSize=10;" vertex="1" parent="d4"><mxGeometry x="104" y="36" width="86" height="56" as="geometry" /></mxCell>
+        <mxCell id="d4b2" value="&lt;s&gt;gym · Posilovna · 17:00–18:30&lt;/s&gt;&lt;br&gt;↷ moved away (cancel #13)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;dashed=1;fontColor=#888888;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d4"><mxGeometry x="10" y="102" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d4b3" value="＋ gym · Posilovna · 19:00–20:30&lt;br&gt;moved here (add #14)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d4"><mxGeometry x="10" y="152" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d4e" value="" style="endArrow=block;endFill=1;html=1;strokeColor=#82b366;dashed=1;curved=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="d4" source="d4b2" target="d4b3">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="198" y="147" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="d4f" value="The doctor's appointment sits side by side with study. Whether study is cancelled is up to Kacey.&lt;br&gt;The move is a cancel plus an add sharing group 7." style="text;html=1;whiteSpace=wrap;fontSize=10;fontColor=#4e6f99;align=left;verticalAlign=top;fontStyle=2;" vertex="1" parent="d4"><mxGeometry x="10" y="200" width="180" height="80" as="geometry" /></mxCell>
+
+        <mxCell id="d5" value="Fri 9. 10." style="swimlane;html=1;startSize=26;fillColor=#ffffff;strokeColor=#999999;fontStyle=1;collapsible=0;swimlaneFillColor=#ffffff;" vertex="1" parent="P3">
+          <mxGeometry x="220" y="40" width="200" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d5b1" value="work · 08:00–16:00" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d5"><mxGeometry x="10" y="36" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d5b2" value="gym · Běh · 18:00–19:00" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="d5"><mxGeometry x="10" y="86" width="180" height="40" as="geometry" /></mxCell>
+        <mxCell id="d5f" value="↺ This day was altered, then &lt;b&gt;reset to default&lt;/b&gt;. Its overrides were deleted, so it follows the default week again." style="text;html=1;whiteSpace=wrap;fontSize=10;fontColor=#4e6f99;align=left;verticalAlign=top;fontStyle=2;" vertex="1" parent="d5"><mxGeometry x="10" y="214" width="180" height="66" as="geometry" /></mxCell>
+
+        <!-- lifecycle state machine -->
+        <mxCell id="t2b" value="&lt;b&gt;Life of a single date&lt;/b&gt;" style="text;html=1;fontSize=16;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="440" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="S1" value="&lt;b&gt;Default week&lt;/b&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px&quot;&gt;kacey_routine_block&lt;/font&gt;&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="490" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="S2" value="&lt;b&gt;Live day&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;today or upcoming&lt;br&gt;= default + overrides&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="340" y="485" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="S3" value="&lt;b&gt;Cemented day&lt;/b&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px&quot;&gt;kacey_routine_day&lt;/font&gt;&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="680" y="490" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ED" value="Planner sheet&lt;br&gt;app_routine_paint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;dashed=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="630" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="O" value="&lt;b&gt;Override&lt;/b&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px&quot;&gt;kacey_routine_override&lt;/font&gt;&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="340" y="630" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="UI" value="&lt;b&gt;Calendar UI&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;same operations as Kacey, minus late amends&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="340" y="750" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="KC" value="&lt;b&gt;Kacey chat&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Opus turn · app_routine_alter&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="680" y="630" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="NX" value="&lt;b&gt;After cementing&lt;/b&gt;&lt;br&gt;• edits to the default week: no effect&lt;br&gt;• alterations from the UI: refused&lt;br&gt;• &lt;b&gt;Kacey chat: can amend&lt;/b&gt; the snapshot, and the previous version is kept for undo" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#f5f5f5;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="940" y="460" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="NC" value="&lt;b&gt;Server off overnight?&lt;/b&gt;&lt;br&gt;At boot, every past day that was not cemented is cemented from the default week plus its overrides (source = catchup)." style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#f5f5f5;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="940" y="630" width="230" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="eS12" value="every date starts as&lt;br&gt;its weekday's default" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;fontSize=10;" edge="1" parent="1" source="S1" target="S2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eS23" value="logical day ends (04:00)&lt;br&gt;night.js tick, idempotent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#9673a6;strokeWidth=2;fontSize=10;" edge="1" parent="1" source="S2" target="S3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eOS" value="applied live" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;fontSize=10;" edge="1" parent="1" source="O" target="S2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eUO" value="cancel · move · add · sick range · reset" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#666666;fontSize=10;" edge="1" parent="1" source="UI" target="O"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eKO" value="same ops" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#666666;fontSize=10;" edge="1" parent="1" source="KC" target="O"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eKS" value="late amend" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#9673a6;strokeWidth=2;dashed=1;fontSize=10;" edge="1" parent="1" source="KC" target="S3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eED" value="edit the default" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#999999;dashed=1;fontSize=10;" edge="1" parent="1" source="ED" target="S1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eNX" style="html=1;endArrow=none;dashed=1;strokeColor=#999999;" edge="1" parent="1" source="S3" target="NX"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="eNC" style="html=1;endArrow=none;dashed=1;strokeColor=#999999;" edge="1" parent="1" source="NC" target="S3"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 3 · RESOLUTION FLOW                                     -->
+  <!-- ============================================================ -->
+  <diagram id="p3" name="3 · Resolution flow">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1040" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="t3" value="&lt;b&gt;blocksForDate(D) · how a day's blocks are resolved&lt;/b&gt;" style="text;html=1;fontSize=18;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="800" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="N1" value="blocks for date D?" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="50" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="D1" value="D before today?&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;(logical day starts 04:00)&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="460" y="140" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="D2" value="snapshot&lt;br&gt;exists?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="150" y="140" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="NCU" value="&lt;b&gt;catch-up cement&lt;/b&gt;&lt;br&gt;resolve live (right column)&lt;br&gt;and write the snapshot&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px&quot;&gt;source = catchup&lt;/font&gt;&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;dashed=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="150" y="290" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="NRET" value="&lt;b&gt;return snapshot&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;🔒 including any late amend from Kacey&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="150" y="420" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="N3" value="take the default blocks&lt;br&gt;for weekday(D)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="460" y="290" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="N4" value="&lt;b&gt;apply cancels&lt;/b&gt; for D&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;remove default blocks inside the slot range whose category matches (NULL = any). The same rule handles one block and a whole sick day.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="460" y="380" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="D3" value="did every cancel&lt;br&gt;match something?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="460" y="500" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="NST" value="&lt;b&gt;⚠ mark the override stale&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;the default week changed under it&lt;br&gt;kept and shown, but not applied&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="760" y="515" width="230" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="N5" value="&lt;b&gt;apply adds&lt;/b&gt; for D&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;one-off blocks, including the destination of a move&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="460" y="640" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="D4" value="does an add overlap&lt;br&gt;a default block?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="460" y="730" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="NOV" value="&lt;b&gt;show both side by side&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;overlap = pending.&lt;br&gt;Kacey (Opus turn) decides: cancel the default block, or keep both (overlap = keep).&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="760" y="740" width="230" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="N6" value="&lt;b&gt;effective blocks&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;each tagged template · cancelled · moved_out · added · moved_in · overlap&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="460" y="870" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="N7" value="calendar UI · night rules · Kacey" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="460" y="970" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="f1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="N1" target="D1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f2" value="yes · past" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="D1" target="D2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f3" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="D2" target="NCU"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="NCU" target="NRET"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f5" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="D2" target="NRET">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="110" y="190" /><mxPoint x="110" y="450" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="f6" value="no · today / future" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="D1" target="N3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="N3" target="N4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="N4" target="D3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f9" value="some didn't" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="D3" target="NST"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f10" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="D3" target="N5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="NST" target="N5">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="875" y="665" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="f12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="N5" target="D4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f12y" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="D4" target="NOV"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f12n" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="D4" target="N6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f12o" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="NOV" target="N6">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="875" y="900" /></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="f13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="N6" target="N7"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="NRET" target="N7">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="240" y="995" /></Array></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 4 · ALTERATIONS: UI ⇄ KACEY PARITY + WRITE PATH          -->
+  <!-- ============================================================ -->
+  <diagram id="p4" name="4 · Alterations (UI ⇄ Kacey)">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="t4" value="&lt;b&gt;Alterations · every Kacey ability is mirrored in the UI&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot; color=&quot;#666666&quot;&gt;Both go through one function, so they cannot drift apart. The only exception is late amends to cemented days, which are Kacey only.&lt;/font&gt;" style="text;html=1;fontSize=18;align=left;verticalAlign=top;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="1100" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- table header -->
+        <mxCell id="h1" value="Ability" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e6e6e6;strokeColor=#999999;fontStyle=1;align=left;spacingLeft=8;" vertex="1" parent="1"><mxGeometry x="40" y="70" width="200" height="32" as="geometry" /></mxCell>
+        <mxCell id="h2" value="In the UI" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e6e6e6;strokeColor=#999999;fontStyle=1;align=left;spacingLeft=8;" vertex="1" parent="1"><mxGeometry x="240" y="70" width="330" height="32" as="geometry" /></mxCell>
+        <mxCell id="h3" value="Kacey · app_routine_alter" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e6e6e6;strokeColor=#999999;fontStyle=1;align=left;spacingLeft=8;" vertex="1" parent="1"><mxGeometry x="570" y="70" width="400" height="32" as="geometry" /></mxCell>
+        <mxCell id="h4" value="Which days" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e6e6e6;strokeColor=#999999;fontStyle=1;align=left;spacingLeft=8;" vertex="1" parent="1"><mxGeometry x="970" y="70" width="190" height="32" as="geometry" /></mxCell>
+
+        <!-- row 1 cancel -->
+        <mxCell id="r1a" value="✕ Cancel one block" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="102" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r1b" value="tap the block in the lane → &quot;Zrušit jen tento den&quot; (+ reason)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="240" y="102" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r1c" value="{op:'cancel', date, from, to, category, reason}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="102" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r1d" value="today · upcoming" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="970" y="102" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- row 2 move -->
+        <mxCell id="r2a" value="↷ Move a block" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="148" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r2b" value="tap the block → &quot;Přesunout…&quot; → new time (and day, within the week)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="240" y="148" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r2c" value="{op:'move', date, from, to, category, to_date?, new_from, new_to}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="148" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r2d" value="today · upcoming" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="970" y="148" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- row 3 add -->
+        <mxCell id="r3a" value="＋ Add a one-off block" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="194" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r3b" value="&quot;＋&quot; in the lane, or long-press an empty slot → category, time, note" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="240" y="194" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r3c" value="{op:'add', date, from, to, category, note?, room?, who?}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="194" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r3d" value="today · upcoming" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="970" y="194" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- row 4 sick range -->
+        <mxCell id="r4a" value="🤒 Cancel a range of days (sick days)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="240" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r4b" value="&quot;Nemoc / volno&quot; sheet: from–to dates, category checkboxes (default: all), reason" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="240" y="240" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r4c" value="{op:'cancel_range', from_date, to_date, categories?, reason}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="240" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r4d" value="today · upcoming" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="970" y="240" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- row 5 reset day -->
+        <mxCell id="r5a" value="↺ Reset a day to default" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="286" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r5b" value="day header ⋯ → &quot;Obnovit výchozí rutinu&quot; (deletes that day's overrides)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="240" y="286" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r5c" value="{op:'reset', dates[] | from_date, to_date}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="286" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r5d" value="today · upcoming" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="970" y="286" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- row 6 undo group -->
+        <mxCell id="r6a" value="↺ Undo a whole move or range" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="332" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r6b" value="tap a cancelled block → &quot;Zrušit celou nemoc&quot; or &quot;Vrátit přesun&quot;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="240" y="332" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r6c" value="{op:'reset', group_id}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="332" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r6d" value="the live days of that group" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="970" y="332" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- row 7 overlap -->
+        <mxCell id="r7a" value="⚠ Resolve an overlap" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="378" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r7b" value="⚠ chip on the pair → &quot;Zeptat se Kacey&quot; (sends it to chat)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="240" y="378" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r7c" value="Opus turn reasons → {op:'cancel', …} on the default or {op:'keep_overlap', id}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="378" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r7d" value="today · upcoming" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="970" y="378" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- row 8 late amend -->
+        <mxCell id="r8a" value="✎ Late change to a past day" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#999999;align=left;spacingLeft=8;fontSize=12;" vertex="1" parent="1"><mxGeometry x="40" y="424" width="200" height="46" as="geometry" /></mxCell>
+        <mxCell id="r8b" value="— not in the UI (a cemented day shows 🔒 with the hint &quot;ask Kacey&quot;)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontColor=#777777;" vertex="1" parent="1"><mxGeometry x="240" y="424" width="330" height="46" as="geometry" /></mxCell>
+        <mxCell id="r8c" value="any op above with a past date → applied onto the snapshot" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1"><mxGeometry x="570" y="424" width="400" height="46" as="geometry" /></mxCell>
+        <mxCell id="r8d" value="cemented · Kacey only" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;align=left;spacingLeft=8;fontSize=11;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="970" y="424" width="190" height="46" as="geometry" /></mxCell>
+
+        <!-- write path -->
+        <mxCell id="t4b" value="&lt;b&gt;Write path&lt;/b&gt;" style="text;html=1;fontSize=16;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="500" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="W1" value="&lt;b&gt;Calendar UI&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;POST /api/routine/alter&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="550" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="W2" value="&lt;b&gt;Kacey chat&lt;/b&gt; (Opus)&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;app_routine_alter, called in-process&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="660" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="W3" value="&lt;b&gt;alterRoutine(op, origin)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;routine-alter.js&lt;br&gt;one validator, one transaction&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="595" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="W4" value="is the date&lt;br&gt;cemented?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="610" y="580" width="160" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="W5" value="&lt;b&gt;write override rows&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;kacey_routine_override&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="850" y="530" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="W6" value="origin =&lt;br&gt;kacey?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="610" y="730" width="160" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="W7" value="&lt;b&gt;amend the snapshot&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;prev_blocks kept · amended_at set&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="850" y="755" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="W8" value="&lt;b&gt;refused&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;&quot;this day is cemented, ask Kacey&quot;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="350" y="755" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="W9" value="&lt;b&gt;broadcast app_changed&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;the lane re-renders and shows the &quot;Vrátit zpět&quot; undo toast&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="850" y="640" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="we1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="W1" target="W3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="we2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="W2" target="W3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="we3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="W3" target="W4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="we4" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="W4" target="W5"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="690" y="555" /></Array></mxGeometry></mxCell>
+        <mxCell id="we5" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="W4" target="W6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="we6" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="W6" target="W7"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="we7" value="no · UI" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="W6" target="W8"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="we8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="W5" target="W9"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="we9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="W7" target="W9"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

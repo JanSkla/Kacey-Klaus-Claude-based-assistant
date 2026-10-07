@@ -203,6 +203,9 @@ export function onServer(msg) {
          where they live. Proposals change at night and when they expire —
          nobody needs a toast for that; a rule Kacey wrote does get one. */
       if (msg.section === 'rules' || msg.section === 'proposals') refreshNight(msg.section);
+      /* The routine on concrete dates: the overrides come with the app
+         document (below); a cemented day Kacey amended comes with the month. */
+      if (msg.section === 'routine_days') refreshCalendar();
       if (msg.section !== 'proposals') applyRemoteChange(typeof msg.section === 'string' ? msg.section : null, msg.undo, msg.quiet === true);
       break;
 

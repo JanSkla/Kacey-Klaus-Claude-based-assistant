@@ -24,6 +24,14 @@
    An event can be unsure (Kacey's own flag, `tentative` in the payload): it is
    drawn dotted with a "?" before its title, and the editor settles it.
 
+   The routine under the events is the date's own, not just its weekday's: a
+   block cancelled or moved for that day is drawn hollow, one added for it
+   carries a "+", and a finished day is drawn from its cemented copy (sent with
+   the month). Tapping a block changes it for that one date; "Nemoc / volno"
+   cancels a range of days. Everything goes through /api/routine/alter — the
+   same alter() Kacey's app_routine_alter calls (routine-days.js) — except
+   amending a cemented day, which only Kacey can do.
+
    Titles come from the model and from external calendars, so every one of them
    reaches the DOM through textContent.
    ========================================================================= */
@@ -33,7 +41,9 @@ import { el, fill, hhmm as fmtMin } from '../core/el.js';
 import * as store from '../core/store.js';
 import { go, onEnter } from './router.js';
 import { say } from './toast.js';
-import { blocksFor, CATS, dayIndexOfDate } from '../views/routine.js';
+import { CATS } from '../views/routine.js';
+import { CATEGORY_KEYS } from '../core/routine-cats.js';
+import { effectiveDay, isActive, activeBlocks } from '../core/routine-day.js';
 import { openSheet, closeSheet, sheetOpen, isPhone } from './psheet.js';
 import { tasks, toggleTask, whenText } from '../views/tasks.js';
 import { bucketOf, parseDue } from '../core/due.js';
@@ -157,6 +167,124 @@ function eventsOn(date) {
 
 /** A routine block's room and teacher, "T2:C2-85 · Fischer J.", or ''. */
 function whereOf(r) { return [r.room, r.who].filter(Boolean).join(' · '); }
+
+/* ---- the routine on a date ----------------------------------------------- */
+
+/** 'čt 8. 10.' */
+function dayWord(date) {
+  var p = date.split('-').map(Number);
+  return DOW_SHORT[dowOf(date)] + ' ' + p[2] + '. ' + p[1] + '.';
+}
+
+/**
+ * One date's routine: its cemented copy once the day is over, otherwise the
+ * default week with that date's overrides, resolved by the same code the
+ * server uses. kind: 'live' (changeable here), 'cemented' (only Kacey can
+ * amend it), 'unrecorded' (before the history began — drawn as the default).
+ */
+function routineDay(date) {
+  var p = payloads[date.slice(0, 7)];
+  var r = p && p.routine;
+  var snap = r && r.days && r.days[date];
+  if (snap) {
+    return { date: date, kind: 'cemented', blocks: snap.blocks || [], stale: [],
+             altered: !!snap.altered, amended_at: snap.amended_at || null };
+  }
+  var v = effectiveDay(store.data.routine, date);
+  var today = payload && payload.today;
+  // A day just over and not fetched cemented yet is history all the same.
+  if (today && date < today) v.kind = (r && r.since && date >= r.since) ? 'cemented' : 'unrecorded';
+  return v;
+}
+
+var GONE = { cancelled: true, moved_out: true };
+var STATE_WORD = { cancelled: 'zrušeno', moved_out: 'přesunuto jinam', added: 'jen tento den', moved_in: 'přesunuto sem' };
+
+function rclass(r) {
+  return (GONE[r.state] ? '.is-cancelled' : '') + (r.src === 'added' ? '.is-added' : '') +
+    (r.overlap === 'pending' ? '.is-overlap' : '');
+}
+
+/** The block's fill and edge: hollow and dashed once it is not happening. */
+function rpaint(r, width, color) {
+  return GONE[r.state]
+    ? 'background:transparent;border-left:' + width + 'px dashed ' + color
+    : 'background:' + color + '1f;border-left:' + width + 'px solid ' + color;
+}
+
+function rmark(r) {
+  if (r.overlap === 'pending') return el('span.rmark.rmark--warn', { 'aria-hidden': 'true' }, '!');
+  if (r.src === 'added') return el('span.rmark', { 'aria-hidden': 'true' }, '+');
+  return null;
+}
+
+function rstateWord(r) {
+  var w = STATE_WORD[r.state] || '';
+  if (w && r.reason) w += ': ' + r.reason;
+  if (r.overlap === 'pending') w = (w ? w + ' · ' : '') + 'překryv, rozhodne Kacey';
+  return w;
+}
+
+/* An added block on top of a default one: the two are drawn side by side
+   ('--a' the default, '--b' the added), never one hiding the other. */
+function sideBySide(blocks) {
+  var out = {};
+  blocks.forEach(function (b, i) {
+    if (b.src !== 'added' || !b.overlap) return;
+    out[i] = '.rblock--b';
+    blocks.forEach(function (t, j) {
+      if (t.src === 'template' && isActive(t) && t.s < b.e && b.s < t.e) out[j] = '.rblock--a';
+    });
+  });
+  return out;
+}
+
+/** The routine blocks of one lane column (or the single-day lane), as buttons. */
+function routineNodes(day, b, col, narrow) {
+  var side = sideBySide(day.blocks);
+  var nodes = [];
+  day.blocks.forEach(function (r, i) {
+    if (r.e <= b.start || r.s >= b.end) return;
+    var cat = CATS[r.cat];
+    if (!cat) return;
+    var where = whereOf(r);
+    var word = rstateWord(r);
+    var name = [rmark(r), r.note || cat.label];
+    var ink = GONE[r.state] ? 'var(--ink3)' : cat.color;
+    var open = function () { openBlock(day, r, b.top(r.s), col); };
+    if (col === undefined) {
+      var tall = (r.e - r.s) >= 45;
+      nodes.push(el('button.rblock' + rclass(r) + (side[i] || '') + (tall ? '' : '.is-short'), {
+        type: 'button', title: [r.note || cat.label, where, word].filter(Boolean).join(' · '),
+        style: 'top:' + b.top(r.s) + 'px;height:' + Math.max(b.height(r.s, r.e), 18) + 'px;' + rpaint(r, 6, cat.color),
+        onclick: open
+      }, [
+        el('b', { style: 'color:' + ink }, name),
+        el('em', fmtMin(r.s) + '–' + fmtMin(r.e) + (word ? ' · ' + word : (r.note ? ' · ' + cat.label : ''))),
+        // Where and with whom — a class from the timetable. Needs ~an hour of height.
+        // Two spans, so a phone can stack them in its narrow label strip.
+        where && (r.e - r.s) >= 60
+          ? el('em.rblock__where', [r.room ? el('span', r.room) : null, r.who ? el('span', r.who) : null])
+          : null
+      ]));
+      return;
+    }
+    nodes.push(el('button.rblock.rblock--col' + rclass(r) + (side[i] || ''), {
+      type: 'button', title: [r.note || cat.label, where, word].filter(Boolean).join(' · '),
+      style: 'top:' + b.top(r.s) + 'px;height:' + Math.max(b.height(r.s, r.e), 6) + 'px;' + rpaint(r, 4, cat.color),
+      onclick: open
+    }, (r.e - r.s) >= 45 && !narrow ? [
+      el('b', { style: 'color:' + ink }, name),
+      // The room only: a column has no width for the teacher as well.
+      r.room && (r.e - r.s) >= 75 ? el('em.rblock__where', r.room) : null
+    ] : null));
+  });
+  return nodes;
+}
+
+function coveredMin(day) {
+  return activeBlocks(day).reduce(function (a, r) { return a + (r.e - r.s); }, 0);
+}
 
 /* ---- tasks in the calendar ---------------------------------------------- */
 
@@ -349,6 +477,7 @@ function markRange() {
 
 /** Point the lane at a new range without rebuilding the month grid. */
 function showRange(start, n) {
+  hideCard();
   selected = start; span = n;
   markRange(); renderSpans(); renderLane(); renderWeek();
 }
@@ -483,7 +612,12 @@ function laneFrame(b, labelled) {
 
 function renderLane() {
   if (!$('dayLane') || !payload || !selected) return;
+  /* An open editor survives the repaint (the minute tick, a store change);
+     without this it vanished under the pointer about to press its button. */
+  var editing = $('dayLane').querySelector('.eventedit');
   if (span > 1) renderMulti(); else renderDay();
+  if (editing) $('dayLane').appendChild(editing);
+  renderRoutineBar();
   fill($('routineLegend'), Object.keys(CATS).map(function (k) {
     return el('span', [el('i', { style: 'background:' + CATS[k].color }), CATS[k].label]);
   }));
@@ -504,29 +638,9 @@ function renderDay() {
 
   var nodes = laneFrame(b, true);
 
-  // the week's routine, painted underneath
-  var wIdx = dowOf(selected);
-  var blocks = blocksFor(wIdx);
-  blocks.forEach(function (r) {
-    if (r.e <= start || r.s >= end) return;
-    var cat = CATS[r.cat];
-    if (!cat) return;
-    var tall = (r.e - r.s) >= 45;
-    var where = whereOf(r);
-    nodes.push(el('div.rblock' + (tall ? '' : '.is-short'), {
-      title: where || null,
-      style: 'top:' + top(r.s) + 'px;height:' + Math.max(height(r.s, r.e), 18) + 'px;' +
-             'background:' + cat.color + '1f;border-left:6px solid ' + cat.color
-    }, [
-      el('b', { style: 'color:' + cat.color }, r.note || cat.label),
-      el('em', fmtMin(r.s) + '–' + fmtMin(r.e) + (r.note ? ' · ' + cat.label : '')),
-      // Where and with whom — a class from the timetable. Needs ~an hour of height.
-      // Two spans, so a phone can stack them in its narrow label strip.
-      where && (r.e - r.s) >= 60
-        ? el('em.rblock__where', [r.room ? el('span', r.room) : null, r.who ? el('span', r.who) : null])
-        : null
-    ]));
-  });
+  // the date's routine, painted underneath
+  var rday = routineDay(selected);
+  nodes = nodes.concat(routineNodes(rday, b));
 
   // the day's real events, on top
   var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
@@ -577,7 +691,7 @@ function renderDay() {
         .filter(Boolean).join(' · ') + (isToday ? ' · teď ' + fmtMin(nowMin) : '')
     : 'žádné události';
 
-  var covered = blocks.reduce(function (a, r) { return a + (r.e - r.s); }, 0);
+  var covered = coveredMin(rday);
   $('routineHours').textContent = 'Rutina pokrývá ' + (Math.round(covered / 6) / 10) +
     ' h z tohoto dne. Události kalendáře sedí nahoře.';
 }
@@ -629,23 +743,9 @@ function renderMulti() {
       dayTasks.map(function (x) { return dayTaskChip(x, 'colhead__allday'); })
     ]));
 
-    var nodes = [];
-    blocksFor(wd).forEach(function (r) {
-      if (r.e <= b.start || r.s >= b.end) return;
-      var cat = CATS[r.cat];
-      if (!cat) return;
-      covered += r.e - r.s;
-      var where = whereOf(r);
-      nodes.push(el('div.rblock.rblock--col', {
-        title: [r.note || cat.label, where].filter(Boolean).join(' · '),
-        style: 'top:' + top(r.s) + 'px;height:' + Math.max(height(r.s, r.e), 6) + 'px;' +
-               'background:' + cat.color + '1f;border-left:4px solid ' + cat.color
-      }, (r.e - r.s) >= 45 && !narrow ? [
-        el('b', { style: 'color:' + cat.color }, r.note || cat.label),
-        // The room only: a column has no width for the teacher as well.
-        r.room && (r.e - r.s) >= 75 ? el('em.rblock__where', r.room) : null
-      ] : null));
-    });
+    var rday = routineDay(date);
+    covered += coveredMin(rday);
+    var nodes = routineNodes(rday, b, ci, narrow);
 
     timed.forEach(function (e) {
       var s = minutesOf(e.starts_at);
@@ -777,6 +877,283 @@ async function writeEvent(id, action, body) {
   }
 }
 
+/* ---- changing the routine for one date ------------------------------------
+   The same operations Kacey has (app_routine_alter), through the same server
+   function. The default week is not touched; the planner still owns that. */
+
+/** The card over the lane (a bottom sheet on a phone), the event editor's. */
+function showCard(children, topPx, col) {
+  var lane = $('dayLane');
+  var existing = lane.querySelector('.eventedit');
+  if (existing) existing.remove();
+  var place = 'top:' + (topPx || 0) + 'px';
+  if (span > 1) place += ';left:clamp(0px, calc(' + ((col || 0) / span * 100) + '%), calc(100% - 340px))';
+  var box = el('div.card.card--pad.eventedit' + (span > 1 ? '.eventedit--col' : ''), { style: place }, children);
+  lane.appendChild(box);
+  if (isPhone()) openSheet(box, function () { box.remove(); });
+  return box;
+}
+
+function hideCard() {
+  var box = $('dayLane') && $('dayLane').querySelector('.eventedit');
+  if (!box) return;
+  if (sheetOpen(box)) closeSheet(); else box.remove();
+}
+
+function button(cls, label, fn) {
+  return el('button.btn.btn--sm' + (cls || ''), { type: 'button', onclick: fn }, label);
+}
+
+/* Sends a message as if typed — protocol.js's submit(), handed in by app.js. */
+var sendToKacey = null;
+
+/** Ask Kacey in the conversation — the overlap decision is hers (an Opus turn). */
+function askKacey(text) {
+  if (!sendToKacey) return;
+  hideCard();
+  go('main');
+  sendToKacey(text);
+}
+
+function overlapQuestion(day, r) {
+  var added = r.src === 'added' ? [r] : day.blocks.filter(function (x) {
+    return x.src === 'added' && x.overlap === 'pending' && x.s < r.e && r.s < x.e;
+  });
+  var under = day.blocks.filter(function (x) {
+    return x.src === 'template' && isActive(x) && added.some(function (a) { return x.s < a.e && a.s < x.e; });
+  });
+  var word = function (x) { return (x.note || CATS[x.cat].label) + ' ' + fmtMin(x.s) + '–' + fmtMin(x.e); };
+  return 'V rutině se ' + dayWord(day.date) + ' překrývá ' + added.map(word).join(', ') +
+    ' (přidané jen na ten den' + (added[0] && added[0].override_id ? ', #' + added[0].override_id : '') + ') s výchozím ' +
+    under.map(word).join(', ') + '. Rozhodni, jestli ten výchozí blok na ten den zrušit, nebo nechat obojí.';
+}
+
+async function alterRoutine(op) {
+  try {
+    var res = await fetch('/api/routine/alter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(op)
+    });
+    var out = await res.json();
+    if (!res.ok || !out.ok) throw new Error(out.error || ('HTTP ' + res.status));
+    hideCard();
+    await store.load();                // the overrides are in the app document; load() repaints
+    var warn = (out.warnings || [])[0];
+    say(out.summary, warn ? {
+      label: 'Zeptat se Kacey',
+      run: function () { askKacey('Rozhodni prosím o překryvu v rutině: ' + warn); }
+    } : null);
+    return out;
+  } catch (err) {
+    say('Nepovedlo se: ' + err.message);
+    return null;
+  }
+}
+
+/** The week's dates from `date` on that are still live — where a block can move to. */
+function liveWeek(date) {
+  var out = [];
+  for (var i = 0; i < 7; i++) {
+    var d = addDays(mondayOf(date), i);
+    if (!payload || d >= payload.today) out.push(d);
+  }
+  return out;
+}
+
+function timeInput(mins) {
+  return el('input.input.input--when', { type: 'time', step: '900', value: fmtMin(Math.min(mins, 1439)) });
+}
+
+/** A tapped routine block: what can change about it on this one date. */
+function openBlock(day, r, topPx, col) {
+  var cat = CATS[r.cat];
+  var word = rstateWord(r);
+  var parts = [
+    el('p.label', [(r.note || cat.label).toUpperCase(), fmtMin(r.s) + '–' + fmtMin(r.e), dayWord(day.date).toUpperCase()].join(' · ')),
+    word ? el('p.muted', word) : null
+  ];
+  var acts = [];
+
+  if (day.kind !== 'live') {
+    parts.push(el('p.muted-3.eventedit__note', day.kind === 'cemented'
+      ? 'Tento den je zapsaný v historii' + (day.amended_at ? ' (opravený přes Kacey)' : '') +
+        '. Změnit ho může jen Kacey — řekni jí to v konverzaci, třeba „ten den jsem byl nemocný“.'
+      : 'Tento den proběhl dřív, než se rutina začala zapisovat do historie.'));
+  } else if (r.src === 'template' && isActive(r)) {
+    var reason = el('input.input', { type: 'text', maxlength: '120', placeholder: 'Proč (nepovinné) — např. nemoc' });
+    var to = el('select.select', liveWeek(day.date).map(function (d) {
+      return el('option', { value: d, selected: d === day.date }, dayWord(d));
+    }));
+    var from = timeInput(r.s), until = timeInput(r.e);
+    // Moving the start keeps the length, like dragging the block would.
+    from.addEventListener('change', function () {
+      var p = from.value.split(':').map(Number);
+      if (p.length === 2) until.value = fmtMin(Math.min(1439, p[0] * 60 + p[1] + (r.e - r.s)));
+    });
+    var move = el('div', { hidden: true }, [
+      el('div.row', [to, from, until,
+        button('.btn--accent', 'Přesunout', function () {
+          alterRoutine({ op: 'move', date: day.date, from: fmtMin(r.s), to: fmtMin(r.e), category: r.cat,
+                         to_date: to.value, new_from: from.value, new_to: until.value, reason: reason.value.trim() || undefined });
+        })])
+    ]);
+    parts.push(reason, move);
+    acts.push(button('.btn--accent', 'Zrušit jen tento den', function () {
+      alterRoutine({ op: 'cancel', date: day.date, from: fmtMin(r.s), to: fmtMin(r.e), category: r.cat, reason: reason.value.trim() || undefined });
+    }));
+    acts.push(button('', 'Přesunout…', function () { move.hidden = !move.hidden; }));
+    if (r.overlap === 'pending') acts.push(button('', 'Zeptat se Kacey', function () { askKacey(overlapQuestion(day, r)); }));
+  } else if (GONE[r.state]) {
+    acts.push(button('.btn--accent', r.state === 'moved_out' ? 'Vrátit přesun' : 'Vrátit jen tento den', function () {
+      alterRoutine({ op: 'remove', id: r.override_id });
+    }));
+    if (r.group_kind === 'range' && r.group_id) {
+      acts.push(button('', 'Vrátit všechny dny', function () { alterRoutine({ op: 'reset', group_id: r.group_id }); }));
+    }
+  } else if (r.src === 'added') {
+    if (r.overlap === 'pending') {
+      parts.push(el('p.muted-3', 'Leží přes výchozí blok. Jestli ho na tento den zrušit, rozhodne Kacey — nebo nech obojí.'));
+      acts.push(button('.btn--accent', 'Zeptat se Kacey', function () { askKacey(overlapQuestion(day, r)); }));
+      acts.push(button('', 'Nechat obojí', function () { alterRoutine({ op: 'keep_overlap', id: r.override_id }); }));
+    }
+    acts.push(button('.btn--dangerghost', r.state === 'moved_in' ? 'Vrátit přesun' : 'Odebrat', function () {
+      alterRoutine({ op: 'remove', id: r.override_id });
+    }));
+  }
+  acts.push(button('', 'Zavřít', hideCard));
+  parts.push(el('div.row', acts));
+  showCard(parts, topPx, col);
+}
+
+/** "+ Blok": something on this one date only — the default week stays. */
+function openAdd(date) {
+  var pick = 'free';
+  var cats = el('div.catpick', { role: 'group', 'aria-label': 'Kategorie' });
+  function paintCats() {
+    fill(cats, CATEGORY_KEYS.map(function (k) {
+      return el('button.catpick__opt', {
+        type: 'button', 'aria-pressed': String(pick === k), style: '--cat:' + CATS[k].color,
+        onclick: function () { pick = k; paintCats(); }
+      }, [el('span.catpick__sw', { 'aria-hidden': 'true' }), CATS[k].label]);
+    }));
+  }
+  paintCats();
+  var now = new Date();
+  var start = date === (payload && payload.today) ? Math.min(22 * 60, (now.getHours() + 1) * 60) : 10 * 60;
+  var from = timeInput(start), to = timeInput(start + 60);
+  var note = el('input.input', { type: 'text', maxlength: '80', placeholder: 'Název (nepovinné) — např. Doktor' });
+  showCard([
+    el('p.label', 'PŘIDAT JEN NA ' + dayWord(date).toUpperCase()),
+    cats,
+    el('div.row', [from, to]),
+    note,
+    el('div.row', [
+      button('.btn--accent', 'Přidat', function () {
+        alterRoutine({ op: 'add', date: date, from: from.value, to: to.value, category: pick, note: note.value.trim() || undefined });
+      }),
+      button('', 'Zavřít', hideCard)
+    ])
+  ], $('laneWrap').scrollTop);
+}
+
+/** The bar over the lane: what the shown days' routine is, and what can be done. */
+function renderRoutineBar() {
+  if (!$('routineBar') || !payload || !selected) return;
+  var days = rangeDays().map(routineDay);
+  var stale = days.reduce(function (a, d) { return a + (d.stale || []).length; }, 0);
+  var text, cls = '';
+  if (span === 1) {
+    var d = days[0];
+    var changes = d.blocks.filter(function (x) { return x.state !== 'template'; }).length;
+    if (d.kind === 'cemented') text = 'Zapsáno v historii' + (d.altered ? ' · den se lišil od výchozí rutiny' : ' · výchozí rutina') + (d.amended_at ? ' · opraveno přes Kacey' : '');
+    else if (d.kind === 'unrecorded') text = 'Výchozí rutina · den před začátkem historie';
+    else if (d.altered) { text = 'Upraveno jen pro tento den · ' + changes + (changes === 1 ? ' změna' : changes < 5 ? ' změny' : ' změn'); cls = 'is-altered'; }
+    else text = 'Výchozí rutina';
+  } else {
+    var n = days.filter(function (x) { return x.altered; }).length;
+    text = n ? n + (n === 1 ? ' upravený den' : n < 5 ? ' upravené dny' : ' upravených dní') : 'Výchozí rutina ve všech dnech';
+    if (n) cls = 'is-altered';
+  }
+  if (stale) { text += ' · ⚠ ' + stale + ' neplatné (výchozí týden se mezitím změnil) — Obnovit výchozí je smaže'; cls = 'is-stale'; }
+  $('routineState').textContent = text;
+  $('routineState').className = 'routinebar__state' + (cls ? ' ' + cls : '');
+  var live = span === 1 && days[0].kind === 'live';
+  $('routineAdd').hidden = !live;
+  $('routineReset').hidden = !(live && days[0].altered);
+}
+
+/* ---- sick days: the routine cancelled over a range of dates ---------------- */
+
+var sickCats = [];
+
+function sickRange() {
+  var a = $('sickFrom').value, b = $('sickTo').value || a;
+  if (!a) return null;
+  if (b < a) { var t = a; a = b; b = t; }
+  var out = [];
+  for (var d = a; d <= b && out.length < 62; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+function renderSick() {
+  fill($('sickCats'), CATEGORY_KEYS.map(function (k) {
+    var on = sickCats.indexOf(k) !== -1;
+    return el('button.catpick__opt', {
+      type: 'button', 'aria-pressed': String(on), style: '--cat:' + CATS[k].color,
+      onclick: function () {
+        sickCats = on ? sickCats.filter(function (x) { return x !== k; }) : sickCats.concat([k]);
+        renderSick();
+      }
+    }, [el('span.catpick__sw', { 'aria-hidden': 'true' }), CATS[k].label]);
+  }));
+
+  var dates = sickRange();
+  var today = payload ? payload.today : '';
+  var text = '';
+  if (!dates) text = 'Vyber dny.';
+  else if (dates[0] < today) text = 'Minulé dny jsou zapsané v historii — ty změní jen Kacey v konverzaci. Začni dneškem nebo později.';
+  else {
+    var n = 0;
+    dates.forEach(function (d) {
+      // The default week's blocks; something added for one day stays until removed.
+      n += activeBlocks(effectiveDay(store.data.routine, d)).filter(function (x) {
+        return x.src === 'template' && (!sickCats.length || sickCats.indexOf(x.cat) !== -1);
+      }).length;
+    });
+    text = dates.length + (dates.length === 1 ? ' den' : dates.length < 5 ? ' dny' : ' dní') + ' · zruší se ' + n +
+      (n === 1 ? ' blok' : n > 1 && n < 5 ? ' bloky' : ' bloků') + '. Výchozí týden zůstane; jde to vrátit po dnech i celé.';
+  }
+  $('sickPreview').textContent = text;
+  $('sickApply').disabled = !dates || dates[0] < today;
+}
+
+function openSick(open) {
+  var sheet = $('sickPanel');
+  if (!open) { sheet.hidden = true; return; }
+  var today = payload ? payload.today : selected;
+  var from = selected && selected >= today ? selected : today;
+  $('sickFrom').value = from;
+  $('sickFrom').min = today;
+  $('sickTo').value = addDays(from, Math.max(0, span - 1));
+  $('sickTo').min = today;
+  $('sickReason').value = 'nemoc';
+  sickCats = [];
+  renderSick();
+  sheet.hidden = false;
+  $('sickFrom').focus();
+}
+
+async function applySick() {
+  var dates = sickRange();
+  if (!dates) return;
+  var out = await alterRoutine({
+    op: 'cancel_range', from_date: dates[0], to_date: dates[dates.length - 1],
+    categories: sickCats.length ? sickCats : undefined, reason: $('sickReason').value.trim() || undefined
+  });
+  if (out) openSick(false);
+}
+
 /* ---- the "Today" panel on the main view --------------------------------- */
 
 export function renderTodayAgenda() {
@@ -839,6 +1216,7 @@ export function todaySummary() {
 
 /** Move the range; follow it to another month when it starts in one. */
 function moveTo(start, n) {
+  hideCard();
   selected = start; span = n;
   if (start.slice(0, 7) !== month) showMonth(start.slice(0, 7));
   else render();
@@ -855,7 +1233,8 @@ function render() {
 
 /* ---- wiring ------------------------------------------------------------- */
 
-export function initCalendar() {
+export function initCalendar(opts) {
+  if (opts && typeof opts.ask === 'function') sendToKacey = opts.ask;
   $('calPrev').addEventListener('click', function () { showMonth(shiftMonth(month, -1)); });
   $('calNext').addEventListener('click', function () { showMonth(shiftMonth(month, 1)); });
   $('calToday').addEventListener('click', function () {
@@ -889,6 +1268,26 @@ export function initCalendar() {
   $('calReloadM').addEventListener('click', function () { refreshCalendar(); say('Kalendář načten znovu.'); });
   $('calReload').addEventListener('click', refreshCalendar);
   $('calSync').addEventListener('click', function () { refreshCalendar(); say('Kalendář načten znovu.'); });
+
+  /* The routine on the shown date: add for the day, sick days, back to default. */
+  $('routineAdd').addEventListener('click', function () { openAdd(selected); });
+  $('routineReset').addEventListener('click', function () { alterRoutine({ op: 'reset', dates: [selected] }); });
+  $('routineSick').addEventListener('click', function () { openSick(true); });
+  var sick = $('sickPanel');
+  $('sickClose').addEventListener('click', function () { openSick(false); });
+  $('sickCancel').addEventListener('click', function () { openSick(false); });
+  $('sickApply').addEventListener('click', applySick);
+  $('sickFrom').addEventListener('input', renderSick);
+  $('sickTo').addEventListener('input', renderSick);
+  sick.addEventListener('click', function (ev) { if (ev.target === sick) openSick(false); });
+  // Capture phase, like the other sheets: Escape closes this, not the conversation.
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && !sick.hidden) {
+      openSick(false);
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+    }
+  }, true);
 
   onEnter('calendar', function () { if (!payload) refreshCalendar(); else render(); });
   store.onChange(function () { if (payload) render(); });

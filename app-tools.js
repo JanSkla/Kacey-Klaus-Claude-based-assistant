@@ -28,6 +28,7 @@ import { CATEGORY_KEYS } from './public/js/core/routine-cats.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
 import * as notifications from './notifications.js';
+import * as routineDays from './routine-days.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -138,6 +139,12 @@ const appRead = tool(
         `ROUTINE (vstávání ${hhmm(doc.routine.wake)}, spánek ${hhmm(doc.routine.sleep)}):\n` +
         describeRoutine(doc.routine),
       );
+      /* The week as it will really be: the default plus each date's changes,
+         and the recent past where it diverged (cemented, amendable). #n are
+         the ids app_routine_alter's remove / keep_overlap take. */
+      let days;
+      try { days = routineDays.describeDays(); } catch (err) { days = `(nejde spočítat: ${err.message})`; }
+      parts.push('ROUTINE DAYS (konkrétní dny; posledních 7 jen upravené, dalších 14 všechny):\n' + days);
     }
     if (section === 'all' || section === 'tasks') {
       parts.push('TASKS:\n' + (doc.tasks.length
@@ -312,6 +319,57 @@ const routineHours = tool(
     appstate.setSection('routine', next);
     onWrite('routine', before);
     return ok(`Vstávání ${hhmm(next.wake)}, spánek ${hhmm(next.sleep)}.`);
+  },
+);
+
+/* One date's routine, not the default week (routine-days.js). The calendar's
+   buttons call the same alter() with the same operations; the one thing only
+   this tool can do is amend a day already cemented in history. */
+const routineAlter = tool(
+  'app_routine_alter',
+  'Změň rutinu jen pro konkrétní den (nebo dny) — výchozí týden zůstane, jak je. ' +
+    'Na nemoc, zrušený trénink, posunutou posilovnu, jednorázový blok. Stav konkrétních dnů a id změn (#n) vrátí app_read (ROUTINE DAYS). ' +
+    'op: "cancel" (date + from/to bloku, volitelně category; bez from/to = celý den), ' +
+    '"cancel_range" (from_date–to_date, volitelně categories, reason — dny nemoci), ' +
+    '"add" (date, from, to, category, note…), ' +
+    '"move" (date + from/to původního bloku, new_from, volitelně new_to a to_date v témž týdnu), ' +
+    '"reset" (dates nebo from_date–to_date nebo group_id — vrátí dny na výchozí rutinu), ' +
+    '"remove" (id — odebere jednu změnu, u přesunu celý přesun), ' +
+    '"keep_overlap" (id přidaného bloku — překryv s výchozím blokem nechat, oba platí). ' +
+    'Minulé dny jsou zapsané v historii; měnit je smíš jen ty, když pán řekne, že na to zapomněl. ' +
+    'Když přidaný nebo přesunutý blok překryje výchozí blok, oba zůstanou vedle sebe a vrátí se ⚠: ' +
+    'rozhodni sama, jestli výchozí blok zrušit (cancel), nebo nechat obojí (keep_overlap) — když to není jasné, zeptej se.',
+  {
+    op: z.enum(['cancel', 'cancel_range', 'add', 'move', 'reset', 'remove', 'keep_overlap']),
+    date: z.string().optional().describe('Den "YYYY-MM-DD".'),
+    from: z.string().optional().describe('Začátek "HH:MM" (u cancel/move: blok, kterého se to týká).'),
+    to: z.string().optional().describe('Konec "HH:MM".'),
+    category: z.enum(CATEGORIES).optional(),
+    from_date: z.string().optional().describe('Začátek rozsahu dnů "YYYY-MM-DD".'),
+    to_date: z.string().optional().describe('Konec rozsahu (včetně), nebo u move cílový den.'),
+    categories: z.array(z.enum(CATEGORIES)).optional().describe('cancel_range: jen tyto kategorie; vynech = všechno.'),
+    new_from: z.string().optional().describe('move: nový začátek "HH:MM".'),
+    new_to: z.string().optional().describe('move: nový konec; vynech = stejná délka.'),
+    dates: z.array(z.string()).optional().describe('reset: konkrétní dny.'),
+    group_id: z.number().int().optional().describe('reset: celá skupina (přesun, dny nemoci).'),
+    id: z.number().int().optional().describe('remove / keep_overlap: id změny (#n).'),
+    note: z.string().max(80).optional(),
+    room: z.string().max(80).optional(),
+    who: z.string().max(80).optional(),
+    reason: z.string().max(120).optional().describe('Proč, krátce: "nemoc", "doktor".'),
+  },
+  async (args) => {
+    const input = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined && v !== null));
+    /* move's target day travels as to_date in the shared schema too. */
+    let out;
+    try {
+      out = routineDays.alter(input, { origin: 'kacey' });
+    } catch (err) {
+      return fail(`${err.message}${/Nic se nezměnilo/.test(err.message) ? '' : ' Nic se nezměnilo.'}`);
+    }
+    onWrite('routine_days');
+    const views = out.dates.slice(0, 7).map((d) => routineDays.describeDay(routineDays.dayView(d)));
+    return ok([out.summary, ...out.warnings, '', 'Teď:', ...views].join('\n'));
   },
 );
 
@@ -675,14 +733,14 @@ const notificationsRead = tool(
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
-  appRead, routinePaint, routineErase, routineHours, taskAdd, taskUpdate, journalAdd,
+  appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, journalAdd,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative,
   notificationsRead,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
 export const APP_TOOL_NAMES = [
-  'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours',
+  'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours', 'app_routine_alter',
   'app_task_add', 'app_task_update', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_notifications',
@@ -698,7 +756,8 @@ export function makeAppServer() {
       'Nejisté události kalendáře označuje app_calendar_tentative. ' +
       'Oznámení z telefonu a zprávy z Instagramu čte app_notifications. ' +
       'Rutina je tvar běžného týdne (opakující se bloky), NE konkrétní události — ' +
-      'ty patří do kalendáře přes klaus-memory. Před úpravou si přečti stav přes app_read. ' +
+      'ty patří do kalendáře přes klaus-memory. Změna jen pro konkrétní den (nemoc, zrušený nebo posunutý trénink) ' +
+      'je app_routine_alter, ne app_routine_paint — výchozí týden zůstane. Před úpravou si přečti stav přes app_read. ' +
       'Když uživatel pošle obrázek rozvrhu, přečti ho a natři přes app_routine_paint ' +
       's replace: true; u každé hodiny vyplň note (předmět), room (místnost) a who (vyučující).',
     tools: APP_TOOLS,

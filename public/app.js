@@ -158,7 +158,9 @@ initTheme();           // restores the hue, wires the presets, paints once
    point — store.load() lands later and re-renders through its subscribers, so
    nothing here has to wait for the network. */
 initRoutine();
-initCalendar();
+/* The calendar asks Kacey about a routine overlap through the conversation;
+   handed in, so calendar.js and protocol.js do not import each other. */
+initCalendar({ ask: submit });
 initTasks();
 initJournal(askAside);
 initLibrary();

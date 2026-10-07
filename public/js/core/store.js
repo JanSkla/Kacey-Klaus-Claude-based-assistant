@@ -25,7 +25,9 @@ var ready = false;
 export var data = {
   tasks: [],
   journal: { entries: [] },
-  routine: { grid: {}, notes: {}, info: {}, wake: 420, sleep: 1350 },
+  /* overrides: read-only, from the server — this date's divergences from the
+     default week (core/routine-day.js); changed through /api/routine/alter. */
+  routine: { grid: {}, notes: {}, info: {}, wake: 420, sleep: 1350, overrides: [] },
   timers: { presets: [] },
   checklists: {},
   /* Read-only, from the server: the tools refused by configuration. Not a
@@ -138,7 +140,7 @@ export async function applyRemoteChange(section, undo, quiet) {
   if (quiet) return;
 
   var names = {
-    routine: 'Rutina', tasks: 'Úkoly', journal: 'Deník',
+    routine: 'Rutina', routine_days: 'Rutina dne', tasks: 'Úkoly', journal: 'Deník',
     settings: 'Nastavení', timers: 'Časovače', checklists: 'Seznamy', rules: 'Pravidla'
   };
   var label = names[section] || 'Aplikace';

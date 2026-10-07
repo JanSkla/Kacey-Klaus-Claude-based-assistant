@@ -390,6 +390,13 @@
       <button type="button" class="btn btn--sm push" id="openRoutine">Upravit rutinu</button>
     </div>
     <div class="legend" id="routineLegend"></div>
+    <!-- This date's routine: changed only for this day, cemented, or the default. -->
+    <div class="routinebar" id="routineBar">
+      <span class="routinebar__state" id="routineState"></span>
+      <button type="button" class="btn btn--sm push" id="routineAdd">+ Blok</button>
+      <button type="button" class="btn btn--sm" id="routineSick">Nemoc / volno…</button>
+      <button type="button" class="btn btn--sm" id="routineReset" hidden>Obnovit výchozí</button>
+    </div>
     <div class="card__body card__body--scroll lanewrap" id="laneWrap">
       <div class="colheads" id="dayCols" hidden></div>
       <div class="alldaystrip" id="dayAllDay"></div>
@@ -1047,6 +1054,38 @@
 
     <div class="sheet__foot">
       <button type="button" class="btn btn--accent push" id="routineDone">Hotovo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SICK DAYS — the routine cancelled over a range of dates.
+     The default week stays; each day gets a whole-day cancel.
+     ============================================================ -->
+<div class="sheet" id="sickPanel" hidden>
+  <div class="sheet__box" role="dialog" aria-modal="true" aria-labelledby="sickTitle">
+    <div class="sheet__head">
+      <h2 class="sheet__title" id="sickTitle">Nemoc / volno</h2>
+      <span class="muted">rutina jen v těchto dnech</span>
+      <button type="button" class="sheet__close push" id="sickClose" aria-label="Zavřít">×</button>
+    </div>
+    <div class="sheet__body sickform">
+      <div class="row">
+        <label class="field"><span class="label">OD</span><input class="input input--when" type="date" id="sickFrom"></label>
+        <label class="field"><span class="label">DO (VČETNĚ)</span><input class="input input--when" type="date" id="sickTo"></label>
+      </div>
+      <div class="field">
+        <span class="label">CO ZRUŠIT · nic vybráno = všechno</span>
+        <div class="catpick" id="sickCats" role="group" aria-label="Kategorie"></div>
+      </div>
+      <label class="field"><span class="label">PROČ</span>
+        <input class="input" type="text" id="sickReason" maxlength="120" value="nemoc">
+      </label>
+      <p class="muted-3" id="sickPreview"></p>
+    </div>
+    <div class="sheet__foot">
+      <button type="button" class="btn" id="sickCancel">Nechat být</button>
+      <button type="button" class="btn btn--accent push" id="sickApply">Zrušit rutinu v těchto dnech</button>
     </div>
   </div>
 </div>

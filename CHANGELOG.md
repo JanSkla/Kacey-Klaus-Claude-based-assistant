@@ -19,6 +19,36 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**The routine on concrete dates**
+- The weekly routine is now the default week, and a single date can diverge
+  from it: a run cancelled while sick, the gym moved to the evening, a one-off
+  block, a range of sick days. The default week is untouched; each change is a
+  row in `kacey_routine_override` for that date ([routine-days.js](routine-days.js),
+  [public/js/core/routine-day.js](public/js/core/routine-day.js),
+  [docs/routine-divergence.drawio](docs/routine-divergence.drawio)).
+- **Finished days are cemented.** At 04:00 after a day the night tick writes
+  what the routine actually was that day into `kacey_routine_day`, and the
+  default week can no longer change it. A server that was off catches up at its
+  next tick. History starts on the first day this version runs.
+- **The calendar** draws each date's own routine (cancelled blocks hollow and
+  struck, one-off blocks with a "+"), and a tap changes a block for that day:
+  cancel, move within the week, undo. **+ Blok**, **Nemoc / volno…** (cancel a
+  range of days, all or chosen categories) and **Obnovit výchozí** sit above the
+  lane. Past days are read-only there.
+- **Kacey** gets `app_routine_alter` with the same operations (cancel,
+  cancel_range, add, move, reset, remove, keep_overlap), and `app_read` shows
+  the days around today with their changes. She alone can amend a day already
+  in history, when you tell her you forgot.
+- A block added on top of a default one is drawn **beside** it, never hiding
+  it. Whether the default one goes is Kacey's call: she decides in the turn, or
+  the calendar's "Zeptat se Kacey" asks her.
+- The night run's rules follow the date: no gym-bag reminder for a cancelled
+  gym, and the reminder for a moved one follows it.
+- New API: `GET /api/routine/days?from&to`, `POST /api/routine/alter`;
+  `/api/calendar` carries the month's cemented days (`routine`), `/api/app`'s
+  routine its overrides. New tables `kacey_routine_override`, `kacey_routine_day`
+  (created on boot; nothing to migrate). New test `test/routine-days.mjs`.
+
 **The bedside screen as a second monitor**
 - A new switch in the Controller, **Druhý monitor**, turns kaceybody's panel
   into a second monitor for the PC. Apollo on the PC adds a virtual display for

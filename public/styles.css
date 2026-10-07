@@ -588,6 +588,35 @@ button.task__due.is-empty { color: var(--ink3); }
 .rblock em.rblock__where { color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rblock em.rblock__where span + span::before { content: " · "; }
 .rblock--col em.rblock__where { font-size: 11px; }
+/* A routine block is a button: tapping it shows what can change on that one date. */
+button.rblock { font: inherit; color: var(--ink); text-align: left; cursor: pointer; border: 0; }
+button.rblock:hover { background-color: var(--l2); }
+/* The date diverges from its default week (core/routine-day.js). Cancelled or
+   moved away: hollow, the edge dashed (inline, in the category colour), the
+   name struck. Added for the day only: a "+" before the name. On top of a
+   default block: the two split the label strip side by side, and a warn "!"
+   stays until Kacey decides whether the default one goes. */
+.rblock.is-cancelled { outline: 1px dashed var(--line2); outline-offset: -1px; }
+.rblock.is-cancelled b { text-decoration: line-through; }
+.rmark {
+  display: inline-grid; place-items: center; width: 13px; height: 13px; margin-right: 5px; vertical-align: -1px;
+  border: 1px solid currentColor; font-size: 10px; font-weight: 600; line-height: 1;
+}
+.rmark--warn { border-color: var(--warn); color: var(--warn); }
+.lane { --rstrip: 118px; }
+.rblock--a { right: auto; width: calc(var(--rstrip) / 2); }
+.rblock--b { left: calc(var(--rstrip) / 2); }
+.rblock--col.rblock--a { width: 50%; }
+.rblock--col.rblock--b { left: 50%; }
+/* The selected date's routine: default, changed for the day, or cemented. */
+.routinebar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.routinebar__state { font-size: 13px; color: var(--ink2); }
+.routinebar__state.is-altered { color: var(--acc); }
+.routinebar__state.is-stale { color: var(--warn); }
+.sickform > * + * { margin-top: 14px; }
+.sickform .row .field { flex: 1 1 160px; }
+.eventedit .catpick { margin-top: 8px; }
+.eventedit .input + .input, .eventedit .row + .input { margin-top: 8px; }
 .eblock {
   position: absolute; left: 118px; right: 10px; overflow: hidden; padding: 8px 12px;
   background: var(--l2); border: 1px solid var(--line); box-shadow: 0 2px 6px rgb(0 0 0 / .35);
@@ -1423,6 +1452,12 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .eblock--col p { font-size: 10px; -webkit-line-clamp: 3; }
   .rblock--col { padding: 2px 3px 0 6px; }
   .rblock--col b { width: auto; font-size: 10px; }
+  /* Side by side halves of the 92px label strip; their text drops the 74px width. */
+  .lane { --rstrip: 92px; }
+  .rblock--a b, .rblock--a em, .rblock--b b, .rblock--b em { width: auto; }
+  .routinebar { padding: 0 12px 8px; border: 0; }
+  .routinebar__state { flex: 1 1 100%; font-size: 12px; }
+  .routinebar .btn { min-height: 44px; margin-left: 0; }
 
   /* Renaming an event: a sheet, buttons stacked. */
   .eventedit.is-psheet-open { padding: 14px 16px 24px; gap: 10px; box-shadow: 0 -2px 6px rgb(0 0 0 / .5); }

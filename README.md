@@ -295,6 +295,10 @@ HTTP:
 - `GET /api/rules` · `PUT /api/rules/sets/:id|new` · `DELETE /api/rules/sets/:id` ·
   `PUT /api/rules/:id|new` · `DELETE /api/rules/:id` · `POST /api/rules/preview`
   → the night routine's rules ([docs/DREAM.md §8](docs/DREAM.md#8-rules))
+- `GET /api/routine/days?from=YYYY-MM-DD&to=` → each date's routine (≤62): `kind` live | cemented | unrecorded, its blocks with their state
+  (template, cancelled, moved_out, added, moved_in), stale overrides · `POST /api/routine/alter { op: cancel|cancel_range|add|move|reset|remove|keep_overlap, … }`
+  → changes the routine for concrete dates, never the default week ([routine-days.js](routine-days.js)); a cemented day answers **409** (only
+  Kacey's `app_routine_alter` may amend it). `/api/calendar` carries the month's cemented days as `routine: { since, days }`
 - `POST /api/night/run { date?, force?, wait? }` → a night run by hand, for testing
   (`npm run night:run`, `-- --force` to redo a done day). Not a tool: the persona never gets it.
 - `GET /api/night/runs` → recent runs with their reports
