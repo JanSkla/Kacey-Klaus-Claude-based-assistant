@@ -286,7 +286,7 @@ body[data-view="morning"] .sidenav, body[data-view="proposals"] .sidenav { displ
   .view--home > .col--rail { grid-column: 1; grid-row: 1; overflow: visible; }
   .view--home > .col--stack { display: contents; }
   .view--home > .col--stack > .card:first-child { grid-column: 1; grid-row: 2; min-height: 0; }
-  .view--home > .col--stack > .card:last-child { grid-column: 1; grid-row: 3; min-height: 0; }
+  .view--home > .col--stack > .card + .card { grid-column: 1; grid-row: 3; min-height: 0; }
   .view--home > .col--chat { grid-column: 2; grid-row: 1 / -1; }
   .view--home .nextcard {
     display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; align-items: center;
@@ -1680,7 +1680,6 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .nextcard__text .muted { margin: 0; }
   .nextcard__label { display: block; font-size: 13px; color: var(--acc); white-space: nowrap; }
   .nextcard .btn--block { display: none; margin: 0 14px 14px; width: calc(100% - 28px); }
-  .view[data-view="main"][data-today="open"] .nextcard .btn--block { display: flex; }
   .view[data-view="main"] .col--stack .card__body--scroll { overflow: visible; }
 
   .view[data-view="main"] .chatbox { flex: 1 1 auto; min-height: 0; background: none; border: 0; }
@@ -1817,7 +1816,7 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
      ===================================================================== */
   .view[data-view="tasks"] { padding-bottom: 0; }
   .view[data-view="tasks"] > .col--rail { order: 0; }
-  .view[data-view="tasks"] > .card { order: 1; flex: 1 0 auto; background: none; border: 0; }
+  .view[data-view="tasks"] > .card:not(.psheet) { order: 1; flex: 1 0 auto; background: none; border: 0; }
   .view[data-view="tasks"] > .card > .card__head { display: none; }
   .view[data-view="tasks"] .card--pad { display: grid; grid-template-columns: 1fr auto; align-items: baseline; padding: 14px; }
   .view[data-view="tasks"] .card--pad .card__title { font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--ink3); }
@@ -2471,4 +2470,68 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
 
   /* morning */
   .morning__check .segbar__seg { height: 6px; }
+}
+
+/* ==== Kacey Phone: today panel, task dock, Termín sheet (2026-10-08) ================== */
+@media (max-width: 760px) {
+  /* 2a: the today panel hangs under "next up" as one panel */
+  .nextcard .btn--block { display: none; }
+  .view[data-view="main"][data-today="open"] > .col--stack {
+    margin: 0 12px; padding: 0; gap: 0;
+    background: var(--l1); border: 1px solid var(--line); border-top: 0;
+  }
+  .view[data-view="main"] > .col--stack > .card { background: none; border: 0; }
+  .view[data-view="main"] > .col--stack .card__head { padding: 10px 14px 4px; border: 0; }
+  .view[data-view="main"] > .col--stack > .card + .card .card__head { padding-top: 12px; }
+  .view[data-view="main"] > .col--stack .card__title {
+    font-size: 12px; letter-spacing: .08em; color: var(--ink3); text-transform: uppercase; font-weight: 400;
+  }
+  .view[data-view="main"] > .col--stack .card__head .link,
+  #todayTaskForm { display: none; }
+  .todayfoot { display: flex; gap: 8px; padding: 10px 14px 14px; }
+  .todayfoot .btn { flex: 1; min-height: 44px; font-size: 14px; background: var(--l2); border: 1px solid var(--line2); }
+  #todayAgenda .rowbtn {
+    display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 4px 14px;
+    border: 0; border-left: 4px solid transparent;
+  }
+  #todayAgenda .rowbtn__time { font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; }
+  #todayAgenda .rowbtn__title { flex: 1; min-width: 0; margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #todayAgenda .rowbtn__meta { display: none; }
+  #todayAgenda .rowbtn.is-now { background: var(--l2); border-left-color: var(--acc); }
+  #todayAgenda .rowbtn.is-now .rowbtn__title { font-size: 14px; font-weight: 600; }
+  #todayTasks .task { min-height: 48px; padding: 6px 14px; gap: 12px; border-bottom: 0; border-top: 1px solid #2e2e2e; }
+
+  /* 3c: the task dock */
+  .view[data-view="tasks"] .taskdock {
+    position: sticky; bottom: 0; z-index: 5; margin: 12px -12px 0;
+    display: flex; flex-direction: column; gap: 6px; padding: 8px 12px;
+    background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .taskdock__reply {
+    display: flex; align-items: baseline; gap: 8px; min-height: 44px; padding: 6px 10px;
+    text-align: left; font: inherit; font-size: 13px; line-height: 1.4;
+    background: var(--l1); border: 1px solid var(--line); color: var(--ink2); cursor: pointer;
+  }
+  .taskdock__reply[hidden] { display: none; }
+  .taskdock__reply b { flex: none; font-weight: 600; color: var(--acc); }
+  #taskReplyText { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .taskdock__chat { flex: none; color: var(--acc); }
+  .taskdock .composer { padding-left: 10px; }
+  .taskdock .composer .btn { min-height: 44px; padding: 0 14px; font-size: 14px; font-weight: 600; }
+
+  /* 3e: the Termín sheet */
+  .whensheet { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 40px; }
+  .whensheet__now, .whensheet__note { margin: 0; }
+  .whensheet__now { font-size: 13px; }
+  .whensheet__note { font-size: 12px; }
+  .whensheet__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .whensheet .field { gap: 4px; }
+  .whensheet .field > span { font-size: 12px; letter-spacing: .08em; color: var(--ink3); }
+  .whensheet .input, .whensheet .select {
+    min-height: 48px; font-size: 16px; padding: 0 10px; width: 100%;
+    background: var(--bg); border: 1px solid var(--line2); color-scheme: dark;
+  }
+  .whensheet .btn { min-height: 48px; font-size: 14px; justify-content: center; }
+  .whensheet .btn--accent { font-weight: 600; }
+  .whensheet .btn:not(.btn--accent) { background: var(--l2); border: 1px solid var(--line2); }
 }

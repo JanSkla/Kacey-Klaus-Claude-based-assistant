@@ -181,6 +181,11 @@
         <button type="submit" class="btn">Přidat</button>
       </form>
     </section>
+    <!-- Phone: the panel's own foot, under "next up" (Kacey Phone 2a). -->
+    <div class="todayfoot phone-only">
+      <button type="button" class="btn" id="askNextM">Zeptat se na to</button>
+      <button type="button" class="btn" data-go="tasks">Všechny úkoly</button>
+    </div>
   </div>
 
   <div class="col col--chat">
@@ -246,12 +251,26 @@
       <button type="button" class="btn btn--sm push" id="toggleDone">Skrýt hotové</button>
     </div>
     <div class="card__body card__body--scroll groups" id="taskGroups"></div>
-    <form class="card__foot row" id="taskForm">
+    <form class="card__foot row desk-only" id="taskForm">
       <input class="input" id="taskInput" type="text" placeholder="Přidat úkol — nebo řekni „KC, přidej …“" autocomplete="off" />
       <input class="input input--when" id="taskDate" type="date" aria-label="Termín — datum (prázdné = bez termínu)" title="Termín (prázdné = bez termínu)" />
       <input class="input input--when" id="taskTime" type="time" step="300" aria-label="Termín — čas (s časem se úkol ukáže v kalendáři)" title="Čas (s časem se úkol ukáže v kalendáři)" />
       <button type="submit" class="btn btn--accent">Přidat</button>
     </form>
+    <!-- Phone: a task goes to Kacey as a chat turn; she parses the date (Kacey Phone 3c). -->
+    <div class="taskdock phone-only">
+      <button type="button" class="taskdock__reply" id="taskReply" data-go="main" hidden><b>Kacey</b><span id="taskReplyText"></span><span class="taskdock__chat">Chat →</span></button>
+      <form class="composer" id="taskAsk" autocomplete="off">
+        <input class="composer__input" id="taskAskInput" type="text" placeholder="Napiš Kacey… „zítra v 9 zavolat do banky“" enterkeyhint="send" aria-label="Úkol pro Kacey" />
+        <button type="submit" class="btn btn--accent">Odeslat</button>
+      </form>
+      <button type="button" class="btn btn--talk" id="taskMic" aria-pressed="false"><span class="dot" aria-hidden="true"></span><span id="taskMicLabel">Mluvit</span></button>
+    </div>
+  </section>
+  <!-- Phone: a task's date and time as a bottom sheet (Kacey Phone 3e). tasks.js openWhen() -->
+  <section class="card psheet phone-only" id="whenSheet" aria-label="Termín">
+    <div class="psheet__head"><h2 class="card__title card__title--bar" id="whenTitle">Termín</h2><button type="button" class="sheet__close push" data-psheet-close aria-label="Zavřít">×</button></div>
+    <div id="whenBody"></div>
   </section>
 
   <div class="col col--rail">

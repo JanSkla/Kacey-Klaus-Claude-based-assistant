@@ -21,6 +21,10 @@ import { editRule } from './rules.js';
 import { night } from '../net/nightapi.js';
 import { ruleOrigin } from '../core/rulewords.js';
 import { openDay } from '../ui/calendar.js';
+import { isPhone, openSheet, closeSheet } from '../ui/psheet.js';
+import { submit, isOnline } from '../net/protocol.js';
+import * as bus from '../core/bus.js';
+import { orbState } from '../ui/orb.js';
 
 /* `optional` groups only appear when something is in them. */
 var GROUPS = [
@@ -115,7 +119,7 @@ function taskRow(t, big) {
   var dueNode = big
     ? el('button.task__due' + (when ? '' : '.is-empty'), {
         type: 'button', 'aria-expanded': String(editingId === t.id),
-        onclick: function () { editingId = editingId === t.id ? null : t.id; renderTasks(); }
+        onclick: function () { openWhen(t.id); }
       }, when || '+ termín')
     : (when ? el('span.task__due', when) : null);
 
@@ -151,7 +155,7 @@ function taskRow(t, big) {
   }
 
   if (generated && whyOpen[t.id]) kids.push(whyPanel(t));
-  if (big && editingId === t.id) kids.push(dueEditor(t));
+  if (big && editingId === t.id && !isPhone()) kids.push(dueEditor(t));
 
   return el('div.task' + (t.done ? '.is-done' : '') + (bucket === 'overdue' ? '.task--overdue' : ''), kids);
 }
@@ -194,9 +198,25 @@ function whyPanel(t) {
   ]);
 }
 
+/** A task's date: inline under its row on desktop, a bottom sheet on the phone (Kacey Phone 3e). */
+export function openWhen(id) {
+  var t = tasks().filter(function (x) { return x.id === id; })[0];
+  if (!t) return;
+  if (!isPhone()) { editingId = editingId === id ? null : id; go('tasks'); renderTasks(); return; }
+  editingId = id;
+  $('whenTitle').textContent = 'Termín · ' + t.label;
+  fill($('whenBody'), dueEditor(t, true));
+  openSheet($('whenSheet'), function () { editingId = null; });
+}
+
+function captioned(word, input) {
+  return el('label.field', [el('span', word), input]);
+}
+
 /* Under the row it belongs to: a date, an optional time, and — once there is
-   a time — how long it takes, which is how tall it is in the calendar. */
-function dueEditor(t) {
+   a time — how long it takes, which is how tall it is in the calendar. In the
+   phone's sheet (`sheet`) the length is always there and × closes it. */
+function dueEditor(t, sheet) {
   var p = parseDue(t.due_at) || {};
   var date = el('input.input.input--when', { type: 'date', value: p.date || '', 'aria-label': 'Datum' });
   var time = el('input.input.input--when', { type: 'time', value: p.time || '', step: 300, 'aria-label': 'Čas' });
@@ -205,11 +225,30 @@ function dueEditor(t) {
   var dur = el('select.select.input--when', { 'aria-label': 'Délka' }, lengths.map(function (m) {
     return el('option', { value: String(m), selected: (t.duration || 30) === m ? '' : null }, durWord(m));
   }));
-  function syncDur() { dur.hidden = !time.value; }
+  function syncDur() { dur.hidden = !sheet && !time.value; }
   time.addEventListener('input', syncDur);
   syncDur();
 
   function close() { editingId = null; renderTasks(); }
+  if (sheet) {
+    return el('form.whensheet', {
+      onsubmit: function (ev) {
+        ev.preventDefault();
+        editingId = null;
+        closeSheet();
+        setDue(t.id, dueFrom(date.value, time.value), Number(dur.value));
+      }
+    }, [
+      el('p.muted-3.whensheet__now', 'Teď: ' + (whenText(t) || 'bez termínu')),
+      el('div.whensheet__grid', [captioned('DATUM', date), captioned('ČAS', time)]),
+      captioned('DÉLKA · JEN S ČASEM', dur),
+      el('button.btn.btn--accent.btn--block', { type: 'submit' }, 'Uložit'),
+      t.due_at ? el('button.btn.btn--block', {
+        type: 'button', onclick: function () { editingId = null; closeSheet(); setDue(t.id, null); }
+      }, 'Bez termínu') : null,
+      el('p.muted-3.whensheet__note', 'S časem se úkol ukáže v kalendáři.')
+    ]);
+  }
   var form = el('form.taskwhen', {
     onsubmit: function (ev) {
       ev.preventDefault();
@@ -390,7 +429,42 @@ function addChecklistItem(label) {
 
 /* ---- wiring ------------------------------------------------------------- */
 
+/* ---- the phone's task dock (Kacey Phone 3c) ----------------------------- */
+
+var awaitingReply = false;
+
+function lastReply() {
+  var rows = document.querySelectorAll('#log .msg--assistant .msg__bubble');
+  for (var i = rows.length - 1; i >= 0; i--) { var s = rows[i].textContent.trim(); if (s) return s; }
+  return '';
+}
+
+function initDock() {
+  if (!$('taskAsk')) return;
+  $('taskAsk').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var text = $('taskAskInput').value.trim();
+    if (!text) return;
+    $('taskAskInput').value = '';
+    // Offline, the task is still written down — for today, as typed.
+    if (!isOnline()) { addTask(text, { due_at: logicalToday() }); return; }
+    submit(text);
+    awaitingReply = true;
+    $('taskReplyText').textContent = 'Rozumím, přidávám…';
+    $('taskReply').hidden = false;
+  });
+  $('taskMic').addEventListener('click', function () { $('mic').click(); });
+  bus.on('orb', function () {
+    if (!awaitingReply || orbState() !== 'idle') return;
+    awaitingReply = false;
+    var reply = lastReply();
+    if (reply) $('taskReplyText').textContent = reply;
+  });
+}
+
 export function initTasks() {
+  store.setTaskOpener(openWhen);
+  initDock();
   $('taskForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var due = dueFrom($('taskDate').value, $('taskTime').value);

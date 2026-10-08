@@ -136,7 +136,12 @@ export function flip(group, key) {
  * user gets one click to put it back — a routine imported from a screenshot is
  * the case this exists for.
  */
+/* Who opens a task's due date — tasks.js sets it, so this module needs no view. */
+var taskOpener = null;
+export function setTaskOpener(fn) { taskOpener = fn; }
+
 export async function applyRemoteChange(section, undo, quiet) {
+  var before = section === 'tasks' && Array.isArray(undo) ? undo.map(function (t) { return t.id; }) : null;
   await load();
   // The owner's own action on another screen (a proposal accepted): reload, say nothing.
   if (quiet) return;
@@ -157,6 +162,15 @@ export async function applyRemoteChange(section, undo, quiet) {
       }
     : null;
 
+  // Kacey added one task: say which, and the line opens its date (Kacey Phone 3d).
+  if (before) {
+    var added = (data.tasks || []).filter(function (t) { return before.indexOf(t.id) === -1; });
+    if (added.length === 1) {
+      var t = added[0];
+      say('Úkol přidán · ' + t.label, act, taskOpener ? function () { taskOpener(t.id); } : null);
+      return;
+    }
+  }
   say(label + ' — změnila Kacey.', act);
 }
 

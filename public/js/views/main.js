@@ -16,6 +16,8 @@ import * as bus from '../core/bus.js';
 import { nextUp } from '../ui/calendar.js';
 import { submit } from '../net/protocol.js';
 import { go } from '../ui/router.js';
+import { taskSummary } from './tasks.js';
+import * as store from '../core/store.js';
 
 /* The phone header has room for three words, not a sentence. */
 var STATE_SHORT = {
@@ -57,8 +59,17 @@ function paintRail() {
 
   var next = nextUp();
   $('nextTitle').textContent = next ? next.title : 'Nic dalšího dnes';
-  $('nextMeta').textContent = next ? next.meta : 'Kalendář je na dnešek prázdný.';
+  // "… · 3 úkoly na dnes" (Kacey Phone 2a).
+  var n = taskSummary().due;
+  var due = n ? ' · ' + n + ' ' + (n === 1 ? 'úkol' : n < 5 ? 'úkoly' : 'úkolů') + ' na dnes' : '';
+  $('nextMeta').textContent = (next ? next.meta : 'Kalendář je na dnešek prázdný.') + due;
   $('askNext').disabled = !next;
+  if ($('askNextM')) $('askNextM').disabled = !next;
+  // The phone's task dock talks too: its button mirrors this one.
+  if ($('taskMicLabel')) {
+    $('taskMicLabel').textContent = state.listening ? 'Stop' : 'Mluvit';
+    $('taskMic').setAttribute('aria-pressed', String(state.listening));
+  }
 }
 
 export function initMain() {
@@ -72,15 +83,18 @@ export function initMain() {
     $('todayToggleLabel').textContent = open ? 'Skrýt' : 'Dnes ▾';
   });
 
-  $('askNext').addEventListener('click', function () {
+  function askNext() {
     var next = nextUp();
     if (!next) return;
     go('main');
     submit('Co potřebuju na "' + next.title + '"?');
-  });
+  }
+  $('askNext').addEventListener('click', askNext);
+  if ($('askNextM')) $('askNextM').addEventListener('click', askNext);
 
   /* The rail follows the orb, exactly like the telemetry rails did: one
      subscription, and it cannot drift from the state everything else reads. */
   bus.on('orb', paintRail);
+  store.onChange(paintRail);         // the task count under "next up"
   paintRail();
 }

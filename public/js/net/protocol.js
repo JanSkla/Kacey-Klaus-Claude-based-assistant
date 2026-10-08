@@ -249,6 +249,9 @@ export function onConn(next, retryMs) {
   syncOrb();
 }
 
+/** Whether a turn can go to Kacey now (the task dock falls back to a local task). */
+export function isOnline() { return !!transport && transport.isOpen(); }
+
 export function submit(text) {
   var msg = String(text == null ? '' : text).trim();
   // An image on its own is a turn: "here, look at this".
