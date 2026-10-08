@@ -1536,6 +1536,20 @@ export function nextUp() {
   return upcoming[0] || null;
 }
 
+/** The calendar on one day, with that event's editor open when it is there
+    (a task's "Otevřít událost"). */
+export function openDay(date, eventId) {
+  selected = date; span = 1;
+  go('calendar');
+  if (!eventId) return;
+  var tries = 0;
+  (function find() {
+    var e = payload && eventsOn(date).filter(function (x) { return x.event_id === eventId; })[0];
+    if (e) { openEvent(e, e.all_day ? 0 : laneBounds([date]).top(minutesOf(e.starts_at))); return; }
+    if (++tries < 10) setTimeout(find, 200);       // the month may still be loading
+  })();
+}
+
 /** Today's timed events, for the morning's "další: zubař v 10:30": [{ start (min), title }]. */
 export function todayEvents() {
   if (!payload) return [];

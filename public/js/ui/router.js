@@ -76,9 +76,18 @@ export function go(view) {
    is where you are. */
 function paintTabs(view) {
   var tabs = document.querySelectorAll('.tab[data-tab]');
+  var onTab = false;
   for (var i = 0; i < tabs.length; i++) {
-    if (tabs[i].getAttribute('data-tab') === view) tabs[i].setAttribute('aria-current', 'true');
+    if (tabs[i].getAttribute('data-tab') === view) { tabs[i].setAttribute('aria-current', 'true'); onTab = true; }
     else tabs[i].removeAttribute('aria-current');
+  }
+  // A view reached from "Víc" lights the Víc tab: that is where you are.
+  var more = $('tabMore');
+  if (more) { if (onTab) more.removeAttribute('aria-current'); else more.setAttribute('aria-current', 'true'); }
+  var rows = document.querySelectorAll('.morelist__row[data-tab]');
+  for (var r = 0; r < rows.length; r++) {
+    if (rows[r].getAttribute('data-tab') === view) rows[r].setAttribute('aria-current', 'true');
+    else rows[r].removeAttribute('aria-current');
   }
   // The desktop sidebar and the header's Controller gear, the same way.
   var items = document.querySelectorAll('.sidenav [data-go], #controllerBtn, #lightChip');

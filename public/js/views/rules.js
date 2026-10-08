@@ -17,6 +17,8 @@ import { $ } from '../core/dom.js';
 import * as dom from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import { CATS, CATEGORY_KEYS } from '../core/routine-cats.js';
+import { ruleSummary } from '../core/rulewords.js';
+import { isPhone } from '../ui/psheet.js';
 import { go, onEnter, currentView } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import {
@@ -31,13 +33,15 @@ var previewTimer = 0;
 var previewSeq = 0;
 var deleteArmed = 0;
 var offerKind = null;      // the rule being written came from a learning-loop offer (§13)
+var afterSave = null;      // what the offer wants once the rule is saved (back to the cards)
 
 var TIMING = [
   { key: 'evening_before', label: 'Večer předem', at: '20:00' },
   { key: 'morning_of', label: 'Ráno v den', at: '07:00' },
-  { key: 'before_start', label: 'X min před' }
+  { key: 'before_start', label: 'X min před', phone: 'X min před začátkem' }
 ];
-var LENGTHS = [null, 5, 10, 15, 30];
+/* No "—": tapping the pressed length clears it (no duration). */
+var LENGTHS = [5, 10, 15, 30];
 
 /* ---- the model --------------------------------------------------------------- */
 
@@ -100,16 +104,8 @@ function payload(d) {
   return { name: d.name.trim() || 'Pravidlo', enabled: d.enabled, trigger: trigger, timing: timing, task: task };
 }
 
-function timingWords(tm) {
-  if (tm.anchor === 'evening_before') return 'večer předem ' + (tm.at || '20:00');
-  if (tm.anchor === 'morning_of') return 'ráno v den ' + (tm.at || '07:00');
-  return (tm.offset_min == null ? 60 : tm.offset_min) + ' min před';
-}
-
 /** "Posilovna → večer předem 20:00 → Sbalit tašku" — the same words as the server's describeRule. */
-function summary(rule) {
-  return rule.name + ' → ' + timingWords(rule.timing || {}) + ' → ' + ((rule.task && rule.task.label) || '…');
-}
+function summary(rule) { return ruleSummary(rule); }
 
 function isDirty() { return !!draft && JSON.stringify(payload(draft)) !== saved; }
 
@@ -118,6 +114,8 @@ function plural(n) { return n === 1 ? '1 pravidlo' : n >= 2 && n <= 4 ? n + ' pr
 function setStep(step) {
   var view = document.querySelector('.view[data-view="rules"]');
   if (view) view.setAttribute('data-step', step);
+  // The phone's editor docks its own footer where the tab bar was.
+  document.body.setAttribute('data-rules-step', step);
 }
 
 /* ---- opening things ---------------------------------------------------------------- */
@@ -172,19 +170,24 @@ function renderLists() {
   }) : el('p.empty', 'Žádná sada. Založ první — nebo řekni Kacey, co si má hlídat.'));
 
   var set = currentSet();
-  $('rSetTitle').textContent = set ? 'Pravidla · ' + set.name : 'Pravidla';
+  // A phone's header names just the set; the desktop's card says what the list is.
+  $('rSetTitle').textContent = set ? (isPhone() ? set.name : 'Pravidla · ' + set.name) : 'Pravidla';
   fill($('rSetSwitch'), set ? switchFor(set.enabled, 'Zapnout sadu', function (on) {
     saveRuleset(set.id, { enabled: on }).catch(function (e) { say(e.message); });
   }) : null);
   $('rAddRule').disabled = !set;
-  fill($('rRules'), set ? (set.rules.length ? set.rules.map(function (r) {
+  var rows = set ? set.rules.slice() : [];
+  // An unsaved new rule shows in its set's list while it is being written.
+  if (set && ruleId === 'new' && draft) rows.push({ id: 'new', name: draft.name || 'Nové pravidlo', enabled: draft.enabled, draft: true });
+  fill($('rRules'), set ? (rows.length ? rows.map(function (r) {
     return el('div.ruleset' + (r.id === ruleId ? '.is-current' : '') + (r.invalid ? '.is-invalid' : ''), {
       role: 'button', tabindex: '0',
       onclick: function () { openRule(r.id); },
       onkeydown: function (ev) { if (ev.key === 'Enter') openRule(r.id); }
     }, [
-      el('span.ruleset__text', [el('b', r.name), el('em', r.invalid ? 'neplatné: ' + r.invalid : summary(r))]),
+      el('span.ruleset__text', [el('b', r.name), el('em', r.invalid ? 'neplatné: ' + r.invalid : summary(r.draft ? payload(draft) : r))]),
       switchFor(r.enabled, 'Zapnout pravidlo ' + r.name, function (on) {
+        if (r.draft) { draft.enabled = on; renderAll(); return; }
         saveRule(r.id, { enabled: on }).catch(function (e) { say(e.message); });
       })
     ]);
@@ -217,7 +220,8 @@ function seg(host, options, current, onPick) {
 }
 
 function change(fn) {
-  return function () { fn.apply(null, arguments); renderEditor(); schedulePreview(); };
+  // renderAll, not just the editor: an unsaved rule's row in the list reads the draft.
+  return function () { fn.apply(null, arguments); renderAll(); schedulePreview(); };
 }
 
 function renderEditor() {
@@ -230,6 +234,9 @@ function renderEditor() {
   var d = draft;
 
   if (document.activeElement !== $('rName')) $('rName').value = d.name;
+  if (document.activeElement !== $('rNameM')) $('rNameM').value = d.name;
+  $('rNameShow').textContent = d.name || 'Nové pravidlo';
+  $('rSetName').textContent = currentSet() ? currentSet().name : '';
   $('rSaved').textContent = ruleId === 'new' ? 'neuloženo' : (isDirty() ? 'neuloženo' : 'uloženo');
 
   var src = d.sources.length === 2 ? 'both' : d.sources[0];
@@ -249,11 +256,14 @@ function renderEditor() {
     }, [el('span.catpick__sw', { 'aria-hidden': 'true' }), CATS[k].label]);
   }));
 
-  $('rBeforeOn').checked = d.beforeOn;
-  $('rBefore').disabled = !d.beforeOn;
+  $('rBeforeOn').setAttribute('aria-pressed', String(d.beforeOn));
+  $('rBeforeOn').textContent = d.beforeOn ? '✓' : '';
+  $('rBefore').hidden = !d.beforeOn;
+  $('rBeforeOff').hidden = d.beforeOn;
   if (document.activeElement !== $('rBefore')) $('rBefore').value = d.before;
 
-  seg($('rTiming'), TIMING.map(function (t) { return { value: t.key, label: t.label }; }), d.anchor, change(function (v) {
+  var phone = isPhone();
+  seg($('rTiming'), TIMING.map(function (t) { return { value: t.key, label: phone && t.phone ? t.phone : t.label }; }), d.anchor, change(function (v) {
     d.anchor = v;
     var t = TIMING.find(function (x) { return x.key === v; });
     if (t && t.at) d.at = t.at;
@@ -269,7 +279,9 @@ function renderEditor() {
   $('rTask').classList.toggle('is-missing', !d.label.trim());
   if (document.activeElement !== $('rMeta')) $('rMeta').value = d.meta;
 
-  seg($('rLen'), LENGTHS.map(function (n) { return { value: n, label: n ? n + ' min' : '—' }; }), d.duration, change(function (v) { d.duration = v; }));
+  seg($('rLen'), LENGTHS.map(function (n, i) {
+    return { value: n, label: phone && i < LENGTHS.length - 1 ? String(n) : n + ' min' };
+  }), d.duration, change(function (v) { d.duration = d.duration === v ? null : v; }));
 
   fill($('rItems'), d.items.map(function (label, i) {
     return el('div.ruleitem', [
@@ -280,7 +292,8 @@ function renderEditor() {
   }));
 
   $('rDelete').hidden = ruleId === 'new';
-  $('rDelete').textContent = deleteArmed ? 'Opravdu smazat?' : 'Smazat pravidlo';
+  $('rDeleteM').hidden = ruleId === 'new';
+  $('rDelete').textContent = $('rDeleteM').textContent = deleteArmed ? 'Opravdu smazat?' : 'Smazat pravidlo';
 }
 
 /* ---- the preview -------------------------------------------------------------------
@@ -295,35 +308,78 @@ function schedulePreview() {
 function runPreview() {
   if (!draft) return;
   var body = payload(draft);
-  if (!body.task.label) { renderPreview([], 'Zatím nic — úkol nemá název.'); return; }
+  var nameless = !body.task.label;
+  // Without a task name nothing would be made; preview anyway, to say where it would land.
+  if (nameless) body.task.label = '…';
   var seq = ++previewSeq;
   previewRule({ rule: body, days: 7 }).then(function (items) {
-    if (seq === previewSeq) renderPreview(items);
+    if (seq !== previewSeq) return;
+    if (nameless) renderPreview([], 'Zatím nic — úkol nemá název.' + wouldFit(body, items));
+    else renderPreview(items);
   }).catch(function (e) {
     if (seq === previewSeq) renderPreview([], 'Pravidlo ještě nedává smysl: ' + e.message);
   });
 }
 
 var WD = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
+
+function wdOf(stamp) {
+  var p = stamp.split(/[-T]/).map(Number);
+  return WD[new Date(p[0], p[1] - 1, p[2], 12).getDay()];
+}
+
+/** " Rutina Pohyb s „běh“ v poznámce by sedla na po, st a pá 06:45." — for a rule without a task name. */
+function wouldFit(rule, items) {
+  var hits = (items || []).filter(function (i) { return i.status !== 'skipped' && i.status !== 'suppressed'; })
+    .sort(function (a, b) { return a.due_at < b.due_at ? -1 : 1; });
+  if (!hits.length) return '';
+  var t = rule.trigger;
+  var subject = t.sources.indexOf('calendar') !== -1
+    ? 'Událost „' + ((t.calendar_match || [])[0] || '…') + '“'
+    : 'Rutina ' + CATS[t.routine_category].label + ((t.routine_note_match || [])[0] ? ' s „' + t.routine_note_match[0] + '“ v poznámce' : '');
+  var days = [];
+  hits.forEach(function (i) { var w = wdOf(i.due_at).toLowerCase(); if (days.indexOf(w) === -1) days.push(w); });
+  var dayText = days.length > 1 ? days.slice(0, -1).join(', ') + ' a ' + days[days.length - 1] : days[0];
+  var times = hits.map(function (i) { return i.due_at.slice(11, 16); });
+  var same = times[0] && times.every(function (x) { return x === times[0]; });
+  return ' ' + subject + ' by sedla na ' + dayText + (same ? ' ' + times[0] : '') + '.';
+}
 function shortWhen(due) {
   var p = due.split(/[-T]/).map(Number);
   var d = new Date(p[0], p[1] - 1, p[2], 12);
   return WD[d.getDay()] + (due.length > 10 ? ' ' + due.slice(11, 16) : '');
 }
 
-function renderPreview(items, note) {
-  var host = $('rPreview');
-  if (!host) return;
-  if (items === null) { fill(host, el('p.empty', 'Vyber pravidlo a tady uvidíš, co by v příštích 7 dnech vytvořilo.')); return; }
-  var shown = (items || []).filter(function (i) { return !(i.source === 'routine' && i.overlap && i.overlap.exact); });
-  fill(host, shown.length ? shown.map(function (i) {
+/** What the task is about, short: "posilovna čt 07:00" (all day: "celý den"). */
+function aboutWord(a) {
+  if (!a) return '';
+  var title = a.title ? a.title.charAt(0).toLowerCase() + a.title.slice(1) : '';
+  return title + (a.start ? ' ' + wdOf(a.start).toLowerCase() + ' ' + (a.all_day ? 'celý den' : a.start.slice(11, 16)) : '');
+}
+
+function previewRows(items, note) {
+  if (items === null) return [el('p.empty', 'Vyber pravidlo a tady uvidíš, co by v příštích 7 dnech vytvořilo.')];
+  var shown = (items || []).filter(function (i) { return !(i.source === 'routine' && i.overlap && i.overlap.exact); })
+    .sort(function (a, b) { return a.due_at < b.due_at ? -1 : 1; });
+  if (!shown.length) return [el('p.empty', note || 'V příštích 7 dnech by nevytvořilo nic — zkontroluj klíčová slova proti tomu, jak se události v kalendáři jmenují.')];
+  return shown.map(function (i) {
+    // Turned away by "Jen když začíná před": shown, dimmed, never a task.
+    if (i.status === 'skipped') {
+      return el('div.preview7__row.is-skipped', [
+        el('b.num', '—'), el('span', 'přeskočeno'),
+        el('em', aboutWord(i.about) + ' · začíná po ' + (i.starts_before || ''))
+      ]);
+    }
     var flag = i.status === 'suppressed' ? ' · smazáno, nevrátí se' : i.status === 'exists' ? ' · už existuje' : '';
     return el('div.preview7__row' + (i.status === 'suppressed' ? '.is-muted' : ''), [
-      el('b.num', shortWhen(i.due_at)),
-      el('span', i.label),
-      el('em', i.reason + flag)
+      el('b.num', shortWhen(i.due_at)), el('span', i.label), el('em', aboutWord(i.about) + flag)
     ]);
-  }) : el('p.empty', note || 'V příštích 7 dnech by nevytvořilo nic — zkontroluj klíčová slova proti tomu, jak se události v kalendáři jmenují.'));
+  });
+}
+
+function renderPreview(items, note) {
+  if ($('rPreview')) fill($('rPreview'), previewRows(items, note));
+  if ($('rPreviewM')) fill($('rPreviewM'), previewRows(items, note));
 }
 
 function renderAll() {
@@ -346,6 +402,7 @@ function save() {
     say('Pravidlo uloženo.');
     renderAll();
     schedulePreview();
+    if (afterSave) { var then = afterSave; afterSave = null; then(); }
   }).catch(function (e) { say('Neuloženo: ' + e.message); });
 }
 
@@ -393,8 +450,9 @@ export function initRules() {
   $('rBackSets').addEventListener('click', function () { setStep('sets'); });
   $('rBackSet').addEventListener('click', function () { setStep('set'); });
 
-  $('rName').addEventListener('input', function () { draft.name = $('rName').value; renderEditor(); schedulePreview(); });
-  $('rBeforeOn').addEventListener('change', function () { draft.beforeOn = $('rBeforeOn').checked; renderEditor(); schedulePreview(); });
+  $('rName').addEventListener('input', function () { draft.name = $('rName').value; renderAll(); schedulePreview(); });
+  $('rNameM').addEventListener('input', function () { draft.name = $('rNameM').value; renderAll(); });
+  $('rBeforeOn').addEventListener('click', function () { draft.beforeOn = !draft.beforeOn; renderEditor(); schedulePreview(); });
   $('rBefore').addEventListener('change', function () { draft.before = $('rBefore').value; renderEditor(); schedulePreview(); });
   $('rAt').addEventListener('change', function () { draft.at = $('rAt').value; renderEditor(); schedulePreview(); });
   $('rOffset').addEventListener('input', function () { draft.offset = Number($('rOffset').value) || 0; renderEditor(); schedulePreview(); });
@@ -412,6 +470,7 @@ export function initRules() {
   $('rSave').addEventListener('click', save);
   $('rCancel').addEventListener('click', cancel);
   $('rDelete').addEventListener('click', remove);
+  $('rDeleteM').addEventListener('click', remove);
 
   /* "Říct pravidlo": the chat, with the sentence started. Kacey writes the
      rule with rule_upsert and it turns up here. */
@@ -437,7 +496,7 @@ export function initRules() {
  * Open the editor on a new rule, prefilled — the learning loop's "Vytvořit
  * pravidlo" (§13). Saved through the same endpoint and schema as every rule.
  */
-export function editRuleDraft(rule, kind) {
+export function editRuleDraft(rule, kind, onSaved) {
   go('rules');
   loadRules().then(function () {
     if (!setId && sets().length) setId = sets()[0].id;
@@ -445,6 +504,7 @@ export function editRuleDraft(rule, kind) {
     draft = toDraft(Object.assign({ enabled: true }, rule));
     saved = null;
     offerKind = kind || null;
+    afterSave = onSaved || null;
     setStep('edit');
     renderAll();
     schedulePreview();

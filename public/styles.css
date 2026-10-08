@@ -314,7 +314,7 @@ body[data-view="morning"] .sidenav, body[data-view="proposals"] .sidenav { displ
   color: var(--ink3); font: inherit; font-size: 11px; cursor: pointer;
 }
 .tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; }
-.tab[aria-current="true"] { color: var(--acc); border-top-color: var(--acc); }
+.tab[aria-current="true"] { color: var(--ink); border-top-color: var(--acc); }
 .tab:active { background: var(--l2); }
 
 /* "Víc" slides up from the bar rather than landing in the middle of the screen. */
@@ -1337,6 +1337,7 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
 .propoffer__text b { display: block; font-size: 22px; font-weight: 600; }
 .propoffer__text em { display: block; margin-top: 4px; font-size: 16px; font-style: normal; color: var(--ink2); }
 .propoffer .btn { min-height: 60px; font-size: 18px; }
+.propoffer__acts { display: flex; gap: 10px; }
 
 .propresults { display: flex; flex-direction: column; max-width: 760px; border-top: 1px solid var(--line); }
 .propresult { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 20px; }
@@ -1393,7 +1394,21 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
 .preview7__row b { display: block; font-size: 13px; font-weight: 600; }
 .preview7__row span { display: block; font-size: 13px; }
 .preview7__row em { display: block; font-size: 12px; font-style: normal; color: var(--ink3); }
-.preview7__row.is-muted { opacity: .6; }
+.preview7__row.is-muted, .preview7__row.is-skipped { opacity: .6; }
+.preview7__row b { font-variant-numeric: tabular-nums; }
+.rules__sets .ruleset__text em { font-size: 13px; }
+/* "Jen když začíná před": a box of our own (acc fill + ✓ when on), the time beside it, or "—". */
+.tickbox {
+  width: 20px; height: 20px; flex: none; display: grid; place-items: center; padding: 0; cursor: pointer;
+  background: none; border: 2px solid var(--line2); font: inherit; font-size: 13px; font-weight: 600; color: var(--on-acc);
+}
+.tickbox[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); }
+.rules__before .input--when { width: 78px; height: 34px; font-size: 15px; text-align: center; }
+.rules__beforeoff { width: 78px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line); color: var(--ink3); }
+.rules__beforeoff[hidden] { display: none; }
+.rules__foot .btn { min-height: 40px; font-size: 14px; }
+.rules__foot #rSave { padding: 0 20px; }
+.rules__foot #rDelete { background: var(--l2); }
 .rules__say { margin-top: 10px; }
 
 /* ---- the night timeline (replaces .cyclestep) ---- */
@@ -1419,22 +1434,21 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
 .timeline__sunrise { font-size: 18px; font-weight: 600; }
 
 /* ---- small things: task origin, controller ---- */
-.task__origin { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.task__origin { flex: none; display: flex; align-items: center; gap: 6px; align-self: flex-start; }
 .origin { flex: 0 0 auto; padding: 1px 6px; font-size: 11px; letter-spacing: .08em; border: 1px solid var(--line2); color: var(--ink3); }
 .origin--kacey { border-color: var(--acc); color: var(--acc); }
 .origin__why {
-  flex: 0 0 26px; width: 26px; height: 22px; padding: 0; font: inherit; font-size: 13px; cursor: pointer;
-  background: none; border: 1px solid var(--line2); color: var(--ink3);
+  flex: 0 0 32px; width: 32px; height: 32px; padding: 0; font: inherit; font-size: 14px; cursor: pointer;
+  background: none; border: 1px solid transparent; color: var(--ink3);
 }
 .origin__why[aria-expanded="true"] { background: var(--l2); border-color: var(--line2); color: var(--ink); }
-.task__why { flex: 1 0 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0 0 2px 30px; padding: 8px 10px; background: var(--l2); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; color: var(--ink2); }
+.task__why { flex: 1 0 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0 14px 10px 44px; padding: 8px 10px; background: var(--l2); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; color: var(--ink2); }
 
 .srow__state.is-on { color: var(--ok); }
 .srow__step { display: flex; align-items: center; gap: 6px; }
 .srow__value { min-width: 62px; text-align: center; font-size: 15px; }
 .readout dd[data-ok] { color: var(--ok); }
 .ctrl__runnight { margin-top: 12px; }
-.btn__meta { margin-left: 6px; font-weight: 400; color: var(--ink3); }
 
 /* Woken at night by the wake word (Claude Design 5c): the same surfaces and
    the one accent, dimmed as a layer over the whole screen. Not the morning. */
@@ -1955,7 +1969,16 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .sheet__foot .btn { min-height: 48px; }
 
   /* Víc */
-  .sheet--bottom .fnlist { padding: 12px 16px 24px; }
+  /* Víc (3j): list rows, a meta on the right, the current view lit. */
+  .morelist { display: flex; flex-direction: column; padding-bottom: 30px; }
+  .morelist__row {
+    display: flex; align-items: center; min-height: 56px; padding: 0 16px; gap: 10px;
+    background: none; border: 0; border-bottom: 1px solid #2e2e2e; color: var(--ink);
+    font: inherit; font-size: 15px; text-align: left; cursor: pointer;
+  }
+  .morelist__row:active { background: var(--l2); }
+  .morelist__row[aria-current="true"] { background: var(--l2); color: var(--acc); font-weight: 600; }
+  .morelist__meta { margin-left: auto; font-size: 13px; font-weight: 400; color: var(--ink3); }
   .sheet--bottom .btn--fn { min-height: 56px; padding: 0 16px; font-size: 15px; }
 
   /* The planner: one day at a time, painted downwards (routine.js). */
@@ -2077,6 +2100,33 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .propoffer__text b { font-size: 16px; }
   .propoffer__text em { font-size: 13px; }
   .propoffer .btn { min-height: 48px; font-size: 15px; }
+  /* 2am–2dm: a header of its own (← Návrhy · count · segments), the actions docked under the scroll. */
+  .bleedbar__back { width: 44px; height: 44px; padding: 0; background: none; border: 0; color: var(--acc); font-size: 18px; }
+  .view[data-view="proposals"] .bleedbar { padding: 0 12px 0 4px; }
+  .bleedbar__progress { gap: 8px; }
+  .bleedbar__progress b { font-size: 14px; }
+  .segbar--inline { gap: 3px; }
+  .propview { padding-bottom: 0; }
+  #pActs, #pEditActs, .propoffer__acts {
+    position: sticky; bottom: 0; z-index: 2; margin: auto -12px 0;
+    padding: 10px 12px 30px; background: var(--l1); border-top: 1px solid var(--line);
+  }
+  #pEditActs { grid-template-columns: 1fr; }
+  #pEditActs .btn--accent { min-height: 56px; }
+  .propoffer { display: contents; }
+  .propoffer__text { padding: 14px; background: var(--l1); border: 1px solid var(--acc); }
+  .propoffer__acts { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .propoffer__acts .btn--accent { min-height: 56px; font-size: 16px; }
+  .propview__accepted { align-items: flex-start; font-size: 13px; }
+  .propview__accepted .bleedbar__dot { width: 8px; height: 8px; flex-basis: 8px; margin-top: 6px; }
+  .propcard__edit .row { flex-wrap: wrap; }
+  .propcard__edit .seg { flex-wrap: wrap; gap: 4px; }
+  .propcard__edit .seg__opt { min-height: 44px; padding: 0 12px; font-size: 14px; margin-left: 0; }
+  .propcard__edit #pWhenTime { flex-basis: 100%; max-width: 120px; min-height: 44px; font-size: 16px; }
+  .propcard__facts > div:last-child { display: flex; align-items: center; gap: 10px; }
+  .propcard__facts > div:last-child .muted-3 { font-size: 12px; }
+  .propcard__facts > div:last-child .row { margin: 0; gap: 10px; }
+  #pFinal .row { flex-direction: column; align-items: stretch; }
   .propresult__res { font-size: 13px; }
 
   /* ---- the rules editor: one pane at a time (3f sets · 3g a set · 3h the editor) ---- */
@@ -2103,7 +2153,43 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .catpick__opt { min-height: 44px; }
   .tagstrip--field .tag__x { width: 40px; height: 40px; }
   .field--inline { min-height: 48px; }
-  .rules__editor .card__foot { position: sticky; bottom: 0; background: var(--l1); }
+  /* The panes' heads are the phone's headers (3f, 3g, 3h): the app header steps aside. */
+  body[data-view="rules"] .top { display: none; }
+  .rules__head { min-height: 52px; gap: 6px; padding: 0 12px 0 4px; background: var(--l1); }
+  .rules__sets .rules__head { padding-left: 16px; gap: 10px; }
+  .rules__sets .rules__head .top__mark { width: 12px; height: 12px; }
+  .rules__head .card__title, .rules__title { font-size: 16px; font-weight: 600; letter-spacing: 0; }
+  .rules__head .link { min-height: 44px; padding: 0 4px; font-size: 13px; }
+  .rules__back { width: 44px; height: 44px; padding: 0; background: none; border: 0; color: var(--acc); font-size: 18px; }
+  .rules__setname { font-size: 12px; color: var(--ink3); }
+  .rules__voicehint { margin: 0; padding: 0 4px; font-size: 13px; line-height: 1.55; color: var(--ink3); }
+  .rules__sets .ruleset__text em { font-size: 13px; }
+  .rules__list .ruleset { min-height: 68px; padding: 10px 14px; }
+  .rules__list .card__foot { border: 0; padding: 12px 0 0; background: none; }
+  .rules__list #rAddRule { min-height: 48px; font-size: 14px; }
+  .rules__col .label { font-size: 12px; font-weight: 600; letter-spacing: .08em; color: var(--ink2); text-transform: uppercase; margin-top: 4px; }
+  .rules__col { gap: 16px; padding: 14px; }
+  .rules__namem { min-height: 48px; padding: 0 12px; font-size: 16px; }
+  #rTiming .seg__opt { justify-content: flex-start; text-align: left; }
+  .rules__before { min-height: 48px; }
+  .rules__before .tickbox { width: 22px; height: 22px; font-size: 14px; }
+  .rules__before .input--when, .rules__beforeoff { width: 80px; height: 44px; }
+  .preview7--box { padding: 4px 12px; background: var(--l1); border: 1px solid var(--line); }
+  .preview7--box .preview7__row { display: flex; flex-wrap: wrap; gap: 0 6px; padding: 9px 0; font-size: 13px; }
+  .preview7--box .preview7__row b, .preview7--box .preview7__row span, .preview7--box .preview7__row em { display: inline; font-size: 13px; }
+  .preview7--box .preview7__row em::before { content: "("; }
+  .preview7--box .preview7__row em::after { content: ")"; }
+  .preview7--box .preview7__row.is-skipped em::before, .preview7--box .preview7__row.is-skipped em::after { content: none; }
+  /* The editor's footer docks where the tab bar was: Zrušit | Uložit. */
+  body[data-view="rules"][data-rules-step="edit"] .tabbar { display: none; }
+  .view--rules[data-step="edit"] { padding-bottom: 0; }
+  .rules__editor .card__foot.rules__foot {
+    position: sticky; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    padding: 10px 12px 30px; background: var(--l1); border-top: 1px solid var(--line);
+  }
+  .rules__foot #rCancel { order: 1; }
+  .rules__foot #rSave { order: 2; padding: 0; }
+  .rules__foot .btn { min-height: 52px; font-size: 15px; }
 }
 
 /* A phone in landscape has no vertical room for full chrome. */

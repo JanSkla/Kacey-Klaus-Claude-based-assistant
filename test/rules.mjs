@@ -177,6 +177,16 @@ test('starts_before: early yes, late no, all-day never', () => {
   assert.equal(items[0].due_at, '2026-09-30T20:30');
 });
 
+test('withSkipped (the editor only) shows what starts_before turned away, never as a task', () => {
+  const late = ev('ev_r2', 'Běh s Janou', at(2026, 10, 1, 17, 0), at(2026, 10, 1, 18, 0));
+  const items = previewRules({ rules: [BEH], events: [late], ...dayWindow(THU), withSkipped: true });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].status, 'skipped');
+  assert.equal(items[0].due_at, '2026-10-01T17:00');
+  assert.equal(items[0].starts_before, '10:00');
+  assert.equal(previewRules({ rules: [BEH], events: [late], ...dayWindow(THU) }).length, 0, 'the night run never sees it');
+});
+
 test('an event nothing matches creates nothing', () => {
   const other = ev('ev_x', 'Zubař', at(2026, 10, 1, 9, 0), at(2026, 10, 1, 10, 0));
   assert.equal(previewRules({ rules: [POSILOVNA, BEH], events: [other], ...dayWindow(WED) }).length, 0);
@@ -279,7 +289,10 @@ test('source keys and task ids are stable', () => {
 test('describeRule reads like the design', () => {
   assert.equal(describeRule(POSILOVNA), 'Posilovna → večer předem 20:00 → Sbalit tašku na posilovnu');
   assert.equal(describeRule({ ...POSILOVNA, timing: { anchor: 'before_start', offset_min: 45 } }),
-    'Posilovna → 45 min před začátkem → Sbalit tašku na posilovnu');
+    'Posilovna → 45 min před → Sbalit tašku na posilovnu');
+  // It leads with what sets it off, not the rule's name.
+  assert.equal(describeRule({ ...BEH, trigger: { sources: ['routine'], routine_category: 'gym', routine_note_match: ['běh'] } }),
+    'Rutina Pohyb „běh“ → večer předem 20:30 → ' + BEH.task.label);
 });
 
 test('logicalDateOf works from the wall clock', () => {

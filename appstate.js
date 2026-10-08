@@ -59,7 +59,11 @@ const DEFAULT_PRESETS = [
 
 function readTasks() {
   return open().prepare(
-    'SELECT * FROM kacey_task ORDER BY sort_order, created_at',
+    /* An accepted proposal's task also says when it was accepted and what
+       event it is about (Claude Design 5a: "Návrh přijatý ráno 07:12"). */
+    `SELECT t.*, p.decided_at AS p_decided_at, p.about_start AS p_about_start, p.about_event AS p_about_event
+       FROM kacey_task t LEFT JOIN kacey_proposal p ON p.final_task_id = t.task_id
+      ORDER BY t.sort_order, t.created_at`,
   ).all().map((r) => ({
     id: r.task_id,
     label: r.label,
@@ -78,6 +82,7 @@ function readTasks() {
     ...(r.source_key ? { source_key: r.source_key } : {}),
     ...(r.reason ? { reason: r.reason } : {}),
     ...(r.note ? { note: r.note } : {}),
+    ...(r.p_decided_at ? { proposal: { decided_at: r.p_decided_at, about_start: r.p_about_start || null, about_event: r.p_about_event || null } } : {}),
   }));
 }
 

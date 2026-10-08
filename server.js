@@ -720,7 +720,8 @@ app.post('/api/rules/preview', express.json({ limit: '64kb' }), (req, res) => {
   }
   try {
     const from = new Date();
-    res.json({ items: nightstore.previewWindow({ from, to: new Date(from.getTime() + days * 86400000), now: from, rules }) });
+    // withSkipped: the editor also shows what `starts_before` turned away (never a task).
+    res.json({ items: nightstore.previewWindow({ from, to: new Date(from.getTime() + days * 86400000), now: from, rules, withSkipped: true }) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

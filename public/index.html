@@ -152,7 +152,7 @@
     <button type="button" class="sidenav__item" data-go="timer">Časovače</button>
     <button type="button" class="sidenav__item" data-go="brief">Ranní brief</button>
     <button type="button" class="sidenav__item" data-go="morning">Ráno<span class="sidenav__badge">↗</span></button>
-    <button type="button" class="sidenav__item" data-go="rules">Pravidla</button>
+    <button type="button" class="sidenav__item" data-go="rules">Pravidla<span class="sidenav__badge" id="fnRulesMeta"></span></button>
   </div>
 </nav>
 
@@ -778,9 +778,9 @@
 <section class="view view--bleed" data-view="proposals" hidden>
   <div class="bleedbar">
     <span class="top__mark desk-only" aria-hidden="true"></span>
-    <button type="button" class="btn btn--sm phone-only" id="pBackPhone" data-go="morning" aria-label="Zpět na ráno">←</button>
-    <b class="bleedbar__name desk-only">Kacey</b>
-    <span class="bleedbar__state">Návrhy od Kacey</span>
+    <button type="button" class="btn btn--sm phone-only bleedbar__back" id="pBackPhone" data-go="morning" aria-label="Zpět na ráno">←</button>
+    <b class="bleedbar__name"><span class="desk-only">Kacey</span><span class="phone-only">Návrhy</span></b>
+    <span class="bleedbar__state desk-only">Návrhy od Kacey</span>
     <span class="push row bleedbar__progress">
       <b class="num" id="pCount">0 / 0</b>
       <span class="segbar segbar--inline" id="pSegs" aria-hidden="true"></span>
@@ -825,8 +825,10 @@
         <b>Tohle přijímáš pravidelně — udělat z toho pravidlo?</b>
         <em id="pOfferSum"></em>
       </span>
-      <button type="button" class="btn btn--lg btn--accent" id="pOfferYes">Vytvořit pravidlo</button>
-      <button type="button" class="btn btn--lg" id="pOfferNo">Teď ne</button>
+      <span class="propoffer__acts">
+        <button type="button" class="btn btn--lg btn--accent" id="pOfferYes">Vytvořit pravidlo</button>
+        <button type="button" class="btn btn--lg" id="pOfferNo">Teď ne<span class="phone-only"> · další návrh</span></button>
+      </span>
     </div>
     <div class="propacts propacts--two" id="pEditActs" hidden>
       <button type="button" class="btn btn--lg btn--accent" id="pSave">Uložit a přijmout</button>
@@ -857,8 +859,9 @@
 <section class="view view--rules" data-view="rules" data-step="sets" hidden>
   <div class="col rules__nav">
     <section class="card rules__sets">
-      <div class="card__head">
-        <h2 class="card__title">Sady pravidel</h2>
+      <div class="card__head rules__head">
+        <span class="top__mark phone-only" aria-hidden="true"></span>
+        <h2 class="card__title"><span class="desk-only">Sady pravidel</span><span class="phone-only">Pravidla</span></h2>
         <button type="button" class="link push" id="rNewSet">+ Nová sada</button>
       </div>
       <form class="card__sub row" id="rNewSetForm" hidden>
@@ -866,11 +869,11 @@
         <button type="submit" class="btn btn--sm btn--accent">Vytvořit</button>
       </form>
       <div class="card__body card__body--scroll" id="rSets"></div>
-      <p class="muted-3 rules__voicehint phone-only">Pravidla můžeš vytvořit i hlasem — řekni Kacey třeba „Když mám zubaře, připomeň mi večer předem kartičku.“</p>
     </section>
+    <p class="rules__voicehint phone-only">Pravidla můžeš vytvořit i hlasem — řekni Kacey třeba „Když mám zubaře, připomeň mi večer předem kartičku.“</p>
     <section class="card rules__list">
-      <div class="card__head">
-        <button type="button" class="btn btn--sm phone-only" id="rBackSets" aria-label="Zpět na sady">←</button>
+      <div class="card__head rules__head">
+        <button type="button" class="btn btn--sm phone-only rules__back" id="rBackSets" aria-label="Zpět">←</button>
         <h2 class="card__title" id="rSetTitle">Pravidla</h2>
         <span class="push phone-only" id="rSetSwitch"></span>
       </div>
@@ -880,14 +883,17 @@
   </div>
 
   <section class="card rules__editor">
-    <div class="card__head" id="rNameRow">
-      <button type="button" class="btn btn--sm phone-only" id="rBackSet" aria-label="Zpět na pravidla">←</button>
-      <input class="rules__name" type="text" id="rName" aria-label="Název pravidla" />
-      <span class="muted-3 push" id="rSaved">—</span>
+    <div class="card__head rules__head" id="rNameRow">
+      <button type="button" class="btn btn--sm phone-only rules__back" id="rBackSet" aria-label="Zpět">←</button>
+      <input class="rules__name desk-only" type="text" id="rName" aria-label="Název pravidla" />
+      <b class="rules__title phone-only" id="rNameShow"></b>
+      <span class="muted-3 push desk-only" id="rSaved">—</span>
+      <span class="rules__setname phone-only push" id="rSetName"></span>
     </div>
     <p class="empty" id="rNone">Vyber pravidlo vlevo, nebo přidej nové.</p>
     <div class="card__body card__body--scroll rules__form" id="rForm" hidden>
       <div class="rules__col">
+        <label class="field phone-only"><span class="muted-3">Název pravidla</span><input class="input rules__namem" type="text" id="rNameM" /></label>
         <p class="label">Kdy</p>
         <div class="field"><span class="muted-3">Zdroj</span><span class="seg seg--fill" id="rSource" role="group" aria-label="Zdroj"></span></div>
         <div class="field" id="rKwBox"><span class="muted-3">Klíčová slova v kalendáři</span><div class="tagstrip tagstrip--field" id="rKw"></div></div>
@@ -897,11 +903,12 @@
           <span class="muted-3">Klíčová slova v poznámce · volitelné</span>
           <div class="tagstrip tagstrip--field" id="rNoteKw"></div>
         </div>
-        <label class="field field--inline">
-          <input type="checkbox" id="rBeforeOn" />
+        <div class="field field--inline rules__before">
+          <button type="button" class="tickbox" id="rBeforeOn" aria-pressed="false" aria-label="Jen když začíná před"></button>
           <span>Jen když začíná před</span>
           <input class="input input--when push" type="time" id="rBefore" step="300" aria-label="Čas" />
-        </label>
+          <span class="rules__beforeoff push" id="rBeforeOff" aria-hidden="true">—</span>
+        </div>
         <div class="field">
           <span class="muted-3">Načasování</span>
           <span class="seg seg--fill seg--wrap" id="rTiming" role="group" aria-label="Načasování"></span>
@@ -922,12 +929,14 @@
           <div class="ruleitems" id="rItems"></div>
           <input class="input" type="text" id="rItemAdd" placeholder="Přidat položku…" aria-label="Přidat položku checklistu" />
         </div>
+        <div class="field phone-only"><span class="muted-3">Náhled · 7 dní</span><div class="preview7 preview7--box" id="rPreviewM"></div></div>
+        <button type="button" class="btn btn--block btn--danger phone-only" id="rDeleteM">Smazat pravidlo</button>
       </div>
     </div>
-    <div class="card__foot row" id="rFoot" hidden>
+    <div class="card__foot row rules__foot" id="rFoot" hidden>
       <button type="button" class="btn btn--accent" id="rSave">Uložit</button>
       <button type="button" class="btn" id="rCancel">Zrušit</button>
-      <button type="button" class="btn btn--danger push" id="rDelete">Smazat pravidlo</button>
+      <button type="button" class="btn btn--danger push desk-only" id="rDelete">Smazat pravidlo</button>
     </div>
   </section>
 
@@ -1024,14 +1033,15 @@
       <h2 class="sheet__title">Další</h2>
       <button type="button" class="sheet__close push" id="moreClose" aria-label="Zavřít">×</button>
     </div>
-    <div class="fnlist">
-      <button type="button" class="btn btn--fn btn--accent" data-go="brief" data-tab="brief">Ranní brief</button>
-      <button type="button" class="btn btn--fn" data-go="morning" data-tab="morning">Ráno <span class="btn__meta" id="moreMorningMeta">checklist</span></button>
-      <button type="button" class="btn btn--fn" data-go="rules" data-tab="rules">Pravidla <span class="btn__meta" id="moreRulesMeta"></span></button>
-      <button type="button" class="btn btn--fn" data-go="library" data-tab="library">Knihovna deníku</button>
-      <button type="button" class="btn btn--fn" data-go="lights" data-tab="lights">Světla</button>
-      <button type="button" class="btn btn--fn" data-go="timer" data-tab="timer">Časovače</button>
-      <button type="button" class="btn btn--fn" data-go="controller" data-tab="controller">Controller</button>
+    <!-- Rows, not buttons: the current view's row is lit (router.js paints aria-current). -->
+    <div class="morelist">
+      <button type="button" class="morelist__row" data-go="brief" data-tab="brief">Ranní brief</button>
+      <button type="button" class="morelist__row" data-go="morning" data-tab="morning">Ráno <span class="morelist__meta" id="moreMorningMeta">checklist</span></button>
+      <button type="button" class="morelist__row" data-go="rules" data-tab="rules">Pravidla <span class="morelist__meta" id="moreRulesMeta"></span></button>
+      <button type="button" class="morelist__row" data-go="library" data-tab="library">Knihovna deníku</button>
+      <button type="button" class="morelist__row" data-go="timer" data-tab="timer">Časovače</button>
+      <button type="button" class="morelist__row" data-go="lights" data-tab="lights">Světla <span class="morelist__meta" id="moreLightsMeta"></span></button>
+      <button type="button" class="morelist__row" data-go="controller" data-tab="controller">Controller</button>
     </div>
   </div>
 </div>

@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 import { addDays, dowOf } from './public/js/core/due.js';
 import { CATS, CATEGORY_KEYS } from './public/js/core/routine-cats.js';
+import { ruleSummary } from './public/js/core/rulewords.js';
 import { dayOf, activeBlocks } from './public/js/core/routine-day.js';
 import { dayRangeOf } from './calendar-days.js';
 import { LOGICAL_DAY_START_HOUR } from './config.js';
@@ -182,7 +183,9 @@ export function routineBlocks(routine, day) {
   return out.map((b) => ({ cat: b.cat, slot: b.i, s: b.i * 15, e: (b.i + b.n) * 15, note: notes[day + '-' + b.i] || '' }));
 }
 
-function calendarOccurrences(trigger, events, dates) {
+/* `skipped`, when given, collects the occurrences a `starts_before` turned
+   away — for the editor's preview ("Út 18:00 přeskočeno — po 10:00") only. */
+function calendarOccurrences(trigger, events, dates, skipped) {
   if (!trigger.sources.includes('calendar')) return [];
   const sb = trigger.starts_before ? logicalMin(clockMin(trigger.starts_before)) : null;
   const out = [];
@@ -197,7 +200,10 @@ function calendarOccurrences(trigger, events, dates) {
       const s = new Date(ev.starts_at);
       const lm = start.slice(0, 10) === range.first ? s.getHours() * 60 + s.getMinutes()
         : DAY_MIN + s.getHours() * 60 + s.getMinutes();
-      if (lm >= sb) continue;
+      if (lm >= sb) {
+        if (skipped) skipped.push({ source: 'calendar', date: range.first, start, end, all_day: false, title: ev.title });
+        continue;
+      }
     }
     out.push({
       source: 'calendar', date: range.first, start, end, all_day: range.allDay,
@@ -208,7 +214,7 @@ function calendarOccurrences(trigger, events, dates) {
   return out;
 }
 
-function routineOccurrences(trigger, routine, dates) {
+function routineOccurrences(trigger, routine, dates, skipped) {
   if (!trigger.sources.includes('routine')) return [];
   const sb = trigger.starts_before ? logicalMin(clockMin(trigger.starts_before)) : null;
   const out = [];
@@ -223,7 +229,13 @@ function routineOccurrences(trigger, routine, dates) {
     for (const b of activeBlocks(dayOf(routine, date))) {
       if (b.cat !== trigger.routine_category) continue;
       if (trigger.routine_note_match && trigger.routine_note_match.length && !matchesAny(b.note, trigger.routine_note_match)) continue;
-      if (sb !== null && logicalMin(b.s) >= sb) continue;
+      if (sb !== null && logicalMin(b.s) >= sb) {
+        if (skipped) {
+          skipped.push({ source: 'routine', date: b.s < DAY_START_MIN ? addDays(date, -1) : date, all_day: false,
+            start: `${date}T${hhmmOf(b.s)}`, end: null, title: CATS[b.cat].label + (b.note ? ` „${b.note}“` : '') });
+        }
+        continue;
+      }
       /* The grid is in clock days: a block at 02:00 on Tuesday is Monday's
          logical night, the same rule the calendar follows. */
       out.push({
@@ -285,7 +297,7 @@ function reasonFor(occ) {
    same day. `exact` when the times are identical to the minute — the night
    run merges those in code; any other pair goes to the reasoning pass. */
 
-export function previewRules({ rules, events = [], routine = {}, from, to, now, existingKeys = new Set(), suppressedKeys = new Set() }) {
+export function previewRules({ rules, events = [], routine = {}, from, to, now, existingKeys = new Set(), suppressedKeys = new Set(), withSkipped = false }) {
   const fromMs = from.getTime(), toMs = to.getTime(), nowMs = now.getTime();
 
   /* Occurrences are looked for on every logical date a due in the window can
@@ -297,10 +309,22 @@ export function previewRules({ rules, events = [], routine = {}, from, to, now, 
 
   const items = [];
   for (const rule of rules || []) {
+    const skipped = withSkipped ? [] : null;
     const occs = [
-      ...calendarOccurrences(rule.trigger, events, dates),
-      ...routineOccurrences(rule.trigger, routine, dates),
+      ...calendarOccurrences(rule.trigger, events, dates, skipped),
+      ...routineOccurrences(rule.trigger, routine, dates, skipped),
     ];
+    /* What `starts_before` turned away, shown in the editor's preview only:
+       when it starts, "přeskočeno", and the limit. Never a task. */
+    for (const occ of skipped || []) {
+      const at = parseLocal(occ.start).getTime();
+      if (at < fromMs || at >= toMs) continue;
+      items.push({
+        rule_id: rule.id, rule_name: rule.name, source: occ.source, status: 'skipped', skip: 'starts_after',
+        starts_before: rule.trigger.starts_before, about: { title: occ.title, start: occ.start, end: occ.end, all_day: false },
+        occurrence_date: occ.date, due_at: occ.start, label: 'přeskočeno', reason: '', overlap: null,
+      });
+    }
     for (const occ of occs) {
       const due = dueFor(rule.timing, occ);
       const at = dueInstant(due).getTime();
@@ -384,9 +408,10 @@ export function describeTrigger(trigger) {
   return parts.join(' nebo ') + (trigger.starts_before ? `, jen když začíná před ${trigger.starts_before}` : '');
 }
 
-/** "Posilovna → večer předem 20:00 → Sbalit tašku na posilovnu" */
+/** "Posilovna → večer předem 20:00 → Sbalit tašku na posilovnu": what sets it off first,
+    the same line the app shows (public/js/core/rulewords.js). */
 export function describeRule(rule) {
-  return `${rule.name} → ${describeTiming(rule.timing)} → ${rule.task.label}`;
+  return ruleSummary(rule);
 }
 
 /** One preview line: "st 30. 9. 20:00 Sbalit tašku (Posilovna čt 1. 10. v 7:00)". */

@@ -246,7 +246,7 @@ export function readCalendar(from, to, { sources } = {}) {
  * the routine, which keys exist and which are suppressed. `rules` defaults to
  * the active ones; pass a draft to preview a rule before saving it.
  */
-export function previewWindow({ from, to, now: at = new Date(), rules } = {}) {
+export function previewWindow({ from, to, now: at = new Date(), rules, withSkipped = false } = {}) {
   const doc = appstate.get();
   const list = rules || activeRules().rules;
   /* Events from a day before the window to a day after: an event's first
@@ -255,7 +255,7 @@ export function previewWindow({ from, to, now: at = new Date(), rules } = {}) {
     { sources: doc.settings.sources });
   return previewRules({
     rules: list, events, routine: doc.routine, from, to, now: at,
-    existingKeys: existingKeys(), suppressedKeys: suppressedKeys(),
+    existingKeys: existingKeys(), suppressedKeys: suppressedKeys(), withSkipped,
   });
 }
 

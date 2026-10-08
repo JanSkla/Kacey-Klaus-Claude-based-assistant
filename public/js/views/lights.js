@@ -58,6 +58,9 @@ export function initLights() {
   if (!$('lightsFrame')) return;
   var url = lightsUrl();
   $('lightsOpen').href = url;
+  // The Víc sheet's row says where it goes: "otevře :8080".
+  var port = (url.match(/:(\d+)/) || [])[1];
+  if ($('moreLightsMeta')) $('moreLightsMeta').textContent = port ? 'otevře :' + port : '';
   $('lightsWhere').textContent = 'samostatná aplikace · lightsd na ' + url.replace(/^https?:\/\//, '');
 
   $('lightsRetry').addEventListener('click', probe);

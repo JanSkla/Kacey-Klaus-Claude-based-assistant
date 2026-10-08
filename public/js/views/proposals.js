@@ -16,6 +16,8 @@ import { say } from '../ui/toast.js';
 import { night, onNight, loadProposals, decideProposal, loadOffers, closeOffer } from '../net/nightapi.js';
 import { editRuleDraft } from './rules.js';
 import { addDays, logicalToday, dueLabel } from '../core/due.js';
+import { ruleSummary } from '../core/rulewords.js';
+import { isPhone } from '../ui/psheet.js';
 
 var session = [];          // this sitting's proposals, in order, with what was decided
 var cursor = 0;
@@ -46,13 +48,29 @@ function confidence(c) {
   return { bars: n, word: c >= 0.7 ? 'vysoká' : c >= 0.45 ? 'střední' : 'nízká' };
 }
 
-/** "Zubař MUDr. Nová · do zítra 09:45" — the event, and until when the proposal makes sense. */
-function aboutText(p) {
-  if (!p.about_end) return p.about_title;
-  var d = new Date(p.about_end);
+var WD = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
+
+/** A local stamp of an ISO instant: '2026-10-08T10:30'. */
+function stampOf(iso) {
+  var d = new Date(iso);
   var pad = function (n) { return ('0' + n).slice(-2); };
-  var stamp = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-  return p.about_title + ' · do ' + dueLabel(stamp);
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + (String(iso).length > 10 ? 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) : '');
+}
+
+/** "st 10:30", "dnes 20:00", "zítra", "so 27. 9." (a day without a time keeps its date). */
+function shortWhen(stamp) {
+  var date = stamp.slice(0, 10), time = stamp.slice(11, 16);
+  var today = logicalToday();
+  var p = date.split('-').map(Number);
+  var day = date === today ? 'dnes' : date === addDays(today, 1) ? 'zítra'
+    : WD[new Date(p[0], p[1] - 1, p[2], 12).getDay()] + (time ? '' : ' ' + p[2] + '. ' + p[1] + '.');
+  return day + (time ? ' ' + time : '');
+}
+
+/** "Zubař · st 10:30" — the event and when it starts. */
+function aboutText(p) {
+  if (!p.about_start) return p.about_title;
+  return p.about_title + ' · ' + shortWhen(stampOf(p.about_start));
 }
 
 /* ---- rendering ------------------------------------------------------------------ */
@@ -89,7 +107,8 @@ function renderCard() {
   var p = s.p;
   var last = offer ? offer.decided : session.slice(0, cursor).reverse().find(function (x) { return x.result && x.result !== 'rejected'; });
   $('pAccepted').hidden = !last || (!offer && session.indexOf(last) !== cursor - 1);
-  if (last) $('pAcceptedText').textContent = 'Přijato · ' + last.p.label + (last.p.due_at ? ', ' + dueLabel(last.p.due_at) : '');
+  // A phone has room for the day and the time only: "čt 20:00".
+  if (last) $('pAcceptedText').textContent = 'Přijato · ' + last.p.label + (last.p.due_at ? ', ' + (isPhone() ? shortWhen(last.p.due_at) : dueLabel(last.p.due_at)) : '');
 
   $('pView').hidden = editing;
   $('pEdit').hidden = !editing;
@@ -118,20 +137,28 @@ function renderCard() {
     }).concat(el('button.seg__opt', {
       type: 'button', 'aria-pressed': String(!known),
       onclick: function () { draft.label = $('pEditName').value; $('pWhenDate').hidden = false; $('pWhenDate').focus(); }
-    }, 'Jiný den')));
+    }, isPhone() ? 'Jiný' : 'Jiný den')));
     $('pWhenDate').hidden = known;
     $('pWhenDate').value = draft.date;
     $('pWhenTime').value = draft.time;
   }
 }
 
+function count(n, one, few, many) { return n + ' ' + (n === 1 ? one : n > 1 && n < 5 ? few : many); }
+
+/* "2 přijaty · 1 zamítnut · 1 nové pravidlo" — the parts that are not zero. */
 function renderFinal() {
   if (!session.length) return;
   var acc = session.filter(function (s) { return s.result === 'accepted' || s.result === 'edited'; }).length;
   var rej = session.filter(function (s) { return s.result === 'rejected'; }).length;
-  $('pFinalSum').textContent = acc + ' ' + (acc === 1 ? 'přijat' : 'přijaty') + ' · ' + rej + ' ' + (rej === 1 ? 'zamítnut' : 'zamítnuty');
+  var ruled = session.filter(function (s) { return s.ruled; }).length;
+  var parts = [];
+  if (acc) parts.push(count(acc, 'přijat', 'přijaty', 'přijato'));
+  if (rej) parts.push(count(rej, 'zamítnut', 'zamítnuty', 'zamítnuto'));
+  if (ruled) parts.push(count(ruled, 'nové pravidlo', 'nová pravidla', 'nových pravidel'));
+  $('pFinalSum').textContent = parts.join(' · ') || '0 přijato';
   fill($('pResults'), session.map(function (s) {
-    var res = s.result === 'rejected' ? 'zamítnuto' : s.result === 'edited' ? 'upraveno a přijato' : 'přijato';
+    var res = s.result === 'rejected' ? 'zamítnuto' : (s.result === 'edited' ? 'upraveno' : 'přijato') + (s.ruled ? ' + pravidlo' : '');
     return el('div.propresult', [el('span', s.p.label), el('span.propresult__res' + (s.result === 'rejected' ? '' : '.is-ok'), res)]);
   }));
   clearTimeout(backTimer);
@@ -145,10 +172,9 @@ function render() {
 
 /* ---- the offer (docs/DREAM.md §13; Claude Design 2c) ------------------------------ */
 
+/* "Vlak → večer předem 20:00 → Vytisknout jízdenku · přijato 4× za 30 dní" (a phone drops "přijato"). */
 function offerSummary(o) {
-  var d = o.draft, t = d.timing;
-  var when = t.anchor === 'evening_before' ? 'večer předem ' + t.at : t.anchor === 'morning_of' ? 'ráno v den ' + t.at : t.offset_min + ' min před';
-  return d.name + ' → ' + when + ' → ' + d.task.label + ' · přijato ' + o.count + '× za 30 dní';
+  return ruleSummary(o.draft) + ' · ' + (isPhone() ? '' : 'přijato ') + o.count + '× za 30 dní';
 }
 
 /* After an accept: is this kind now "regular"? Then the card stays up with
@@ -165,13 +191,24 @@ function maybeOffer(s) {
   });
 }
 
+/* Going to write the rule leaves this view; the session waits for the way
+   back, and the proposal it came from is marked "+ pravidlo" once it is saved. */
+var detour = false;
+
 function endOffer(reason) {
   var o = offer;
   offer = null;
   if (!o) return;
   if (reason === 'declined') closeOffer(o.kind, 'declined');
   render();
-  if (reason === 'rule') editRuleDraft(o.draft, o.kind);
+  if (reason === 'rule') {
+    detour = true;
+    editRuleDraft(o.draft, o.kind, function () {
+      o.decided.ruled = true;
+      // Back to the cards when some still wait, else back to the morning.
+      go(session.some(function (s) { return !s.result; }) ? 'proposals' : 'morning');
+    });
+  }
 }
 
 /* ---- deciding -------------------------------------------------------------------- */
@@ -223,6 +260,7 @@ export function initProposals() {
   $('pOfferNo').addEventListener('click', function () { endOffer('declined'); });
 
   onEnter('proposals', function () {
+    if (detour) { detour = false; render(); return; }   // back from writing a rule: the same session
     session = []; cursor = 0; editing = false; offer = null; offered = [];
     loadProposals().then(function () { startSession(); render(); });
     render();

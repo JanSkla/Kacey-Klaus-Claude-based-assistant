@@ -18,6 +18,9 @@ import { bucketOf, dueLabel, logicalToday, parseDue } from '../core/due.js';
 import { go, onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { editRule } from './rules.js';
+import { night } from '../net/nightapi.js';
+import { ruleOrigin } from '../core/rulewords.js';
+import { openDay } from '../ui/calendar.js';
 
 /* `optional` groups only appear when something is in them. */
 var GROUPS = [
@@ -115,8 +118,9 @@ function taskRow(t, big) {
     : (when ? el('span.task__due', when) : null);
 
   /* Made by the night routine (docs/DREAM.md §9): PRAVIDLO for a rule's task,
-     KACEY for an accepted proposal, and "?" to say why it is here. In the
-     text column, not beside it, so it can never squeeze the label. */
+     KACEY for an accepted proposal, and "?" to say why it is here. On the
+     label's row, at its right (Claude Design 5a); the label wraps rather than
+     being squeezed. */
   var generated = t.origin === 'rule' || t.origin === 'dream';
   var origin = generated ? el('span.task__origin', [
     el('span.origin' + (t.origin === 'dream' ? '.origin--kacey' : ''), t.origin === 'dream' ? 'KACEY' : 'PRAVIDLO'),
@@ -128,9 +132,8 @@ function taskRow(t, big) {
 
   var kids = [box, el('span.task__text', [
     el('span.task__label', t.label),
-    (dueNode || t.meta) ? el('span.task__meta', [dueNode, dueNode && t.meta ? ' · ' : '', t.meta || '']) : null,
-    origin
-  ])];
+    (dueNode || t.meta) ? el('span.task__meta', [dueNode, dueNode && t.meta ? ' · ' : '', t.meta || '']) : null
+  ]), origin];
 
   if (big && !t.done) {
     /* Two ways to start something: run its checklist, or sit with it on a
@@ -151,15 +154,41 @@ function taskRow(t, big) {
   return el('div.task' + (t.done ? '.is-done' : '') + (bucket === 'overdue' ? '.task--overdue' : ''), kids);
 }
 
-/* Why a generated task exists, under its row: the rule or the proposal's
-   reason, the overlap caveat, and a way to the thing that made it. */
+/** The rule and its set, from what the night state knows: { rule, set }. */
+function ruleOf(id) {
+  var sets = night.rulesets || [];
+  for (var i = 0; i < sets.length; i++) {
+    var r = sets[i].rules.filter(function (x) { return x.id === id; })[0];
+    if (r) return { rule: r, set: sets[i] };
+  }
+  return null;
+}
+
+/* "ráno 07:12" (before noon), "v 14:05" after. */
+function acceptedWord(iso) {
+  var d = new Date(iso);
+  var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  return (d.getHours() < 12 ? 'ráno ' : 'v ') + hm;
+}
+
+/* Why a generated task exists, under its row (Claude Design 5a):
+   "Pravidlo Posilovna · Pohyb → ráno v den 07:00. {overlap caveat}" + Upravit pravidlo,
+   "Návrh přijatý ráno 07:12 · {reason}" + Otevřít událost. */
 function whyPanel(t) {
+  if (t.origin === 'rule') {
+    var found = t.rule_id ? ruleOf(t.rule_id) : null;
+    return el('div.task__why', [
+      el('span', (found ? ruleOrigin(found.rule, found.set.name) + '.' : 'Pravidlo · ' + (t.reason || 'bez popisu')) + (t.note ? ' ' + t.note : '')),
+      t.rule_id ? el('button.link', { type: 'button', onclick: function () { editRule(t.rule_id); } }, 'Upravit pravidlo') : null
+    ]);
+  }
+  var pr = t.proposal || {};
+  var start = pr.about_start ? new Date(pr.about_start) : null;
+  var day = start ? start.getFullYear() + '-' + ('0' + (start.getMonth() + 1)).slice(-2) + '-' + ('0' + start.getDate()).slice(-2) : null;
   return el('div.task__why', [
-    el('span', (t.origin === 'dream' ? 'Návrh od Kacey · ' : 'Pravidlo · ') + (t.reason || 'bez popisu')),
-    t.note ? el('span.task__warn', t.note) : null,
-    t.origin === 'rule' && t.rule_id
-      ? el('button.link', { type: 'button', onclick: function () { editRule(t.rule_id); } }, 'Upravit pravidlo')
-      : el('button.link', { type: 'button', onclick: function () { go('calendar'); } }, 'Otevřít kalendář')
+    el('span', (pr.decided_at ? 'Návrh přijatý ' + acceptedWord(pr.decided_at) : 'Návrh od Kacey') + ' · ' + (t.reason || 'bez popisu')),
+    el('button.link', { type: 'button', onclick: function () { if (day) openDay(day, pr.about_event); else go('calendar'); } },
+      day ? 'Otevřít událost' : 'Otevřít kalendář')
   ]);
 }
 
