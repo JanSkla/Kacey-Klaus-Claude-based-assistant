@@ -39,7 +39,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="Bublina nad jakoukoli aplikací, sdílení snímků obrazovky a oznámení telefonu v Kacey."
+            android:text="Bublina nad jakoukoli aplikací, sdílení snímků obrazovky a čtení oznámení."
             android:textColor="@color/ink2"
             android:textSize="14sp" />
 
@@ -175,7 +175,7 @@
             android:layout_height="wrap_content"
             android:paddingTop="16dp"
             android:lineSpacingMultiplier="1.3"
-            android:text="Snímek obrazovky pošleš přes Sdílet → Kacey. Odtaženou bublinu vrátí dlaždice „Kacey bublina“ v rychlém nastavení. Přeposílání oznámení jen čte lištu oznámení; k účtům aplikací se nikdy nepřihlašuje."
+            android:text="Snímek obrazovky pošleš přes Sdílet → Kacey. Odtaženou bublinu vrátí dlaždice „Kacey bublina“ v rychlém nastavení. Oznámení z vybraných aplikací čte Kacey jen po povolení; když je server pryč, počkají ve frontě."
             android:textColor="@color/ink3"
             android:textSize="13sp" />
     </LinearLayout>

@@ -32,7 +32,7 @@ var status = null;         // nowplayingd's last status, or null while it is dow
 var playing = false;
 var progressBase = 0, progressAt = 0, duration = 0;
 var seekingTo = null;       // ms under the pointer while the bar is dragged
-var SEEK_STEP = 10000;      // arrow keys move ten seconds
+var SEEK_STEP = 5000;       // arrow keys move five seconds, thirty with Shift
 var volumePending = null, volumeTimer = 0;
 var keep = false;          // the screen is kept lit ("Nechat hrát vinyl")
 
@@ -136,6 +136,7 @@ function render() {
   $('miniPlay').setAttribute('aria-label', playing ? 'Pozastavit' : 'Přehrát');
   $('miniToggle').textContent = playing ? 'Pauza' : 'Přehrát';
   $('miniState').textContent = (playing ? 'HRAJE' : 'POZASTAVENO') + (status.device ? ' · ' + status.device : '');
+  $('miniSeek').classList.toggle('is-paused', !playing);
 
   var volume = volumePending !== null ? volumePending : status.volume_percent;
   $('miniVol').hidden = typeof volume !== 'number';
@@ -220,13 +221,28 @@ function initSeek() {
     bar.setPointerCapture(ev.pointerId);
     bar.classList.add('is-seeking');
     seekingTo = at(ev);
+    showTip(ev);
   });
-  bar.addEventListener('pointermove', function (ev) { if (seekingTo !== null) seekingTo = at(ev); });
+  /* The time under the pointer, in a label above it: where a tap or a drag would land. */
+  var tip = $('miniTip');
+  function showTip(ev) {
+    if (!(duration > 0)) { tip.hidden = true; return; }
+    var ms = seekingTo !== null ? seekingTo : at(ev);
+    tip.textContent = mmss(ms);
+    tip.style.left = 'clamp(0px, calc(' + (ms / duration * 100) + '% - 22px), calc(100% - 44px))';
+    tip.hidden = false;
+  }
+  bar.addEventListener('pointermove', function (ev) {
+    if (seekingTo !== null) seekingTo = at(ev);
+    showTip(ev);
+  });
+  bar.addEventListener('pointerleave', function () { if (seekingTo === null) tip.hidden = true; });
   function end(ev, commit) {
     if (seekingTo === null) return;
     var target = ev && ev.clientX !== undefined ? at(ev) : seekingTo;
     seekingTo = null;
     bar.classList.remove('is-seeking');
+    tip.hidden = true;
     if (commit) seekTo(target);
   }
   bar.addEventListener('pointerup', function (ev) { end(ev, true); });
@@ -235,9 +251,10 @@ function initSeek() {
     if (!(duration > 0)) return;
     var step = { ArrowLeft: -SEEK_STEP, ArrowDown: -SEEK_STEP, ArrowRight: SEEK_STEP, ArrowUp: SEEK_STEP }[ev.key];
     if (ev.key === 'Home') { ev.preventDefault(); seekTo(0); return; }
+    if (ev.key === 'End') { ev.preventDefault(); seekTo(duration); return; }
     if (!step) return;
     ev.preventDefault();
-    seekTo(elapsedNow() + step);
+    seekTo(elapsedNow() + step * (ev.shiftKey ? 6 : 1));
   });
 }
 

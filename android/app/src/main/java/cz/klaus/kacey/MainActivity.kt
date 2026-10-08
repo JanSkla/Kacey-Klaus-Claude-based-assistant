@@ -121,8 +121,11 @@ class MainActivity : Activity() {
         when {
             !relay -> row(R.id.rowRelay, "Čtení oznámení", Dot.ERR, "vypnuté", "Povolit" to { openRelaySettings() })
             waiting > 0 -> row(R.id.rowRelay, "Čtení oznámení", Dot.HOLLOW,
-                "čeká $waiting" + (relayError?.let { " · $it" } ?: ""), "Odeslat" to { Relay.flush(this); refreshSoon() })
-            else -> row(R.id.rowRelay, "Čtení oznámení", Dot.OK, "posílá do Kacey", "Nastavit" to { openRelaySettings() }, ghost = true)
+                "čeká $waiting" + (relayError?.let { " · $it" } ?: ""), "Odeslat" to { Relay.flush(this); refreshSoon() },
+                stateColor = R.color.ink2)
+            // A queue and a running relay are facts, not verdicts: their state words stay ink2 (Kacey Android 1b, 1c).
+            else -> row(R.id.rowRelay, "Čtení oznámení", Dot.OK, "posílá do Kacey", "Nastavit" to { openRelaySettings() }, ghost = true,
+                stateColor = R.color.ink2)
         }
 
         val primary = findViewById<Button>(R.id.bubble)
@@ -147,13 +150,14 @@ class MainActivity : Activity() {
     private fun row(
         id: Int, name: String, dot: Dot, state: String,
         action: Pair<String, () -> Unit>?, ghost: Boolean = false, current: Boolean = false,
+        stateColor: Int? = null,
     ) {
         val r = findViewById<View>(id)
         r.findViewById<TextView>(R.id.name).text = name
         r.findViewById<View>(R.id.dot).background = dotDrawable(dot)
         r.findViewById<TextView>(R.id.state).apply {
             text = state
-            setTextColor(getColor(when (dot) { Dot.OK -> R.color.ok; Dot.ERR -> R.color.err; Dot.ACC -> R.color.ink; Dot.HOLLOW -> R.color.ink3 }))
+            setTextColor(getColor(stateColor ?: when (dot) { Dot.OK -> R.color.ok; Dot.ERR -> R.color.err; Dot.ACC -> R.color.ink; Dot.HOLLOW -> R.color.ink3 }))
         }
         r.findViewById<Button>(R.id.action).apply {
             if (action == null) { visibility = View.GONE; return@apply }

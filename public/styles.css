@@ -154,16 +154,24 @@ select:focus-visible, textarea:focus-visible {
 .mini__stage { height: 190px; overflow: hidden; position: relative; background: var(--bg); border-top: 1px solid var(--line); }
 .mini__big { position: absolute; width: 400px; height: 225px; left: calc(50% - 200px); top: calc(50% - 112.5px); image-rendering: pixelated; }
 .mini__meta { display: grid; gap: 4px; }
-.mini__bigtitle { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.mini__bigtitle { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
 .mini__meta .mini__artist { font-size: 13px; }
 .mini__progress { height: 4px; }
-/* The progress bar is a seek slider: a 20px-tall hit area around the 4px bar,
-   and a square thumb at the playhead while hovered, focused or dragged. */
-.mini__seek { position: relative; display: flex; align-items: center; height: 20px; margin-top: 2px; cursor: pointer; touch-action: none; }
+/* The progress bar is a seek slider: a 24px-tall hit area around the 4px bar.
+   Hovered, focused or dragged, the bar thickens to 6px, a square --ink thumb
+   ringed in --bg sits at the playhead, and a time label rides above the pointer.
+   Paused, the fill goes --ink3. */
+.mini__seek { position: relative; display: flex; align-items: center; height: 24px; margin-top: 6px; cursor: pointer; touch-action: none; }
 .mini__seek .mini__progress { flex: 1 1 auto; }
 .mini__seek:hover .mini__progress, .mini__seek.is-seeking .mini__progress { height: 6px; }
-.mini__thumb { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--acc); opacity: 0; pointer-events: none; }
+.mini__seek.is-paused .mini__fill { background: var(--ink3); }
+.mini__thumb { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--ink); box-shadow: 0 0 0 2px var(--bg); opacity: 0; pointer-events: none; }
 .mini__seek:hover .mini__thumb, .mini__seek:focus-visible .mini__thumb, .mini__seek.is-seeking .mini__thumb { opacity: 1; }
+.mini__tip {
+  position: absolute; bottom: calc(100% + 2px); width: 44px; padding: 2px 0; text-align: center; pointer-events: none;
+  background: var(--ink); color: var(--on-acc); font-size: 12px; font-weight: 600;
+}
+.mini__seek.is-seeking + .mini__times #miniNow { color: var(--ink); font-weight: 600; }
 .mini__fill { transition: none; }
 .mini__times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink3); }
 .mini__error { font-size: 12px; color: var(--err); }
@@ -181,9 +189,10 @@ select:focus-visible, textarea:focus-visible {
 .mini__keep { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .mini__link {
   display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-top: 1px solid var(--line);
-  color: var(--acc); font-size: 13px; font-weight: 600; text-decoration: none;
+  gap: 8px; color: var(--acc); font-size: 13px; text-decoration: none; white-space: nowrap;
 }
 .mini__link:hover { background: var(--l2); }
+.mini__hint { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--ink3); }
 
 /* The music visual over the kiosk page: a frame, not a second window, because
    cage 0.2 crashes on one. The visual closes it by postMessage. */
@@ -373,6 +382,10 @@ select:focus-visible, textarea:focus-visible {
 .switch[aria-pressed="true"] .switch__knob { left: 27px; background: var(--acc); }
 .switch:disabled { cursor: not-allowed; background: none; border-style: dashed; }
 .switch:disabled .switch__knob { background: repeating-linear-gradient(135deg, var(--line2) 0 3px, transparent 3px 6px); }
+/* In flight (the second monitor answers in 4–5 s): dashed, but it keeps its fill and the knob where it was. */
+.switch.is-busy:disabled { cursor: wait; background: var(--l2); }
+.switch.is-busy[aria-pressed="true"]:disabled { background: var(--acc-dim); }
+.switch.is-busy:disabled .switch__knob { background: var(--line2); }
 
 /* =======================================================================
    CHAT
@@ -588,35 +601,55 @@ button.task__due.is-empty { color: var(--ink3); }
 .rblock em.rblock__where { color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rblock em.rblock__where span + span::before { content: " · "; }
 .rblock--col em.rblock__where { font-size: 11px; }
-/* A routine block is a button: tapping it shows what can change on that one date. */
+/* A routine block is a button: tapping it shows what can change on that one date.
+   Hover brightens it rather than repainting it, so it keeps its category tint. */
 button.rblock { font: inherit; color: var(--ink); text-align: left; cursor: pointer; border: 0; }
-button.rblock:hover { background-color: var(--l2); }
+button.rblock:hover { filter: brightness(1.3); }
+.rblock.is-selected { box-shadow: inset 0 0 0 2px var(--acc); }
 /* The date diverges from its default week (core/routine-day.js). Cancelled or
    moved away: hollow, the edge dashed (inline, in the category colour), the
-   name struck. Added for the day only: a "+" before the name. On top of a
-   default block: the two split the label strip side by side, and a warn "!"
-   stays until Kacey decides whether the default one goes. */
+   name struck, the time line saying why. Added for the day only: a "+" before
+   the name. On top of a default block: the two split the label strip side by
+   side, and a warn "!" (and a warn time line) stays until Kacey decides. */
 .rblock.is-cancelled { outline: 1px dashed var(--line2); outline-offset: -1px; }
 .rblock.is-cancelled b { text-decoration: line-through; }
+.rblock.is-overlap em { color: var(--warn); }
 .rmark {
-  display: inline-grid; place-items: center; width: 13px; height: 13px; margin-right: 5px; vertical-align: -1px;
-  border: 1px solid currentColor; font-size: 10px; font-weight: 600; line-height: 1;
+  display: inline-grid; place-items: center; width: 13px; height: 13px; margin-right: 5px; vertical-align: 1px;
+  border: 1px solid var(--ink2); color: var(--ink2); font-size: 10px; font-weight: 600; line-height: 1;
 }
 .rmark--warn { border-color: var(--warn); color: var(--warn); }
 .lane { --rstrip: 118px; }
-.rblock--a { right: auto; width: calc(var(--rstrip) / 2); }
-.rblock--b { left: calc(var(--rstrip) / 2); }
-.rblock--col.rblock--a { width: 50%; }
-.rblock--col.rblock--b { left: 50%; }
-/* The selected date's routine: default, changed for the day, or cemented. */
+.rblock--a { right: auto; width: calc(var(--rstrip) / 2); padding: 6px 4px 6px 8px; }
+.rblock--b { left: calc(var(--rstrip) / 2); right: auto; width: calc(var(--rstrip) / 2); z-index: 1; padding: 6px 4px 6px 8px; }
+.rblock--a.is-short, .rblock--b.is-short { padding: 2px 4px 2px 8px; }
+.rblock--col.rblock--a { width: 50%; padding: 3px 4px 0 8px; }
+.rblock--col.rblock--b { left: 50%; width: 50%; padding: 3px 4px 0 8px; }
+/* The selected date's routine: a state dot (accent = changed for the day,
+   filled grey = written in history, hollow = the default week) and its words. */
 .routinebar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.routinebar__lead { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.routinebar__dot { width: 8px; height: 8px; flex: none; border: 1px solid var(--ink3); }
+.routinebar__dot--acc { background: var(--acc); border-color: var(--acc); }
+.routinebar__dot--past { background: var(--ink3); }
+.routinebar__dot--stale { background: var(--warn); border-color: var(--warn); }
 .routinebar__state { font-size: 13px; color: var(--ink2); }
 .routinebar__state.is-altered { color: var(--acc); }
 .routinebar__state.is-stale { color: var(--warn); }
-.sickform > * + * { margin-top: 14px; }
-.sickform .row .field { flex: 1 1 160px; }
-.eventedit .catpick { margin-top: 8px; }
-.eventedit .input + .input, .eventedit .row + .input { margin-top: 8px; }
+/* A field with an 11px caption over its control: the routine cards and the sick sheet. */
+.field--tight { gap: 4px; min-width: 0; }
+.field__cap { font-size: 11px; letter-spacing: .08em; color: var(--ink3); }
+.field--tight .input, .field--tight .select { width: 100%; }
+/* Category chips (+ Blok one, Nemoc / volno several): pressed is the accent wash. */
+.catpick.catpick--chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.catpick--chips .catpick__opt { min-height: 0; padding: 6px 10px; color: var(--ink2); }
+.catpick--chips .catpick__opt[aria-pressed="true"] { background: var(--acc-dim); border: 1px solid var(--acc); color: var(--ink); font-weight: 400; }
+.catpick--chips .catpick__sw { width: 10px; height: 10px; flex: 0 0 10px; }
+.sheet__body.sickform { display: grid; gap: 16px; padding: 16px 20px; }
+.sickform__dates { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.sickform__preview { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2); }
+.sickform__preview.is-warn { color: var(--warn); }
+.sheet__box--narrow { width: min(520px, 100%); }
 .eblock {
   position: absolute; left: 118px; right: 10px; overflow: hidden; padding: 8px 12px;
   background: var(--l2); border: 1px solid var(--line); box-shadow: 0 2px 6px rgb(0 0 0 / .35);
@@ -658,6 +691,31 @@ button.rblock:hover { background-color: var(--l2); }
 .eventedit { position: absolute; left: 118px; right: 10px; z-index: 5; box-shadow: 0 2px 6px rgb(0 0 0 / .5); }
 .eventedit .row { margin-top: 8px; }
 .eventedit--col { right: auto; width: 340px; max-width: 100%; }
+/* The routine's own cards: a block (400) and + Blok (420), past the label strip. */
+.eventedit--routine, .eventedit--add { left: 126px; right: auto; width: min(400px, calc(100% - 136px)); padding: 14px; border-color: var(--line2); z-index: 9; }
+.eventedit--add { width: min(420px, calc(100% - 136px)); }
+.eventedit--routine.eventedit--col, .eventedit--add.eventedit--col { width: 340px; max-width: 100%; }
+.eventedit__head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 11px; }
+.eventedit--add .eventedit__head { margin-bottom: 10px; }
+.rswatch { width: 10px; height: 10px; flex: none; background: var(--cat); }
+.rswatch--hollow { background: none; border: 1px dashed var(--cat); }
+.eventedit__name { margin: 0; font-size: 15px; font-weight: 600; }
+.eventedit__name.is-gone { color: var(--ink3); text-decoration: line-through; }
+.eventedit__sub { margin: 2px 0 0; font-size: 13px; color: var(--ink2); }
+.eventedit .eventedit__body > * { margin-top: 12px; }
+.eventedit .eventedit__body > .field + .row, .eventedit .eventedit__body > .eventedit__grid + .row { margin-top: 10px; }
+.eventedit__grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.eventedit__grid--name { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); margin-top: 10px; }
+.eventedit--add .catpick, .eventedit--add .eventedit__hint { margin-top: 0; }
+.eventedit--add > .row { margin-top: 12px; }
+.eventedit__warn { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--l2); border: 1px solid var(--warn); }
+.eventedit__warn p { margin: 0; font-size: 13px; line-height: 1.5; }
+.eventedit__warn .rmark, .eventedit__hint .rmark { flex: none; margin: 3px 0 0; }
+.eventedit__hint { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink2); }
+.eventedit__text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2); }
+.eventedit__foot { margin: 12px 0 0; font-size: 12px; color: var(--ink3); }
+.eventedit--routine .row, .eventedit--add .row { gap: 6px; }
+.btn--dangertext { color: var(--err); }
 
 /* ---- several days side by side ----
    Column heads stay put while the hours scroll. They sit inside .lanewrap, so
@@ -773,6 +831,9 @@ button.rblock:hover { background-color: var(--l2); }
 .srow__text em { display: block; font-size: 13px; font-style: normal; color: var(--ink2); }
 .srow__state { font-size: 13px; color: var(--ink2); min-width: 96px; text-align: right; }
 .srow__state.is-planned { color: var(--warn); }
+.srow__state.is-acc { color: var(--acc); }
+.srow__last { margin: 10px 0 0; font-size: 13px; color: var(--ink3); }
+.srow__note { margin: 10px 0 0; max-width: 60ch; font-size: 14px; line-height: 1.6; color: var(--ink2); }
 
 .meter { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 14px; }
 .meter__bar { flex: 1; height: 3%; background: var(--acc); opacity: .75; transition: height 60ms linear; }
@@ -1438,7 +1499,7 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .eblock em { font-size: 12px; }
   .rblock { padding: 4px 6px 4px 10px; }
   .rblock b { width: 74px; font-size: 12px; }
-  .rblock em { width: 74px; font-size: 11px; overflow: hidden; white-space: nowrap; }
+  .rblock em { width: 74px; font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   /* Room over teacher: the 74px strip has no room for both on one line. */
   .rblock em.rblock__where span { display: block; overflow: hidden; text-overflow: ellipsis; }
   .rblock em.rblock__where span + span::before { content: none; }
@@ -1455,14 +1516,23 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   /* Side by side halves of the 92px label strip; their text drops the 74px width. */
   .lane { --rstrip: 92px; }
   .rblock--a b, .rblock--a em, .rblock--b b, .rblock--b em { width: auto; }
+  .rblock--a, .rblock--b { padding: 4px 3px 4px 6px; }
   .routinebar { padding: 0 12px 8px; border: 0; }
-  .routinebar__state { flex: 1 1 100%; font-size: 12px; }
+  .routinebar__lead { flex: 1 1 100%; }
+  .routinebar__state { font-size: 12px; }
   .routinebar .btn { min-height: 44px; margin-left: 0; }
 
   /* Renaming an event: a sheet, buttons stacked. */
   .eventedit.is-psheet-open { padding: 14px 16px 24px; gap: 10px; box-shadow: 0 -2px 6px rgb(0 0 0 / .5); }
   .eventedit .row { flex-direction: column; align-items: stretch; gap: 8px; }
   .eventedit .row .btn { min-height: 48px; font-size: 14px; }
+  /* The routine cards as sheets: full width, the push gone from stacked buttons,
+     the move fields one under another. */
+  .eventedit--routine.is-psheet-open, .eventedit--add.is-psheet-open { width: auto; }
+  .eventedit .row .btn.push { margin-left: 0; }
+  .eventedit__grid, .eventedit__grid--name { grid-template-columns: 1fr 1fr; }
+  .eventedit__grid > :first-child { grid-column: 1 / -1; }
+  .eventedit .input, .eventedit .select { min-height: 44px; font-size: 16px; }
 
   /* =====================================================================
      TASKS — the summary card carries the controls; groups are cards; the

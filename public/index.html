@@ -58,7 +58,7 @@
     <span class="mini" id="mini" hidden>
       <span class="mini__bar">
         <button type="button" class="mini__open" id="miniOpen" aria-expanded="false" aria-controls="miniDrop"
-                title="Klepnutím ovládání, dvojklikem vinyl přes celou obrazovku">
+                title="Klepnutí: přehrávač · dvojklepnutí: celá obrazovka">
           <span class="mini__win" aria-hidden="true"><canvas class="mini__deck" id="miniDeck" width="400" height="225"></canvas></span>
           <span class="mini__text"><b id="miniTitle"></b> <span class="mini__artist" id="miniArtist"></span></span>
         </button>
@@ -73,11 +73,12 @@
         <div class="mini__row mini__meta">
           <b class="mini__bigtitle" id="miniBigTitle"></b>
           <span class="mini__artist" id="miniBigArtist"></span>
-          <!-- Seek: tap or drag anywhere on the bar, or arrows ±10 s (views/miniplayer.js). -->
+          <!-- Seek: tap or drag anywhere on the bar, or arrows ±5 s (Shift ±30 s), Home/End (views/miniplayer.js). -->
           <span class="mini__seek" id="miniSeek" role="slider" tabindex="0" aria-label="Pozice ve skladbě"
                 aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
             <span class="bar mini__progress"><span class="bar__fill mini__fill" id="miniFill"></span></span>
             <span class="mini__thumb" id="miniThumb" aria-hidden="true"></span>
+            <span class="mini__tip num" id="miniTip" aria-hidden="true" hidden></span>
           </span>
           <span class="mini__times num"><span id="miniNow">0:00</span><span id="miniEnd">0:00</span></span>
           <span class="mini__error" id="miniError" hidden></span>
@@ -98,7 +99,7 @@
           <span class="mini__label">OBRAZOVKA</span>
           <button type="button" class="btn btn--sm" id="miniKeep" aria-pressed="false">Nechat hrát vinyl</button>
         </div>
-        <a class="mini__link" id="miniLink" target="_blank" rel="noopener">Otevřít vizuál na celou obrazovku</a>
+        <a class="mini__link" id="miniLink" target="_blank" rel="noopener">Otevřít vizuál na celou obrazovku<span class="mini__hint">dvojklepnutí</span></a>
       </div>
     </span>
     <button type="button" class="btn" id="controllerBtn">Controller</button>
@@ -392,8 +393,8 @@
     <div class="legend" id="routineLegend"></div>
     <!-- This date's routine: changed only for this day, cemented, or the default. -->
     <div class="routinebar" id="routineBar">
-      <span class="routinebar__state" id="routineState"></span>
-      <button type="button" class="btn btn--sm push" id="routineAdd">+ Blok</button>
+      <span class="routinebar__lead"><span class="routinebar__dot" id="routineDot" aria-hidden="true"></span><span class="routinebar__state" id="routineState"></span></span>
+      <button type="button" class="btn btn--sm" id="routineAdd">+ Blok</button>
       <button type="button" class="btn btn--sm" id="routineSick">Nemoc / volno…</button>
       <button type="button" class="btn btn--sm" id="routineReset" hidden>Obnovit výchozí</button>
     </div>
@@ -634,7 +635,7 @@
       <div>
         <h3 class="subhead">Druhý monitor</h3>
         <div id="ctrlMonitor"></div>
-        <p class="muted narrow">Obrazovka u postele rozšíří plochu počítače — obraz naběhne asi za 10 s. Ukončíš to tady, nebo na notebooku Ctrl+Alt+Shift+Q — pak se vrátí Kacey.</p>
+        <p class="srow__note">Obrazovka u postele rozšíří plochu počítače — obraz naběhne asi za 10 s. Ukončíš to tady, nebo na notebooku Ctrl+Alt+Shift+Q — pak se vrátí Kacey.</p>
       </div>
 
       <div>
@@ -1063,25 +1064,25 @@
      The default week stays; each day gets a whole-day cancel.
      ============================================================ -->
 <div class="sheet" id="sickPanel" hidden>
-  <div class="sheet__box" role="dialog" aria-modal="true" aria-labelledby="sickTitle">
+  <div class="sheet__box sheet__box--narrow" role="dialog" aria-modal="true" aria-labelledby="sickTitle">
     <div class="sheet__head">
       <h2 class="sheet__title" id="sickTitle">Nemoc / volno</h2>
       <span class="muted">rutina jen v těchto dnech</span>
       <button type="button" class="sheet__close push" id="sickClose" aria-label="Zavřít">×</button>
     </div>
     <div class="sheet__body sickform">
-      <div class="row">
-        <label class="field"><span class="label">OD</span><input class="input input--when" type="date" id="sickFrom"></label>
-        <label class="field"><span class="label">DO (VČETNĚ)</span><input class="input input--when" type="date" id="sickTo"></label>
+      <div class="sickform__dates">
+        <label class="field field--tight"><span class="field__cap">OD</span><input class="input" type="date" id="sickFrom"></label>
+        <label class="field field--tight"><span class="field__cap">DO (VČETNĚ)</span><input class="input" type="date" id="sickTo"></label>
       </div>
       <div class="field">
-        <span class="label">CO ZRUŠIT · nic vybráno = všechno</span>
-        <div class="catpick" id="sickCats" role="group" aria-label="Kategorie"></div>
+        <span class="field__cap">CO ZRUŠIT · NIC VYBRÁNO = VŠECHNO</span>
+        <div class="catpick catpick--chips" id="sickCats" role="group" aria-label="Kategorie"></div>
       </div>
-      <label class="field"><span class="label">PROČ</span>
+      <label class="field field--tight"><span class="field__cap">PROČ</span>
         <input class="input" type="text" id="sickReason" maxlength="120" value="nemoc">
       </label>
-      <p class="muted-3" id="sickPreview"></p>
+      <p class="sickform__preview" id="sickPreview"></p>
     </div>
     <div class="sheet__foot">
       <button type="button" class="btn" id="sickCancel">Nechat být</button>

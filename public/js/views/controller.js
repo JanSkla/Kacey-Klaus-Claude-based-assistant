@@ -210,7 +210,7 @@ function runNow(force) {
    from another screen: polled while the Controller shows. */
 
 var monitor = null;          // GET /api/monitor, or null before the first answer
-var monitorBusy = false;
+var monitorBusy = null;       // 'on' / 'off' while a toggle is in flight, else null
 
 function loadMonitor() {
   return fetch('/api/monitor').then(function (r) { return r.json(); })
@@ -219,7 +219,7 @@ function loadMonitor() {
 }
 
 function setMonitor(on) {
-  monitorBusy = true;
+  monitorBusy = on ? 'on' : 'off';
   renderMonitor();
   fetch('/api/monitor', {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -229,7 +229,18 @@ function setMonitor(on) {
     if (d.error) say(d.error);
     else say(on ? 'Druhý monitor zapnutý — obrazovka u postele teď patří počítači.' : 'Druhý monitor vypnutý — zpátky Kacey.');
   }).catch(function (e) { say('Druhý monitor nejde přepnout: ' + e.message); })
-    .then(function () { monitorBusy = false; renderMonitor(); });
+    .then(function () { monitorBusy = null; renderMonitor(); });
+}
+
+/** 'v 21:04' today, 'včera 23:12', or '6. 10. 23:12'. */
+function whenWord(iso) {
+  var d = new Date(iso);
+  if (isNaN(d)) return '';
+  var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  var day = new Date(d); day.setHours(0, 0, 0, 0);
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var ago = Math.round((today - day) / 864e5);
+  return ago === 0 ? 'v ' + hm : ago === 1 ? 'včera ' + hm : d.getDate() + '. ' + (d.getMonth() + 1) + '. ' + hm;
 }
 
 function renderMonitor() {
@@ -239,19 +250,22 @@ function renderMonitor() {
   var usable = on || !!m.available;
   var meta = !monitor ? 'zjišťuji…'
     : !usable ? (m.why || 'tady nejde')
-    : 'Moonlight ← ' + m.host + ' · ' + m.app;
+    : monitorBusy ? (monitorBusy === 'on' ? 'spojuji s počítačem — asi 10 s' : 'vypínám — vrací se Kacey')
+    : on ? 'plocha počítače je na obrazovce u postele' : 'obrazovka u postele jako druhý monitor PC';
+  // The last change, or why it failed: "Naposledy: zapnuto v 21:04" / "…: <chyba> · včera 23:12".
+  var last = !m.since ? '' : 'Naposledy: ' + (m.error ? m.error + ' · ' + whenWord(m.since).replace(/^v /, 'dnes ') : (on ? 'zapnuto ' : 'vypnuto ') + whenWord(m.since));
   fill($('ctrlMonitor'), [
     el('div.srow', [
-      el('span.srow__text', [el('b', 'Obrazovka u postele jako monitor'), el('em', meta)]),
-      el('span.srow__state' + (on ? '.is-on' : !usable && monitor ? '.is-planned' : ''),
+      el('span.srow__text', [el('b', 'Obrazovka u postele'), el('em', meta)]),
+      el('span.srow__state' + (on && !monitorBusy ? '.is-acc' : !usable && monitor ? '.is-planned' : ''), { 'aria-live': 'polite' },
         monitorBusy ? '…' : on ? 'zapnuto' : usable ? 'vypnuto' : 'nenastaveno'),
-      el('button.switch', {
-        type: 'button', 'aria-pressed': String(on), 'aria-label': 'Přepnout druhý monitor',
-        disabled: !usable || monitorBusy,
+      el('button.switch' + (monitorBusy ? '.is-busy' : ''), {
+        type: 'button', 'aria-pressed': String(on), 'aria-label': 'Druhý monitor',
+        disabled: !usable || !!monitorBusy,
         onclick: function () { setMonitor(!on); }
       }, el('span.switch__knob'))
     ]),
-    m.error && !on ? el('p.muted-3', 'Naposledy: ' + m.error) : null
+    last ? el('p.srow__last', last) : null
   ]);
 }
 
