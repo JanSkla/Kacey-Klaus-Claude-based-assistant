@@ -42,7 +42,7 @@ import * as store from '../core/store.js';
 import { go, onEnter } from './router.js';
 import { say } from './toast.js';
 import { CATS } from '../views/routine.js';
-import { CATEGORY_KEYS } from '../core/routine-cats.js';
+import { CATEGORY_KEYS, KINDS } from '../core/routine-cats.js';
 import { effectiveDay, isActive, activeBlocks } from '../core/routine-day.js';
 import { openSheet, closeSheet, sheetOpen, isPhone } from './psheet.js';
 import { tasks, toggleTask, whenText } from '../views/tasks.js';
@@ -247,12 +247,21 @@ function rclass(r) {
 }
 
 /** The block's fill and edge: hollow and dashed once it is not happening. The
-    added half of a side-by-side pair is filled stronger, so it reads as on top. */
-function rpaint(r, width, color, strong) {
-  return GONE[r.state]
-    ? 'background:transparent;border-left:' + width + 'px dashed ' + color
-    : 'background:' + color + (strong ? '33' : '1f') + ';border-left:' + width + 'px solid ' + color;
+    added half of a side-by-side pair is filled stronger, so it reads as on top.
+    A class's type (`r.kind`) is a tag over the top of the edge, `tag` px tall
+    (8–16, by the block's height). The edge is painted as a background layer
+    under a transparent border, so the tag can sit on it: a child element there
+    would be clipped by the block's overflow. */
+function rpaint(r, width, color, strong, tag) {
+  if (GONE[r.state]) return 'background:transparent;border-left:' + width + 'px dashed ' + color;
+  var k = KINDS[r.kind];
+  var layers = (k && tag ? 'linear-gradient(' + k.color + ',' + k.color + ') 0 0/' + width + 'px ' + tag + 'px no-repeat border-box,' : '') +
+    'linear-gradient(' + color + ',' + color + ') 0 0/' + width + 'px 100% no-repeat border-box ' + color + (strong ? '33' : '1f');
+  return 'background:' + layers + ';border-left:' + width + 'px solid transparent';
 }
+
+/** The tag's height for a block `px` tall: 8–16. */
+function tagH(px) { return Math.min(16, Math.max(8, px - 2)); }
 
 /** "+" before a block added for the day; a warn "!" while its overlap waits for Kacey. */
 function rmark(r) {
@@ -301,14 +310,15 @@ function routineNodes(day, b, col, narrow) {
     var time = rtimeLine(r, !!half);
     var key = blockKey(day, r);
     var on = key === openKey;
-    var title = [label, rtimeLine(r, false), where, r.src === 'added' && r.overlap === 'pending' ? 'překryv čeká na Kacey' : '']
+    var title = [label, rtimeLine(r, false), KINDS[r.kind] ? KINDS[r.kind].label : '', where, r.src === 'added' && r.overlap === 'pending' ? 'překryv čeká na Kacey' : '']
       .filter(Boolean).join(' · ');
     var ink = gone ? 'var(--ink3)' : (col !== undefined && r.src === 'added' && r.overlap === 'pending' ? 'var(--warn)' : cat.color);
     var open = function () { openBlock(day, r, b.top(r.s), col); };
     var attrs = {
       type: 'button', title: title, 'aria-pressed': String(on), 'data-rkey': key,
       style: 'top:' + b.top(r.s) + 'px;height:' + Math.max(b.height(r.s, r.e), col === undefined ? 18 : 6) + 'px;' +
-        rpaint(r, col === undefined && !half ? 6 : 4, cat.color, half === '.rblock--b'),
+        rpaint(r, col === undefined && !half ? 6 : 4, cat.color, half === '.rblock--b',
+               col === undefined ? tagH(b.height(r.s, r.e)) : 14),
       onclick: open
     };
     var cls = rclass(r) + half + (on ? '.is-selected' : '');
@@ -674,7 +684,9 @@ function renderLane() {
   renderRoutineBar();
   fill($('routineLegend'), Object.keys(CATS).map(function (k) {
     return el('span', [el('i', { style: 'background:' + CATS[k].color }), CATS[k].label]);
-  }));
+  }).concat([el('span.legend__kinds', { title: 'Značka nahoře v boční čáře školního bloku' }, Object.keys(KINDS).map(function (k) {
+    return el('span', [el('i.legend__kind', { style: 'background:' + KINDS[k].color }), KINDS[k].label]);
+  }))]));
 }
 
 function renderDay() {
@@ -1384,7 +1396,7 @@ function renderTodayTimeline() {
     lane.push(el('div.daytl__rblock' + (gone ? '.is-cancelled' : '') + (len >= 45 ? '' : '.is-short'), {
       title: [name, fmtMin(r.s) + '–' + fmtMin(r.e), whereOf(r), gone ? 'zrušeno jen pro tento den' : r.src === 'added' ? 'přidáno jen pro tento den' : '']
         .filter(Boolean).join(' · '),
-      style: 'top:' + tlTop(r.s) + 'px;height:' + Math.max(tlTop(r.e) - tlTop(r.s), 14) + 'px;' + rpaint(r, gone ? 4 : 6, cat.color)
+      style: 'top:' + tlTop(r.s) + 'px;height:' + Math.max(tlTop(r.e) - tlTop(r.s), 14) + 'px;' + rpaint(r, gone ? 4 : 6, cat.color, false, tagH(tlTop(r.e) - tlTop(r.s)))
     }, [
       el('b', { style: 'color:' + (gone ? 'var(--ink3)' : cat.color) }, name),
       el('em', gone ? 'zrušeno' : fmtMin(r.s) + '–' + fmtMin(r.e)),

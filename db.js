@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS kacey_routine_block (
   -- note, only the block's first slot carries them.
   room       TEXT,
   who        TEXT,
+  -- The class's type: 'pr' přednáška, 'cv' cvičení, 'lab' laboratoř (routine-cats.js KINDS).
+  kind       TEXT,
   PRIMARY KEY (day, slot)
 );
 
@@ -319,6 +321,8 @@ function migrate(h) {
   const routineCols = h.prepare('PRAGMA table_info(kacey_routine_block)').all().map((c) => c.name);
   if (!routineCols.includes('room')) h.exec('ALTER TABLE kacey_routine_block ADD COLUMN room TEXT');
   if (!routineCols.includes('who')) h.exec('ALTER TABLE kacey_routine_block ADD COLUMN who TEXT');
+  // ...and its type (přednáška / cvičení / laboratoř). Nullable like the other two.
+  if (!routineCols.includes('kind')) h.exec('ALTER TABLE kacey_routine_block ADD COLUMN kind TEXT');
 
   /* The learning loop (docs/DREAM.md §13) needs when the event started, to
      tell "the evening before" from "an hour before". */

@@ -24,6 +24,7 @@ process.env.KACEY_STATE_PATH = path.join(dir, 'no-such-file.json');
 
 const appstate = await import('../appstate.js');
 const db = await import('../db.js');
+const { templateBlocks } = await import('../public/js/core/routine-day.js');
 
 let passed = 0;
 function test(name, fn) {
@@ -32,7 +33,7 @@ function test(name, fn) {
 
 test('an older table gains the columns and keeps its rows', () => {
   const cols = db.open().prepare('PRAGMA table_info(kacey_routine_block)').all().map((c) => c.name);
-  assert.ok(cols.includes('room') && cols.includes('who'));
+  assert.ok(cols.includes('room') && cols.includes('who') && cols.includes('kind'));
   const r = appstate.get().routine;
   assert.equal(r.grid['0-37'], 'study');
   assert.equal(r.notes['0-37'], 'Stará hodina');
@@ -57,6 +58,20 @@ test('one of the two alone, blanks and junk dropped', () => {
     wake: 420, sleep: 1350,
   });
   assert.deepEqual(appstate.get().routine.info, { '2-37': { room: 'KN:E-107' } });
+});
+
+test('a class type round-trips; anything but pr / cv / lab is dropped', () => {
+  appstate.setSection('routine', {
+    grid: { '0-32': 'study', '1-32': 'study', '2-32': 'study' }, notes: {},
+    info: { '0-32': { room: 'T1:B1-12', kind: 'pr' }, '1-32': { kind: 'lab' }, '2-32': { kind: 'seminář' } },
+    wake: 420, sleep: 1350,
+  });
+  assert.deepEqual(appstate.get().routine.info, { '0-32': { room: 'T1:B1-12', kind: 'pr' }, '1-32': { kind: 'lab' } });
+});
+
+test('the class type reaches the resolved day', () => {
+  const b = templateBlocks(appstate.get().routine, 1)[0];
+  assert.equal(b.kind, 'lab');
 });
 
 test('info for a slot nobody painted is not stored', () => {

@@ -22,7 +22,7 @@ import { el, fill, hhmm } from '../core/el.js';
 import * as store from '../core/store.js';
 import { say } from '../ui/toast.js';
 import { isPhone } from '../ui/psheet.js';
-import { CATS } from '../core/routine-cats.js';
+import { CATS, KINDS, KIND_KEYS } from '../core/routine-cats.js';
 
 /* The categories live in core/ so the server (Kacey's tools, the rules)
    reads the same list; re-exported here for the calendar, which has always
@@ -71,7 +71,7 @@ export function blocksFor(day) {
     var key = day + '-' + b.i;
     var i = info[key] || {};
     return { cat: b.cat, key: key, s: b.i * 15, e: (b.i + b.n) * 15, note: notes[key] || '',
-             room: i.room || '', who: i.who || '' };
+             room: i.room || '', who: i.who || '', kind: i.kind || '' };
   });
 }
 
@@ -272,7 +272,7 @@ function renderGrid() {
     var labels = blocks.map(function (b) {
       var len = b.e - b.s;
       return el('span.grid__label', {
-        title: [b.note || CATS[b.cat].label, b.room, b.who].filter(Boolean).join(' · '),
+        title: [b.note || CATS[b.cat].label, b.kind && KINDS[b.kind] ? KINDS[b.kind].label : '', b.room, b.who].filter(Boolean).join(' · '),
         style: 'left:calc(' + ((b.s - gStart) / span * 100) + '% + 1px);' +
                'width:calc(' + (len / span * 100) + '% - 2px);border-left-color:' + CATS[b.cat].color
       }, [
@@ -311,6 +311,17 @@ function infoField(key, saved, placeholder, label) {
   return el('label.noteedit__field', [el('span', label.toUpperCase()), input]);
 }
 
+/* The class's type: a tag at the top of the block's edge in the calendar. */
+function kindField(saved) {
+  var current = infoDraft && infoDraft.kind != null ? infoDraft.kind : saved;
+  var select = el('select.select', {
+    onchange: function () { infoDraft = Object.assign({}, infoDraft); infoDraft.kind = select.value; }
+  }, [el('option', { value: '' }, '—')].concat(KIND_KEYS.map(function (k) {
+    return el('option', { value: k, selected: current === k ? '' : null }, KINDS[k].label + ' · ' + KINDS[k].word);
+  })));
+  return el('label.noteedit__field.noteedit__field--wide', [el('span', 'TYP VÝUKY'), select]);
+}
+
 function noteEditor(day, block, leftPct, inline) {
   var saved = (store.data.routine.notes || {})[block.key] || '';
   var input = el('input.input#noteValue', {
@@ -319,8 +330,9 @@ function noteEditor(day, block, leftPct, inline) {
     oninput: function () { noteDraft = input.value; }
   });
   var where = el('span.noteedit__info', [
-    infoField('room', block.room, 'Místnost', 'Místnost'),
-    infoField('who', block.who, 'Vyučující', 'Vyučující')
+    infoField('room', block.room, 'T2:C2-85', 'Místnost'),
+    infoField('who', block.who, 'Fischer J.', 'Vyučující'),
+    kindField(block.kind)
   ]);
   return el('form.noteedit' + (inline ? '.noteedit--inline' : ''), {
     style: (inline ? '' : 'left:clamp(0px, calc(' + leftPct + '% - 0px), calc(100% - 300px));') +
@@ -349,12 +361,12 @@ function saveNote() {
   if (infoDraft != null) {
     var was = info[noteSel] || {};
     var next = {};
-    ['room', 'who'].forEach(function (k) {
+    ['room', 'who', 'kind'].forEach(function (k) {
       var v = infoDraft[k] != null ? infoDraft[k].trim() : (was[k] || '');
       if (v) next[k] = v;
     });
-    if ((was.room || '') !== (next.room || '') || (was.who || '') !== (next.who || '')) {
-      if (next.room || next.who) info[noteSel] = next; else delete info[noteSel];
+    if ((was.room || '') !== (next.room || '') || (was.who || '') !== (next.who || '') || (was.kind || '') !== (next.kind || '')) {
+      if (next.room || next.who || next.kind) info[noteSel] = next; else delete info[noteSel];
       changed = true;
     }
   }

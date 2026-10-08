@@ -26,6 +26,7 @@ import path from 'node:path';
 import { HERE, LOGICAL_DAY_START_HOUR } from './config.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
+import { KIND_KEYS } from './public/js/core/routine-cats.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
 export const LEGACY_STATE_PATH =
@@ -128,7 +129,9 @@ function readRoutine() {
     const key = r.day + '-' + r.slot;
     grid[key] = r.category;
     if (r.note) notes[key] = r.note;
-    if (r.room || r.who) info[key] = { ...(r.room ? { room: r.room } : {}), ...(r.who ? { who: r.who } : {}) };
+    if (r.room || r.who || r.kind) {
+      info[key] = { ...(r.room ? { room: r.room } : {}), ...(r.who ? { who: r.who } : {}), ...(r.kind ? { kind: r.kind } : {}) };
+    }
   }
   const hours = kvGet('routine.hours', { wake: 420, sleep: 1350 });
   /* The divergences from a week ago on (routine-days.js). Read-only here:
@@ -267,10 +270,12 @@ function writeRoutine(value) {
   const info = (value && value.info) || {};
   /* Short free text; anything else (an object, a number) is dropped. */
   const text = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : null);
+  /* A class's type is one of three words or nothing. */
+  const kindOf = (v) => (KIND_KEYS.includes(v) ? v : null);
   transact((h) => {
     h.prepare('DELETE FROM kacey_routine_block').run();
     const insert = h.prepare(
-      'INSERT INTO kacey_routine_block (day, slot, category, note, room, who) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO kacey_routine_block (day, slot, category, note, room, who, kind) VALUES (?, ?, ?, ?, ?, ?, ?)',
     );
     for (const key of Object.keys(grid)) {
       const parts = key.split('-');
@@ -279,7 +284,7 @@ function writeRoutine(value) {
       if (!Number.isInteger(day) || !Number.isInteger(slot)) continue;
       if (day < 0 || day > 6 || slot < 0 || slot > 95) continue;
       const i = info[key] || {};
-      insert.run(day, slot, String(grid[key]), notes[key] ? String(notes[key]) : null, text(i.room), text(i.who));
+      insert.run(day, slot, String(grid[key]), notes[key] ? String(notes[key]) : null, text(i.room), text(i.who), kindOf(i.kind));
     }
   });
   kvSet('routine.hours', {

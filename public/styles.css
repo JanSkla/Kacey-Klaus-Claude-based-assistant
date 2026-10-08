@@ -649,6 +649,10 @@ button.task__due.is-empty { color: var(--ink3); }
 .legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .legend span { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); }
 .legend i, .swatch { width: 10px; height: 10px; flex: 0 0 10px; display: inline-block; }
+/* The class types after the categories: thin 4×12 bars, like the tag on a block's edge. */
+.legend .legend__kinds { gap: 10px; padding-left: 12px; border-left: 1px solid var(--line); }
+.legend .legend__kinds > span { gap: 5px; }
+.legend i.legend__kind { width: 4px; height: 12px; flex: 0 0 4px; }
 
 .lanewrap { padding: 14px 16px 14px 52px; }
 /* All-day events get a strip of their own. Drawn in the lane they would be a
@@ -1043,6 +1047,8 @@ button.rblock:hover { filter: brightness(1.3); }
 .noteedit__info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .noteedit__field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .noteedit__field > span { font-size: 11px; letter-spacing: .08em; color: var(--ink3); }
+.noteedit__field--wide { grid-column: 1 / -1; }
+.noteedit__info .select { font-size: 13px; padding: 6px 8px; }
 .noteedit__info .input { min-width: 0; }
 
 /* Unsaved-since-open strip, with the undo beside it. */

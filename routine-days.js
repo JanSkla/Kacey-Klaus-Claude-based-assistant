@@ -89,7 +89,7 @@ export function historySince(now = new Date()) {
 /** What a block keeps in history: the resolved shape, minus nothing. */
 function frozen(b) {
   return {
-    cat: b.cat, s: b.s, e: b.e, slot: b.slot, note: b.note || '', room: b.room || '', who: b.who || '',
+    cat: b.cat, s: b.s, e: b.e, slot: b.slot, note: b.note || '', room: b.room || '', who: b.who || '', kind: b.kind || '',
     src: b.src, state: b.state, reason: b.reason || '', override_id: b.override_id || null,
     group_id: b.group_id || null, group_kind: b.group_kind || null, overlap: b.overlap || null,
   };

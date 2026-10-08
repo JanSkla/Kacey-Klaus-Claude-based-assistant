@@ -21,7 +21,7 @@
    category cancels every category inside its range — that is a sick day.
 
    A resolved block:
-     { cat, s, e, slot, note, room, who,
+     { cat, s, e, slot, note, room, who, kind,
        src:   'template' | 'added',
        state: 'template' | 'cancelled' | 'moved_out' | 'added' | 'moved_in',
        reason, override_id, group_id, group_kind, overlap: 'pending' | 'keep' | null }
@@ -57,7 +57,7 @@ export function templateBlocks(routine, day) {
     var where = info[key] || {};
     return {
       cat: b.cat, s: b.i * 15, e: (b.i + b.n) * 15, slot: b.i,
-      note: notes[key] || '', room: where.room || '', who: where.who || '',
+      note: notes[key] || '', room: where.room || '', who: where.who || '', kind: where.kind || '',
       src: 'template', state: 'template', reason: '', override_id: null, group_id: null, group_kind: null, overlap: null
     };
   });

@@ -20,3 +20,14 @@ export var CATS = {
 };
 
 export var CATEGORY_KEYS = Object.keys(CATS);
+
+/* A class's type, for a block from a school timetable: a tag at the top of the
+   block's edge in the calendar (Claude Design "Kacey Desktop" / DayTimeline).
+   Light tints, so they read against any category colour. */
+export var KINDS = {
+  pr:  { label: 'přednáška', color: '#fddc69', word: 'žlutá' },
+  cv:  { label: 'cvičení',   color: '#a7f0ba', word: 'zelená' },
+  lab: { label: 'laboratoř', color: '#a6c8ff', word: 'modrá' }
+};
+
+export var KIND_KEYS = Object.keys(KINDS);

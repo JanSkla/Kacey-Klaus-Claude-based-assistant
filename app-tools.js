@@ -24,7 +24,7 @@ import { z } from 'zod';
 import * as appstate from './appstate.js';
 import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
-import { CATEGORY_KEYS } from './public/js/core/routine-cats.js';
+import { CATEGORY_KEYS, KINDS } from './public/js/core/routine-cats.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
 import * as notifications from './notifications.js';
@@ -112,7 +112,7 @@ function describeRoutine(routine) {
     const text = blocks.map((b) => {
       const note = routine.notes[day + '-' + b.i];
       const i = (routine.info || {})[day + '-' + b.i] || {};
-      const where = [i.room, i.who].filter(Boolean).join(', ');
+      const where = [i.kind && KINDS[i.kind] ? KINDS[i.kind].label : '', i.room, i.who].filter(Boolean).join(', ');
       return `${hhmm(b.i * 15)}-${hhmm((b.i + b.n) * 15)} ${b.cat}${note ? ` "${note}"` : ''}${where ? ` (${where})` : ''}`;
     }).join(', ');
     lines.push(`${DAYS[day]}: ${text || '(prázdné)'}`);
@@ -175,6 +175,8 @@ const routinePaint = tool(
       note: z.string().optional().describe('Volitelný popisek bloku, např. "Laborka" nebo název předmětu.'),
       room: z.string().max(80).optional().describe('Místnost, jak ji píše rozvrh, např. "T2:C2-85".'),
       who: z.string().max(80).optional().describe('Vyučující, např. "Fischer J."; víc lidí čárkou.'),
+      kind: z.enum(['pr', 'cv', 'lab']).optional()
+        .describe('Typ výuky podle rozvrhu: "pr" přednáška, "cv" cvičení, "lab" laboratoř. Jen u školních bloků.'),
     })).describe('Bloky k natření.'),
     replace: z.boolean().optional()
       .describe('true = nejdřív smaž celou stávající rutinu (import celého rozvrhu). ' +
@@ -212,8 +214,10 @@ const routinePaint = tool(
             painted++;
           }
           if (block.note && first !== null) notes[d + '-' + first] = block.note;
-          if ((block.room || block.who) && first !== null) {
-            info[d + '-' + first] = { ...(block.room ? { room: block.room } : {}), ...(block.who ? { who: block.who } : {}) };
+          if ((block.room || block.who || block.kind) && first !== null) {
+            info[d + '-' + first] = {
+              ...(block.room ? { room: block.room } : {}), ...(block.who ? { who: block.who } : {}), ...(block.kind ? { kind: block.kind } : {}),
+            };
           }
         }
       }
