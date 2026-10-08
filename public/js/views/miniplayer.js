@@ -161,19 +161,25 @@ function setOpen(open) {
 
 var retry = 2000;
 
+function musicOff() { return ((store.data.settings || {}).sources || {}).music === false; }
+var ws = null;
+
 function connect() {
+  // Controller → Zdroje → Hudba off: no feed; the switch turning back on reconnects.
+  if (musicOff() || ws) return;
   var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  var ws;
   try { ws = new WebSocket(proto + '//' + (location.hostname || 'localhost') + ':' + PORT + '/ws'); }
-  catch (e) { return; }
+  catch (e) { ws = null; return; }
   ws.onopen = function () { retry = 2000; };
   ws.onmessage = function (ev) {
     try { status = JSON.parse(ev.data); } catch (e) { return; }
     render();
   };
   ws.onclose = function () {
+    ws = null;
     status = null;
     render();
+    if (musicOff()) return;
     // nowplayingd is optional; knock politely, less often the longer it is away.
     setTimeout(connect, retry);
     retry = Math.min(retry * 2, 60000);
@@ -310,7 +316,11 @@ function closeVisual() {
 export function initMiniPlayer() {
   if (!$('mini')) return;
   canvases = [$('miniDeck'), $('miniBig')];
-  store.onChange(function () { render(); });          // the Hudba switch in the Controller
+  store.onChange(function () {                        // the Hudba switch in the Controller
+    if (musicOff() && ws) { var w = ws; ws = null; w.onclose = null; w.close(); status = null; }
+    else if (!musicOff()) connect();
+    render();
+  });
   $('miniLink').href = nowplayingUrl();
   /* The kiosk has no tabs, and cage 0.2 crashes when the browser opens a
      second window, so the visual never gets one there: it is shown over this

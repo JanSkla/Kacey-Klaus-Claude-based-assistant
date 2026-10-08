@@ -333,7 +333,7 @@ export async function writeBrief({ date, runner, persona, synth = null, trigger 
   const draft = {
     logical_date: date, lines, made_at: new Date().toISOString(),
     input_hash: briefInputHash({ date, events, tasks: doc.tasks, routine }), trigger,
-    weather: weather ? { temp_c: weather.temp_c, summary_day: weather.summary_day, summary_short: weather.summary_short } : null,
+    weather: weather ? { temp_c: weather.temp_c, summary_day: weather.summary_day, summary_short: weather.summary_short, place: weather.place || null } : null,
     // What the brief was written from, so a rewrite can say what moved (morning 1d).
     basis: briefBasis({ date, events, tasks: doc.tasks, routine }),
     audio: synth ? await renderBriefAudio(date, lines, synth) : [],

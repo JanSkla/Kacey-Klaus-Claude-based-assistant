@@ -157,7 +157,20 @@ function taskRow(t, big) {
   if (generated && whyOpen[t.id]) kids.push(whyPanel(t));
   if (big && editingId === t.id && !isPhone()) kids.push(dueEditor(t));
 
-  return el('div.task' + (t.done ? '.is-done' : '') + (bucket === 'overdue' ? '.task--overdue' : ''), kids);
+  var row = el('div.task' + (t.done ? '.is-done' : '') + (bucket === 'overdue' ? '.task--overdue' : ''), kids);
+  if (generated) longPress(row, function () { whyOpen[t.id] = !whyOpen[t.id]; renderToday(); renderTasks(); });
+  return row;
+}
+
+/* Half a second's press on a phone row, not on one of its buttons. */
+function longPress(node, fn) {
+  var timer = null;
+  function stop() { clearTimeout(timer); timer = null; }
+  node.addEventListener('pointerdown', function (ev) {
+    if (!isPhone() || ev.target.closest('button, a, input')) return;
+    timer = setTimeout(function () { timer = null; fn(); }, 500);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel', 'pointermove'].forEach(function (e) { node.addEventListener(e, stop); });
 }
 
 /** The rule and its set, from what the night state knows: { rule, set }. */

@@ -354,7 +354,8 @@ function paintMenus() {
   var m = list.length && rec() && rec().state !== 'pending' ? done + ' / ' + list.length : 'checklist';
   var n = (night.rulesets || []).length;
   var r = n ? (n === 1 ? '1 sada' : n <= 4 ? n + ' sady' : n + ' sad') : '';
-  [['moreMorningMeta', 'checklist' + (m === 'checklist' ? '' : ' ' + m)], ['fnRulesMeta', r], ['moreRulesMeta', r]].forEach(function (x) {
+  [['moreMorningMeta', 'checklist' + (m === 'checklist' ? '' : ' ' + m)], ['fnMorningMeta', 'checklist' + (m === 'checklist' ? '' : ' ' + m)],
+   ['fnRulesMeta', r], ['moreRulesMeta', r]].forEach(function (x) {
     var node = $(x[0]);
     if (node) node.textContent = x[1];
   });

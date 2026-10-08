@@ -205,9 +205,16 @@ function tagList(host, words, onRemove, onAdd, placeholder) {
     },
     onblur: function () { var v = input.value.trim(); if (v) onAdd(v); }
   });
+  var tail = input;
+  if (isPhone()) {
+    tail = el('button.tag__more', {
+      type: 'button',
+      onclick: function () { tail.replaceWith(input); input.focus(); }
+    }, '+ slovo');
+  }
   fill(host, words.map(function (w, i) {
     return el('span.tag', [w, el('button.tag__x', { type: 'button', 'aria-label': 'Odebrat ' + w, onclick: function () { onRemove(i); } }, '×')]);
-  }).concat(input));
+  }).concat(tail));
 }
 
 function seg(host, options, current, onPick) {

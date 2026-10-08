@@ -50,7 +50,7 @@ function contextBlock() {
     var t = taskSummary();
     parts.push('Úkoly: ' + t.due + ' na dnes, ' + t.overdue + ' po termínu, ' + t.open + ' otevřených celkem.');
   }
-  if (on.weather) parts.push('Počasí: použij, co víš, nebo ho vynech, když ho nemáš.');
+  if (on.weather) parts.push('Počasí: z předpovědi na ten den (Open-Meteo), když je k dispozici.');
   if (on.mail) parts.push('Pošta: není připojená.');
   return parts.length ? '\n\nData k dispozici:\n' + parts.join('\n') : '';
 }
@@ -101,6 +101,12 @@ function hm(iso) {
 function nightName(date) {
   var p = date.split('-').map(Number);
   return 'noc na ' + WEEKDAY[new Date(p[0], p[1] - 1, p[2], 12).getDay()] + ' ' + p[2] + '. ' + p[1] + '.';
+}
+
+/* " · Praha": where the forecast is for, once one has been fetched. */
+function weatherPlace() {
+  var w = night.state && night.state.morning && night.state.morning.weather;
+  return w && w.place ? ' · ' + w.place : '';
 }
 
 function plural(n, one, few, many) { return n + ' ' + (n === 1 ? one : n >= 2 && n <= 4 ? few : many); }
@@ -191,6 +197,8 @@ export function cycleModel(c, now) {
   } else if (m && (m.why === 'no_page' || m.why === 'missed')) {
     steps.push({ time: peak, title: 'Brief', meta: m.why === 'missed' ? 'server byl ráno vypnutý — nepřehráno' : 'kiosek neodpověděl — nepřehráno', st: 'warn' });
     act = { label: 'Přehrát brief teď', kind: 'play' };
+  } else if (failed) {
+    steps.push({ time: peak, title: 'Brief', meta: 'bez nového briefu — noční běh selhal', st: 'warn' });
   } else {
     steps.push({ time: peak, title: 'Brief', meta: 'při nejjasnější bílé', st: 'pend' });
   }
@@ -300,7 +308,7 @@ function renderInjected() {
   var rows = [
     { k: 'cal', name: 'Dnešní kalendář', meta: 'osobní · ' + plural(cal.count, 'událost', 'události', 'událostí') },
     { k: 'tasks', name: 'Dnešní úkoly', meta: 'osobní · ' + t.due + ' na dnes, ' + t.overdue + ' po termínu' },
-    { k: 'weather', name: 'Předpověď počasí', meta: 'neosobní' },
+    { k: 'weather', name: 'Předpověď počasí', meta: 'neosobní' + weatherPlace() },
     { k: 'mail', name: 'Pošta', meta: 'nepřipojeno' }
   ];
   fill($('briefInjected'), rows.map(function (r) {

@@ -6,7 +6,8 @@
    logical date, kept in kv `weather.<date>`; the night run asks for it and
    the morning's T−5 rewrite asks again (a newer forecast replaces the old).
 
-   Where: KACEY_WEATHER_LAT / KACEY_WEATHER_LON (Prague by default).
+   Where: KACEY_WEATHER_LAT / KACEY_WEATHER_LON (Prague by default), and
+   KACEY_WEATHER_PLACE for its name in the Brief view ("Praha").
    KACEY_WEATHER=off turns it off — the tests do that, so they never reach
    the network. Read at call time, not import time.
 
@@ -117,7 +118,7 @@ export async function weatherFor(date, { fetchImpl = globalThis.fetch } = {}) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const w = summarize((await res.json()).hourly, date);
     if (!w) return weatherKept(date);
-    const out = { ...w, at: new Date().toISOString() };
+    const out = { ...w, place: process.env.KACEY_WEATHER_PLACE || 'Praha', at: new Date().toISOString() };
     kvSet(`weather.${date}`, out);
     return out;
   } catch {
