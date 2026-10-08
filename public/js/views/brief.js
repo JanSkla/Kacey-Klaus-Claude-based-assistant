@@ -26,7 +26,7 @@ import { say } from '../ui/toast.js';
 import { taskSummary } from './tasks.js';
 import { todaySummary } from '../ui/calendar.js';
 import { makeLinePlayer, clockText } from './lineplayer.js';
-import { logicalToday } from '../core/due.js';
+import { logicalToday, vTime } from '../core/due.js';
 import {
   night, onNight, loadCycle, loadMorning, runNightNow, startMorningNow, shiftSunrise
 } from '../net/nightapi.js';
@@ -105,6 +105,30 @@ function nightName(date) {
 
 function plural(n, one, few, many) { return n + ' ' + (n === 1 ? one : n >= 2 && n <= 4 ? few : many); }
 
+function mmss(secs) { return Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2); }
+
+/* What broke the wind-down: "klepnutí v 23:20", "budicí slovo ve 02:14". */
+var CANCEL_WORD = { pointer: 'klepnutí', touch: 'klepnutí', key: 'klávesa', wake: 'budicí slovo', message: 'zpráva' };
+
+var RUN_TITLE = { sleep: 'Noční běh', fallback: 'Záložní běh', catchup: 'Noční běh', manual: 'Ruční běh' };
+
+/** One night-run attempt as a step: done, failed (with its Czech error), or running. */
+function attemptStep(a, run, log) {
+  var title = RUN_TITLE[a.trigger] || 'Noční běh';
+  if (a.status === 'running') return { time: hm(a.started_at), title: title + ' běží…', meta: 'kalendář, pravidla, návrhy, brief', st: 'pend' };
+  if (a.status === 'failed') return { time: hm(a.started_at), title: title + ' selhal', meta: a.error_cs || 'důvod v logu serveru', st: 'err' };
+  var secs = a.finished_at ? Math.round((new Date(a.finished_at) - new Date(a.started_at)) / 1000) : null;
+  // A catch-up says why it came late: after the notebook woke, or after the server started.
+  var why = a.trigger !== 'catchup' ? ''
+    : (log.resumed_at && log.resumed_at <= a.started_at ? 'po probuzení · ' : 'po startu serveru · ');
+  return {
+    time: hm(a.started_at), title: title + ' ✓' + (a.trigger === 'catchup' ? ' dohnán' : ''),
+    meta: why + plural(run.tasks, 'úkol', 'úkoly', 'úkolů') + ', ' + plural(run.proposals, 'návrh', 'návrhy', 'návrhů') +
+      (secs != null ? ' · ' + secs + ' s' : '') + (run.reasoning === 'failed' ? ' · úvaha selhala' : ''),
+    st: 'done'
+  };
+}
+
 /** The steps, summary and action for one night, from /api/night/cycle. Pure. */
 export function cycleModel(c, now) {
   now = now || new Date();
@@ -112,44 +136,55 @@ export function cycleModel(c, now) {
   var steps = [];
 
   if (log.winding_at) {
-    steps.push({ time: hm(log.winding_at), title: 'Usínání', meta: log.cancelled_at ? 'zrušeno v ' + hm(log.cancelled_at) + ' — ruch v místnosti' : 'tlačítko Spát · světla zhasínají', st: 'done' });
+    steps.push({ time: hm(log.winding_at), title: 'Usínání', meta: log.cancelled_at ? 'zrušeno ' + vTime(hm(log.cancelled_at)) + ' — ruch v místnosti' : 'tlačítko Spát · světla zhasínají', st: 'done' });
   } else {
     steps.push({ time: '—', title: 'Usínání', meta: 'čeká na tlačítko Spát v lightsd', st: 'pend' });
   }
 
+  // The notebook slept (a long gap between ticks), e.g. with the lid shut.
+  if (log.suspended_at) {
+    steps.push({ time: hm(log.suspended_at), title: 'Uspáno', meta: log.suspend_lid === 'closed' ? 'víko zavřené · notebook spal' : 'notebook spal', st: 'warn' });
+  }
+
+  var attempts = run ? (run.attempt_list || [run]) : [];
   if (log.asleep_at) {
     steps.push({ time: hm(log.asleep_at), title: 'Spánek', meta: 'klid ' + (s.sleep_delay_min || 60) + ' min · spánek potvrzen', st: 'done' });
   } else if (run && run.trigger !== 'sleep') {
-    steps.push({ time: '—', title: 'Spánek nezaznamenán', meta: log.winding_at ? 'klid byl přerušen' : 'tlačítko Spát nepřišlo', st: 'warn' });
+    var cause = log.cancelled_by && CANCEL_WORD[log.cancelled_by] ? CANCEL_WORD[log.cancelled_by] + ' ' + vTime(hm(log.cancelled_at)) : null;
+    steps.push({ time: '—', title: 'Spánek nezaznamenán', meta: cause || (log.winding_at ? 'klid byl přerušen' : 'tlačítko Spát nepřišlo'), st: 'warn' });
   } else {
     steps.push({ time: '—', title: 'Spánek', meta: 'hodina klidu po tlačítku', st: 'pend' });
   }
 
-  var runTitle = { sleep: 'Noční běh', fallback: 'Záložní běh', catchup: 'Noční běh', manual: 'Ruční běh' };
-  if (run && run.status === 'done') {
-    var secs = run.finished_at ? Math.round((new Date(run.finished_at) - new Date(run.started_at)) / 1000) : null;
-    steps.push({
-      time: hm(run.started_at),
-      title: runTitle[run.trigger] + ' ✓' + (run.trigger === 'catchup' ? ' dohnán' : ''),
-      meta: plural(run.tasks, 'úkol', 'úkoly', 'úkolů') + ', ' + plural(run.proposals, 'návrh', 'návrhy', 'návrhů') + (secs != null ? ' · ' + secs + ' s' : '') +
-        (run.reasoning === 'failed' ? ' · úvaha selhala' : ''),
-      st: 'done'
+  if (attempts.length) {
+    // No run after sleep, but a backup one: say the night run never started.
+    var bySleep = attempts.some(function (a) { return a.trigger === 'sleep'; });
+    if (!bySleep && attempts[0].trigger === 'fallback' && log.winding_at) {
+      steps.push({ time: '—', title: 'Noční běh', meta: 'nespuštěn — čekal na spánek', st: 'pend' });
+    }
+    attempts.forEach(function (a, i) {
+      var step = attemptStep(a, run, log);
+      // An earlier failed attempt has no count of its own.
+      if (i < attempts.length - 1 && a.status === 'done') step.meta = step.meta.split(' · ')[0];
+      steps.push(step);
     });
-  } else if (run && run.status === 'failed') {
-    steps.push({ time: hm(run.started_at), title: runTitle[run.trigger] + ' selhal', meta: run.error || 'důvod v logu serveru', st: 'err' });
-  } else if (run && run.status === 'running') {
-    steps.push({ time: hm(run.started_at), title: runTitle[run.trigger] + ' běží…', meta: 'kalendář, pravidla, návrhy, brief', st: 'pend' });
   } else {
     steps.push({ time: '—', title: 'Noční běh', meta: 'po usnutí' + (s.fallback_on === false ? '' : ' · záloha ' + (s.fallback || '04:00')), st: 'pend' });
   }
 
   var sunrise = log.sunrise_at ? hm(log.sunrise_at) : (c.wake_at || '—');
-  steps.push({ time: sunrise, title: 'Svítání', meta: 'začíná ranní rampa světel', st: log.sunrise_at ? 'done' : 'pend' });
+  steps.push({ time: sunrise, title: 'Svítání', meta: log.sunrise_at ? 'nejjasnější bílá · obrazovka zapnuta' : 'začíná ranní rampa světel', st: log.sunrise_at ? 'done' : 'pend' });
 
   var peak = c.morning_peak_at || '—';
   var act = null;
-  if (m && (m.delivered || m.end_reason === 'done' || m.state === 'done')) {
-    steps.push({ time: m.started_at ? hm(m.started_at) : peak, title: 'Brief ✓', meta: 'přečten' + (m.state === 'active' ? ' · ráno běží' : ''), st: 'done' });
+  var failed = run && run.status === 'failed';
+  if (failed && m && (m.delivered || m.end_reason === 'done' || m.state === 'done')) {
+    // Read, but not tonight's: no new tasks came with it.
+    steps.push({ time: m.started_at ? hm(m.started_at) : peak, title: 'Brief',
+      meta: m.brief_trigger === 'refresh' ? 'přepsán ráno — bez nových úkolů' : 'ze včerejších dat — bez nových úkolů', st: 'warn' });
+  } else if (m && (m.delivered || m.end_reason === 'done' || m.state === 'done')) {
+    steps.push({ time: m.started_at ? hm(m.started_at) : peak, title: 'Brief ✓',
+      meta: 'přečten' + (m.brief_secs ? ' · ' + mmss(m.brief_secs) : '') + (m.state === 'active' ? ' · ráno běží' : ''), st: 'done' });
   } else if (m && m.why === 'lid_closed') {
     steps.push({ time: peak, title: 'Brief', meta: 'víko zavřené — nepřehráno', st: 'warn' });
     act = { label: 'Přehrát brief teď', kind: 'play' };
@@ -162,15 +197,15 @@ export function cycleModel(c, now) {
 
   var sum, st;
   if (run && run.status === 'failed') {
-    sum = 'Noční běh selhal' + (m && m.delivered ? '.' : ', brief je ze starších dat.');
+    sum = 'Noční běh selhal, ' + (m && m.brief_trigger === 'refresh' ? 'brief přepsán ráno bez nových úkolů.' : 'brief je ze včerejška.');
     st = 'err';
     act = { label: 'Spustit běh teď', kind: 'run' };
   } else if (act && act.kind === 'play') {
     sum = m.why === 'lid_closed' ? 'Brief čeká — víko bylo zavřené.' : 'Brief čeká — nikdo ho neslyšel.';
     st = 'warn';
   } else if (run && run.status === 'done') {
-    sum = run.trigger === 'fallback' ? 'Běh proběhl záložně v ' + hm(run.started_at) + '.'
-      : run.trigger === 'catchup' ? 'Běh dohnán ráno v ' + hm(run.started_at) + '.'
+    sum = run.trigger === 'fallback' ? 'Běh proběhl záložně ' + vTime(hm(run.started_at)) + '.'
+      : run.trigger === 'catchup' ? 'Běh dohnán ráno ' + vTime(hm(run.started_at)) + '.'
       : (m && m.delivered ? 'Noc proběhla, brief přečten.' : 'Noc proběhla, brief připraven.');
     st = 'ok';
   } else {
@@ -198,6 +233,8 @@ function renderCycle() {
   }));
   var act = $('cycleAct');
   $('cycleActWrap').hidden = !model.act;
+  var card = $('cycleActWrap').closest('.timeline');
+  if (card) card.classList.toggle('has-act', !!model.act);      // a phone puts it first
   if (model.act) {
     act.textContent = model.act.label;
     act.onclick = function () {

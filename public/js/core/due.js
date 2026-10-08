@@ -91,6 +91,12 @@ export function bucketOf(task, now) {
   return 'later';
 }
 
+/** "v 8:00" / "ve 12:30" — Czech says "ve" before the hours that begin with a consonant cluster. */
+export function vTime(hhmm) {
+  var h = Number(String(hhmm).slice(0, 2));
+  return ([2, 3, 4, 12, 13, 14, 20, 21, 22, 23].indexOf(h) !== -1 ? 've ' : 'v ') + hhmm;
+}
+
 var DOW = ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'];
 
 /** Short Czech words for a due_at: "dnes 15:00", "zítra", "st 1. 10.", "3. 1. 2027". */

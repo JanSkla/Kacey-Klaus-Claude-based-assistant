@@ -41,6 +41,8 @@ let tickTimer = null;
 let broadcast = () => {};
 let deps = {};                 // runner, persona, onWrite — handed to dream.js
 let inFlight = null;           // { date, promise } while a run is going in this process
+let lastTickAt = 0;            // the previous tick: a long gap means the notebook slept
+let lastLid = null;
 
 export function settings() {
   const stored = (kvGet('settings', {}) || {}).night;
@@ -75,7 +77,10 @@ function apply(event, now = new Date()) {
     log(`${describe(sleep)} -> ${describe(state)} [${event.type}${event.kind ? ':' + event.kind : ''}]`);
     if (state.state === 'winding_down') logNight(targetDate(new Date(state.since)), { winding_at: state.since, asleep_at: null, cancelled_at: null });
     else if (state.state === 'asleep') logNight(targetDate(new Date(state.since)), { asleep_at: state.since });
-    else if (sleep.state === 'winding_down' && state.reason === 'interaction') logNight(targetDate(new Date(sleep.since)), { cancelled_at: state.since });
+    else if (sleep.state === 'winding_down' && state.reason === 'interaction') {
+      // What broke the wind-down, for the timeline: "klepnutí v 23:20", "budicí slovo v …".
+      logNight(targetDate(new Date(sleep.since)), { cancelled_at: state.since, cancelled_by: event.kind || null });
+    }
     if (event.type === 'sunrise') logNight(targetDate(now), { sunrise_at: now.toISOString() });
     sleep = state;
     kvSet('night.sleep', sleep);
@@ -137,9 +142,26 @@ export function startRun(trigger, at = new Date(), { force = false, date } = {})
 
 /* ---- the tick ---------------------------------------------------------- */
 
+/* Ticks come every NIGHT_TICK_MS while the process runs. A gap of several
+   means the machine was suspended (the lid, on a notebook): log it for the
+   timeline ("Uspáno · víko zavřené") and catch the night run up now — it
+   would otherwise wait for the next boot. */
+function noteGap(now) {
+  const gap = lastTickAt ? now.getTime() - lastTickAt : 0;
+  if (gap > 3 * NIGHT_TICK_MS) {
+    const from = new Date(lastTickAt);
+    logNight(targetDate(from), { suspended_at: from.toISOString(), resumed_at: now.toISOString(), suspend_lid: lastLid });
+    log(`resumed after ${Math.round(gap / 60000)} min (suspended, lid ${lastLid || 'unknown'})`);
+    catchUp(now);
+  }
+  lastTickAt = now.getTime();
+  try { lastLid = screen.status().lid || null; } catch { lastLid = null; }
+}
+
 function tick() {
   const now = new Date();
   try {
+    noteGap(now);
     apply({ type: 'tick' }, now);
 
     const s = settings();
@@ -224,15 +246,36 @@ export function noteVisibility(state) {
   log(`page visibility: ${state} (screen ${screen.status().state})`);
 }
 
+/**
+ * A run's error as the timeline says it: "kalendář neodpověděl",
+ * "timeout 30 s", "bez sítě", "model neodpověděl", "přerušený běh".
+ */
+export function humanError(err) {
+  if (!err) return null;
+  const e = String(err);
+  if (e === 'stuck' || /přerušen/.test(e)) return 'přerušený běh';
+  if (/ENOTFOUND|EAI_AGAIN|ENETUNREACH|ECONNREFUSED|ECONNRESET|fetch failed|network/i.test(e)) return 'bez sítě';
+  const t = e.match(/(?:timeout|timed out|abort)[^0-9]*(\d+)\s*(ms|s)?/i);
+  if (t) return 'timeout ' + (t[2] === 'ms' ? Math.round(Number(t[1]) / 1000) : t[1]) + ' s';
+  if (/timeout|timed out|AbortError/i.test(e)) return 'timeout';
+  if (/calendar|kalendář|klaus_memory|sqlite|database/i.test(e)) return 'kalendář neodpověděl';
+  if (/API|model|overloaded|529|rate|JSON/i.test(e)) return 'model neodpověděl';
+  return e.length > 60 ? e.slice(0, 57) + '…' : e;
+}
+
 export function runSummary(r) {
   if (!r) return null;
   const rep = r.report || {};
+  const error = rep.error || rep.reasoning?.error || (rep.reset === 'stuck' ? 'přerušený běh' : null);
+  // Every attempt for this date, oldest first; the last one is this row.
+  const attempts = (rep.attempts_log || []).map((a) => ({ ...a, error_cs: humanError(a.error) }))
+    .concat([{ trigger: r.trigger, started_at: r.started_at, finished_at: r.finished_at, status: r.status, error, error_cs: humanError(error) }]);
   return {
     logical_date: r.logical_date, status: r.status, trigger: r.trigger, attempts: r.attempts,
     started_at: r.started_at, finished_at: r.finished_at,
     tasks: (rep.rules?.created || []).length, proposals: rep.reasoning?.proposals || 0,
     reasoning: rep.reasoning?.status || null, brief: rep.brief?.status || null,
-    error: rep.error || rep.reasoning?.error || (rep.reset === 'stuck' ? 'přerušený běh' : null),
+    error, error_cs: humanError(error), attempt_list: attempts,
   };
 }
 

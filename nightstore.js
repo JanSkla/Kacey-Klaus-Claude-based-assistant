@@ -301,16 +301,27 @@ export function claimRun(date, trigger, { force = false, now: at = new Date() } 
       const manual = trigger === 'manual';
       if (row.status === 'done' && !(manual && force)) return null;
       if (row.status === 'failed' && !manual && row.attempts >= MAX_AUTO_ATTEMPTS) return null;
+      /* The attempt before this one is kept in the report (`attempts_log`), so
+         the Brief view's night timeline can draw a failed run and its backup. */
+      const prev = parseJson(row.report) || {};
+      const logged = (prev.attempts_log || []).concat([{
+        trigger: row.trigger, started_at: row.started_at, finished_at: row.finished_at, status: row.status,
+        error: prev.error || prev.reasoning?.error || (prev.reset === 'stuck' ? 'stuck' : null),
+      }]).slice(-6);
       h.prepare(`UPDATE kacey_dream_run SET status = 'running', trigger = ?, attempts = attempts + 1,
-                 started_at = ?, finished_at = NULL WHERE logical_date = ?`).run(trigger, stamp, date);
+                 started_at = ?, finished_at = NULL, report = ? WHERE logical_date = ?`)
+        .run(trigger, stamp, JSON.stringify({ attempts_log: logged }), date);
     }
     return runFromRow(h.prepare('SELECT * FROM kacey_dream_run WHERE logical_date = ?').get(date));
   });
 }
 
 export function finishRun(date, status, report) {
+  // Earlier attempts stay with the report (see claimRun).
+  const logged = (getRun(date)?.report || {}).attempts_log;
+  const full = { ...(report || {}), ...(logged ? { attempts_log: logged } : {}) };
   open().prepare('UPDATE kacey_dream_run SET status = ?, finished_at = ?, report = ? WHERE logical_date = ?')
-    .run(status, now(), JSON.stringify(report || {}), date);
+    .run(status, now(), JSON.stringify(full), date);
   return getRun(date);
 }
 

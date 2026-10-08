@@ -22,7 +22,7 @@ import { sendFrame } from '../net/protocol.js';
 import { night, onNight, loadMorning, tickMorning, morningIdle, loadProposals, loadRules, editMorningToday } from '../net/nightapi.js';
 import { makeLinePlayer, clockText } from './lineplayer.js';
 import { tasks } from './tasks.js';
-import { parseDue } from '../core/due.js';
+import { parseDue, vTime } from '../core/due.js';
 import { renderDayTimeline, todayEvents } from '../ui/calendar.js';
 import { isPhone } from '../ui/psheet.js';
 import { renderRows, addRow } from '../ui/checkedit.js';
@@ -269,12 +269,6 @@ function initEditor() {
       if (!once) patchDefaults(function (m) { m.items.push({ key: item.key, label: label }); return m; });
     }
   }));
-}
-
-/** "v 8:00" / "ve 12:30" — Czech says "ve" before the hours that start with a consonant cluster. */
-export function vTime(hhmm) {
-  var h = Number(String(hhmm).slice(0, 2));
-  return ([2, 3, 4, 12, 13, 14, 20, 21, 22, 23].indexOf(h) !== -1 ? 've ' : 'v ') + hhmm;
 }
 
 /** What comes next today: the earliest future event or timed task. "zubař v 10:30". */

@@ -141,6 +141,10 @@ export async function startMorning(now = new Date(), { manual = false } = {}) {
   const audio = ours ? (draft.audio || []) : [];
   rec.items = withProposals(rec.items, pendingCounts(rec.logical_date), now);
   Object.assign(rec, {
+    // How long the brief takes to say (the player's own estimate) and which
+    // draft it was — for the night timeline's "Brief ✓ přečten · 2:40".
+    brief_secs: lines.reduce((a, l) => a + Math.max(2, Math.round(String(l).length / 14)), 0) || null,
+    brief_trigger: ours ? (draft.trigger || null) : null,
     state: 'active', started_at: rec.started_at && manual ? rec.started_at : now.toISOString(),
     ended_at: null, end_reason: null, delivered: false, why: null, last_interaction_at: manual ? now.toISOString() : null,
   });

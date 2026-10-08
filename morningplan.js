@@ -104,6 +104,8 @@ export function historyEntry(rec) {
     total: rec.items.length,
     // The words too: the list can be edited, and an old day should still read.
     labels: Object.fromEntries(rec.items.map((i) => [i.key, i.label])),
+    brief_secs: rec.brief_secs || null,
+    brief_trigger: rec.brief_trigger || null,
     delivered: rec.delivered,
     why: rec.why,
     end_reason: rec.end_reason,

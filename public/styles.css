@@ -1924,6 +1924,12 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .view[data-view="brief"] > section.card > .card__foot { order: 4; margin-top: -12px; background: var(--l1); border: 1px solid var(--line); padding: 12px 14px; flex-wrap: wrap; row-gap: 8px; }
   .view[data-view="brief"] .bar--grow { flex: 1 1 100%; order: 3; }
   .view[data-view="brief"] .col--stack > .card:not(.card--pad) { order: 5; }
+  /* 4f: a night that needs catching up comes first; roomier steps, a bigger action, no sunrise foot. */
+  .view[data-view="brief"] .col--stack > .timeline.has-act { order: 0; }
+  .timeline__time, .timeline__text { padding: 10px 0; }
+  .timeline__act { padding: 0 12px 12px; }
+  .timeline__act .btn { min-height: 48px; font-size: 15px; }
+  .timeline__foot { display: none; }
   .view[data-view="brief"] .col--rail > .card:nth-of-type(1) { order: 6; }
   .view[data-view="brief"] .col--rail > .card:last-child { order: 7; }
   .view[data-view="brief"] .card--pad .big { font-size: 22px; }
