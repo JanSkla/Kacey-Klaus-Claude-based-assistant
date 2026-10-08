@@ -64,6 +64,10 @@ export function initActivity() {
   var kinds = { pointerdown: 'pointer', keydown: 'key', touchstart: 'touch' };
   Object.keys(kinds).forEach(function (ev) {
     // Capture phase and passive: this watches, it never interferes.
-    window.addEventListener(ev, function () { noteInteraction(kinds[ev]); }, { capture: true, passive: true });
+    window.addEventListener(ev, function (e) {
+      // The night view's own buttons are not getting up (views/nightview.js).
+      if (e.target && e.target.closest && e.target.closest('.nightview')) return;
+      noteInteraction(kinds[ev]);
+    }, { capture: true, passive: true });
   });
 }

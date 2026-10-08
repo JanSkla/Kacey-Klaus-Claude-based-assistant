@@ -24,7 +24,7 @@ import { nextItem, createVoiceBridge, createDucker } from './voicebridge.js';
 import { RuleSchema, explainIssues } from './rules.js';
 import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
 import {
-  startNight, stopNight, noteInteraction, noteSpeaking, noteVisibility, notePresence, nightState, INTERACTION_KINDS,
+  startNight, stopNight, noteInteraction, backToSleep, noteSpeaking, noteVisibility, notePresence, nightState, INTERACTION_KINDS,
   startRun as startNight_run, push as pushNight, extendNight, nightLog, runSummary, settings as nightSettings,
 } from './night.js';
 import * as morning from './morning.js';
@@ -528,6 +528,12 @@ app.post('/api/night/run', express.json({ limit: '4kb' }), async (req, res) => {
   const run = await promise;
   if (!run) return res.status(409).json({ error: 'běh pro tento den už proběhl nebo právě běží (force: true ho spustí znovu)' });
   res.json({ ok: true, run });
+});
+
+/* "Zpět spát" in the night view (Claude Design 5c): the screen goes dark,
+   the sleep state and the night run stay as they were. */
+app.post('/api/night/back-to-sleep', (_req, res) => {
+  res.json({ ok: true, sleep: backToSleep() });
 });
 
 app.get('/api/night/runs', (req, res) => {

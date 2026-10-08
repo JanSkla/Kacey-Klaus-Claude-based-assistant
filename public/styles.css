@@ -1492,6 +1492,27 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
    the one accent, dimmed as a layer over the whole screen. Not the morning. */
 html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
 
+/* Night view (Claude Design 5c/5d): the wake word from bed. Only the question, the reply and
+   "Zpět spát" — dim (the body filter above), no panels, no filled accent. */
+html.is-nightwake body { filter: brightness(.42); }
+html.is-nightwake body > :not(.nightview) { visibility: hidden; }
+.nightview { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; background: var(--bg); color: var(--ink2); }
+.nightview[hidden] { display: none; }
+.nightview__bar { flex: 0 0 52px; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.nightview__mark { width: 14px; height: 14px; border: 2px solid var(--acc); box-sizing: border-box; }
+.nightview__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--acc); margin-left: 4px; }
+.nightview__state { font-size: 15px; color: var(--ink3); }
+.nightview__short { display: none; }
+.nightview__clock { margin-left: auto; font-size: 20px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.nightview__body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px; width: 100%; max-width: 720px; margin: 0 auto; padding: 24px; box-sizing: border-box; }
+.nightview__who { margin: 0; font-size: 15px; color: var(--ink3); }
+.nightview__who--kacey { margin-top: 8px; color: var(--acc); }
+.nightview__said, .nightview__reply { margin: -12px 0 0; font-size: 28px; line-height: 1.4; color: var(--ink2); }
+.nightview__acts { display: flex; gap: 10px; margin-top: 18px; }
+.nightview__sleep, .nightview__more { height: 60px; font: inherit; background: transparent; cursor: pointer; }
+.nightview__sleep { padding: 0 28px; font-size: 18px; border: 1px solid var(--acc); color: var(--acc); }
+.nightview__more { padding: 0 24px; font-size: 16px; border: 1px solid var(--line2); color: var(--ink3); }
+
 /* =======================================================================
    PHONE-ONLY PIECES, AS DESKTOP SEES THEM
 
@@ -2248,4 +2269,21 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .tab span { font-size: 10px; }
   .conn__short { display: none; }
   .presetgrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Night view on the phone (Claude Design 5d): one centered column, the reply in accent, only "Zpět spát". */
+@media (max-width: 760px) {
+  .nightview { justify-content: center; gap: 14px; padding: 24px; }
+  .nightview__bar { flex: 0 0 auto; gap: 8px; padding: 0; border: 0; }
+  .nightview__mark, .nightview__long, .nightview__who, .nightview__more { display: none; }
+  .nightview__dot { width: 8px; height: 8px; margin: 0; }
+  .nightview__short { display: inline; }
+  .nightview__state, .nightview__clock { font-size: 13px; }
+  .nightview__clock { margin-left: 0; }
+  .nightview__state::after { content: " ·"; }
+  .nightview__body { flex: 0 0 auto; gap: 14px; max-width: none; padding: 0; }
+  .nightview__said, .nightview__reply { margin: 0; font-size: 19px; line-height: 1.45; }
+  .nightview__reply { color: var(--acc); }
+  .nightview__acts { margin-top: 12px; }
+  .nightview__sleep { flex: 1; height: auto; min-height: 56px; font-size: 16px; }
 }

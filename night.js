@@ -86,7 +86,7 @@ function apply(event, now = new Date()) {
     kvSet('night.sleep', sleep);
   }
   for (const effect of effects) {
-    if (effect.type === 'screen_off') screen.off('winding_down', { release: true });
+    if (effect.type === 'screen_off') screen.off(event.type === 'back_to_sleep' ? 'back to sleep' : 'winding_down', { release: true });
     else if (effect.type === 'start_run') startRun(effect.trigger, effect.at ? new Date(effect.at) : now);
   }
   if (changed) push();
@@ -224,6 +224,12 @@ export function noteInteraction(kind) {
   else screen.wake(kind === 'wake' ? 'wake word' : kind);
   apply({ type: 'interaction', kind });
   if (deps.onInteraction) deps.onInteraction(kind);
+}
+
+/** "Zpět spát" in the night view (5c), or 20 s of quiet there: the night goes on, the screen goes dark. */
+export function backToSleep() {
+  if (!sleep || !sleep.night_wake) return sleep;
+  return apply({ type: 'back_to_sleep' });
 }
 
 /**

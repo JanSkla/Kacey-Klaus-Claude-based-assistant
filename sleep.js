@@ -17,6 +17,7 @@ import { addDays } from './public/js/core/due.js';
 export const SLEEP_STATES = ['awake', 'winding_down', 'asleep'];
 
 const MIN = 60000;
+const NIGHT_WAKE_MAX_MS = 5 * MIN;   // a night view nobody closed
 
 function iso(d) { return new Date(d).toISOString(); }
 
@@ -87,6 +88,14 @@ export function sleepStep(state, event, now, settings = {}) {
     }
 
     case 'interaction':
+      /* The wake word from bed in the night (Claude Design 5c): a question,
+         not getting up. The night stays; the wind-down clock pauses until
+         "Zpět spát" (back_to_sleep). Any other interaction ends it, as before. */
+      if ((event.kind === 'wake' || (event.kind === 'message' && state.night_wake)) &&
+          (state.state === 'asleep' || state.state === 'winding_down')) {
+        return state.night_wake ? { state, effects: [] } : { state: { ...state, night_wake: iso(t) }, effects: [] };
+      }
+      // falls through
     case 'awake_early':
       if (state.state === 'awake') return { state, effects: [] };
       // A run already started keeps going; only the wind-down timer dies,
@@ -98,8 +107,21 @@ export function sleepStep(state, event, now, settings = {}) {
       if (state.state === 'awake') return { state, effects: [] };
       return { state: { state: 'awake', since: iso(t), reason: 'sunrise' }, effects: [] };
 
+    case 'back_to_sleep': {
+      if (!state.night_wake) return { state, effects: [] };
+      const next = { ...state };
+      delete next.night_wake;
+      // The wind-down's clock stood still while Kacey was awake for the question.
+      if (next.state === 'winding_down') next.until = iso(Date.parse(next.until) + Math.max(0, t - Date.parse(state.night_wake)));
+      return { state: next, effects: [{ type: 'screen_off' }] };
+    }
+
     case 'tick':
-      if (state.state === 'winding_down' && Date.parse(state.until) <= t) {
+      // A night view nobody closed (the page went away): back to sleep after 5 min.
+      if (state.night_wake && t - Date.parse(state.night_wake) > NIGHT_WAKE_MAX_MS) {
+        return sleepStep(state, { type: 'back_to_sleep' }, now, settings);
+      }
+      if (state.state === 'winding_down' && !state.night_wake && Date.parse(state.until) <= t) {
         /* Asleep as of the deadline, not as of this tick: a tick up to 30 s
            late, or a restart across the deadline, must not move the bedtime. */
         return {

@@ -109,7 +109,7 @@ test('the next press after an interaction starts a fresh hour', () => {
   const second = plus(EVENING, 25);
   const { state } = run([
     [press, EVENING],
-    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 20)],
+    [{ type: 'interaction', kind: 'key' }, plus(EVENING, 20)],
     [press, second],
     [tick, plus(EVENING, 61)],
   ]);
@@ -119,8 +119,9 @@ test('the next press after an interaction starts a fresh hour', () => {
 
 test('pressing again while winding down restarts the hour', () => {
   const { state } = run([[press, EVENING], [press, plus(EVENING, 40)], [tick, plus(EVENING, 70)]]);
+  const before = run([[press, EVENING]]).state.until;
   assert.equal(state.state, 'winding_down');
-  assert.equal(state.until, plus(EVENING, 100).toISOString());
+  assert.equal(Date.parse(state.until) - Date.parse(before), 40 * 60000);
 });
 
 test('awake early in lightsd counts as an interaction', () => {
@@ -133,10 +134,76 @@ test('an interaction while asleep wakes the state, but emits no second run', () 
   const { state, effects } = run([
     [press, EVENING],
     [tick, plus(EVENING, 61)],
-    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 200)],
+    [{ type: 'interaction', kind: 'pointer' }, plus(EVENING, 200)],
   ]);
   assert.equal(state.state, 'awake');
   assert.equal(effects.filter((e) => e.type === 'start_run').length, 1);
+});
+
+test('the wake word in the night is a question, not getting up (5c)', () => {
+  const { state } = run([
+    [press, EVENING],
+    [tick, plus(EVENING, 61)],
+    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 200)],
+  ]);
+  assert.equal(state.state, 'asleep');
+  assert.equal(state.night_wake, plus(EVENING, 200).toISOString());
+});
+
+test('"Zpět spát" ends the night wake, screen off, the asleep state kept', () => {
+  const { state, effects } = run([
+    [press, EVENING],
+    [tick, plus(EVENING, 61)],
+    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 200)],
+    [{ type: 'back_to_sleep' }, plus(EVENING, 202)],
+  ]);
+  assert.equal(state.state, 'asleep');
+  assert.equal(state.night_wake, undefined);
+  assert.ok(effects.some((e) => e.type === 'screen_off' && e.seen.getTime() === plus(EVENING, 202).getTime()));
+});
+
+test('a night wake during the wind-down pauses its clock', () => {
+  const { state } = run([
+    [press, EVENING],
+    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 58)],
+    [tick, plus(EVENING, 61)],                      // would have been asleep; paused instead
+    [{ type: 'back_to_sleep' }, plus(EVENING, 62)],  // 4 min awake for the question
+  ]);
+  const before = run([[press, EVENING]]).state.until;
+  assert.equal(state.state, 'winding_down');
+  assert.equal(Date.parse(state.until) - Date.parse(before), 4 * 60000);
+});
+
+test('a night view nobody closes goes dark by itself after 5 min', () => {
+  const { state, effects } = run([
+    [press, EVENING],
+    [tick, plus(EVENING, 61)],
+    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 200)],
+    [tick, plus(EVENING, 206)],
+  ]);
+  assert.equal(state.state, 'asleep');
+  assert.equal(state.night_wake, undefined);
+  assert.ok(effects.some((e) => e.type === 'screen_off' && e.seen.getTime() === plus(EVENING, 206).getTime()));
+});
+
+test('the question itself (a message) during a night wake keeps the night', () => {
+  const { state } = run([
+    [press, EVENING],
+    [tick, plus(EVENING, 61)],
+    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 200)],
+    [{ type: 'interaction', kind: 'message' }, plus(EVENING, 200.2)],
+  ]);
+  assert.equal(state.state, 'asleep');
+});
+
+test('getting up after a night wake (a tap) ends the night as before', () => {
+  const { state } = run([
+    [press, EVENING],
+    [tick, plus(EVENING, 61)],
+    [{ type: 'interaction', kind: 'wake' }, plus(EVENING, 200)],
+    [{ type: 'interaction', kind: 'pointer' }, plus(EVENING, 201)],
+  ]);
+  assert.equal(state.state, 'awake');
 });
 
 test('an interaction while awake changes nothing', () => {
