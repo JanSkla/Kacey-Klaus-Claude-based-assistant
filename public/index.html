@@ -467,6 +467,7 @@
     </div>
     <div class="tiles" id="briefTiles"></div>
     <div class="card__body card__body--scroll brieflines" id="briefLines"></div>
+    <p class="brief__hint">Klepni na řádek a uslyšíš ho znovu. Řekni „ticho“ pro konec.</p>
     <div class="card__foot row">
       <button type="button" class="btn btn--accent" id="briefPlay">Přečíst nahlas</button>
       <span class="bar bar--grow"><span class="bar__fill" id="briefProgress"></span></span>
@@ -615,14 +616,6 @@
         </div>
         <button type="button" class="btn btn--outlineaccent btn--block" id="vwOpen" aria-expanded="false" aria-controls="vwPanel">Nahrát vzorky budicího slova</button>
 
-        <!-- The wake listener as a test bench while the Controller shows (voice/wake-monitor.js). -->
-        <div class="wakemon" id="wakeMon">
-          <div class="wakemon__head"><span>TEST BUDICÍHO SLOVA</span><span class="wakemon__engine" id="wmEngine">—</span></div>
-          <span class="bar wakemon__level" aria-hidden="true"><span class="bar__fill" id="wmLevel"></span></span>
-          <p class="wakemon__note">Řekni „KC“. Tady se jen ukáže, jestli ho Kacey poznala — diktování se nespustí.</p>
-          <ol class="wakemon__log" id="wmLog" aria-live="polite"><li class="wakemon__empty">zatím nic</li></ol>
-        </div>
-
         <div class="meter" id="meter" aria-hidden="true">
           <span class="meter__bar"></span><span class="meter__bar"></span>
           <span class="meter__bar"></span><span class="meter__bar"></span>
@@ -630,6 +623,14 @@
           <span class="meter__bar"></span><span class="meter__bar"></span>
           <span class="meter__bar"></span><span class="meter__bar"></span>
           <span class="meter__bar"></span><span class="meter__bar"></span>
+        </div>
+
+        <!-- The wake listener as a test bench while the Controller shows (voice/wake-monitor.js). -->
+        <div class="wakemon" id="wakeMon">
+          <div class="wakemon__head"><span>TEST BUDICÍHO SLOVA</span><span class="wakemon__engine" id="wmEngine">—</span></div>
+          <span class="bar wakemon__level" aria-hidden="true"><span class="bar__fill" id="wmLevel"></span></span>
+          <p class="wakemon__note">Řekni „KC“. Tady se jen ukáže, jestli ho Kacey poznala — diktování se nespustí.</p>
+          <ol class="wakemon__log" id="wmLog" aria-live="polite"><li class="wakemon__empty">zatím nic</li></ol>
         </div>
       </div>
 
@@ -662,9 +663,9 @@
 
       <div>
         <h3 class="subhead">Oprávnění nástrojů</h3>
-        <p class="muted narrow">Kacey nemá shell, přístup k souborům ani na web. Klepnutím nástroj povolíš nebo zakážeš. Změna platí od příští relace.</p>
+        <p class="ctrl__lede">Kacey nemá shell, přístup k souborům ani na web. Klepnutím nástroj povolíš nebo zakážeš. Změna platí od příští relace.</p>
         <div class="chips" id="ctrlTools"></div>
-        <div class="denied narrow" id="ctrlDenied"></div>
+        <div class="denied" id="ctrlDenied"></div>
       </div>
     </div>
   </section>
@@ -962,9 +963,11 @@
       <span class="muted" id="runCount">—</span>
       <button type="button" class="btn push" data-go="tasks">Pauza</button>
     </div>
-    <h1 class="runner__title" id="runTitle">—</h1>
-    <p class="muted" id="runMeta">—</p>
-    <p class="muted narrow">Jen to nutné. Klepni na položku nebo ji řekni nahlas — „boty hotovo“.</p>
+    <div class="runner__titlerow">
+      <h1 class="runner__title" id="runTitle">—</h1>
+      <span class="runner__meta" id="runMeta">—</span>
+    </div>
+    <p class="runner__lede">Jen to nutné. Klepni na položku nebo ji řekni nahlas — „boty hotovo“.</p>
     <div class="runner__list" id="runList"></div>
     <form class="runner__add row" id="runAddForm">
       <input class="input" id="runAddInput" type="text" placeholder="Přidat položku — „boty“, „ručník“…" autocomplete="off" />
@@ -981,14 +984,14 @@
 <!-- ================= FOCUS ================= -->
 <section class="view view--full" data-view="focus" hidden>
   <div class="focus">
-    <p class="label">Jen jedna věc</p>
+    <p class="focus__label">Jen jedna věc</p>
     <h1 class="focus__title" id="focusTitle">—</h1>
-    <p class="muted" id="focusMeta">—</p>
+    <p class="focus__meta" id="focusMeta">—</p>
     <p class="focus__clock" id="focusClock">00:00</p>
-    <p class="muted narrow center">Zavolej „KC“, když se ztratíš.</p>
+    <p class="focus__hint">Zavolej „KC“, když se ztratíš.</p>
     <div class="row center">
       <button type="button" class="btn btn--accent btn--lg" id="focusDone">Hotovo</button>
-      <button type="button" class="btn btn--lg" id="focusLeave">Opustit focus</button>
+      <button type="button" class="btn btn--lg focus__leave" id="focusLeave">Opustit focus</button>
     </div>
   </div>
 </section>

@@ -310,7 +310,8 @@ function focusTask() {
 function paintFocus() {
   var t = focusTask();
   $('focusTitle').textContent = t ? t.label : '—';
-  $('focusMeta').textContent = t ? (t.meta || '') : '';
+  // "dnes 17:45 · seznam 7 položek": when it is due, then the rest.
+  $('focusMeta').textContent = t ? [whenText(t), t.meta].filter(Boolean).join(' · ') : '';
   $('focusClock').textContent =
     ('0' + Math.floor(focusSecs / 60)).slice(-2) + ':' + ('0' + (focusSecs % 60)).slice(-2);
 }

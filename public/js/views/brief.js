@@ -241,7 +241,7 @@ function renderTiles() {
     ]),
     el('span.tile', [
       el('b', 'Relace'), el('strong', state.sessionId ? state.sessionId.slice(0, 8) : '—'),
-      el('em', state.conn === 'online' ? 'připojeno' : 'offline')
+      el('em' + (state.conn === 'online' ? '.is-ok' : ''), state.conn === 'online' ? 'připojeno' : 'offline')
     ])
   ]);
 }
@@ -260,8 +260,8 @@ function renderInjected() {
   var t = taskSummary();
   var cal = todaySummary();
   var rows = [
-    { k: 'cal', name: 'Dnešní kalendář', meta: cal.count + ' událostí' },
-    { k: 'tasks', name: 'Dnešní úkoly', meta: t.due + ' na dnes, ' + t.overdue + ' po termínu' },
+    { k: 'cal', name: 'Dnešní kalendář', meta: 'osobní · ' + cal.count + ' událostí' },
+    { k: 'tasks', name: 'Dnešní úkoly', meta: 'osobní · ' + t.due + ' na dnes, ' + t.overdue + ' po termínu' },
     { k: 'weather', name: 'Předpověď počasí', meta: 'neosobní' },
     { k: 'mail', name: 'Pošta', meta: 'nepřipojeno' }
   ];

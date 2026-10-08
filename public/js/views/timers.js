@@ -80,8 +80,8 @@ function renderActive() {
     var done = t.left === 0;
     return el('div.timercard' + (done ? '.is-done' : ''), [
       el('div.timercard__head', [
-        el('b', t.label || (mmss(t.total) + ' časovač')),
-        el('em', done ? 'doběhlo' : t.running ? 'běží' : 'pauza')
+        el('b', t.label || ('časovač ' + mmss(t.total))),
+        el('em', done ? 'hotovo' : t.running ? 'běží' : 'pozastaveno')
       ]),
       el('p.timercard__big', mmss(t.left)),
       el('span.bar', el('span.bar__fill', {
@@ -123,8 +123,8 @@ function renderActive() {
       ])
     ]);
   }) : el('div.card.card--pad', [
-    el('p.strong', 'Nic neběží.'),
-    el('p.muted', 'Vyber délku, nebo to řekni nahlas — „KC, deset minut“. Časovače běží dál, i když jsi jinde v aplikaci.')
+    el('p.timers__emptytitle', 'Nic neběží.'),
+    el('p.timers__emptytext', 'Vyber délku, nebo to řekni nahlas — „KC, deset minut“. Časovače běží dál, i když jsi jinde v aplikaci.')
   ]));
 
   $('timerCount').textContent = running.filter(function (t) { return t.running; }).length +

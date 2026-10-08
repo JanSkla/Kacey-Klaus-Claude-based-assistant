@@ -201,7 +201,7 @@ function finish() {
     // Nothing was said. End the session rather than filing a blank entry.
     draft = null; currentId = null;
     renderAll();
-    say('Prázdná relace — nic k uložení.');
+    say('Prázdný zápis — není co uložit.');
     return;
   }
   clearTimeout(saveTimer);
@@ -245,7 +245,10 @@ function paintClock() {
 
 function paintRecState() {
   var note = $('jRecState');
-  if (!dictating) { note.textContent = 'Připraveno · klepni na Diktovat nebo piš'; }
+  // Paused with words already written: say how to carry on.
+  if (!dictating) {
+    note.textContent = $('jText') && $('jText').value.trim() ? 'Pozastaveno · klepni na Pokračovat' : 'Připraveno · klepni na Diktovat nebo piš';
+  }
   else if (interimText) { note.textContent = '… ' + interimText; }
   else { note.textContent = 'Nahrávám · řekni „konec“ pro ukončení'; }
 
@@ -262,8 +265,8 @@ function paintRecState() {
 function paintStats() {
   var entry = activeEntry();
   var text = $('jText').value;
-  $('jStats').textContent = wordCount(text) + ' slov' + (entry && !entry.unfinished ? ' · dokončeno' : '');
-  $('jTitle').textContent = 'Deník' + (entry ? ' · ' + timeLabel(entry.created) : '');
+  $('jStats').textContent = wordCount(text) + ' slov' + (entry && !entry.unfinished ? ' · dokončeno' : ' · končí na „konec“');
+  $('jTitle').textContent = 'Deník' + (entry ? ' · ' + timeLabel(entry.created) + (entry.title ? ' · ' + entry.title : '') : '');
 }
 
 function timeLabel(iso) {
@@ -288,7 +291,7 @@ function renderUnfinished() {
         el('span.rowbtn__title', (e.title || 'Bez názvu') + ' — ' + wordCount(e.text) + ' slov')
       ])
     ]);
-  }) : el('p.muted-3', { style: 'padding:0 12px 10px' }, 'Nic rozepsaného.'));
+  }) : el('p.muted-3', { style: 'padding:0 12px 10px' }, 'Nic nedokončeného.'));
 }
 
 /* ---- tags ---------------------------------------------------------------

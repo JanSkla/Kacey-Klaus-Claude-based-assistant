@@ -22,6 +22,7 @@ import { say } from '../ui/toast.js';
 import { primeTTS, cancelSpeech, feedTTS, flushTTS } from '../voice/tts.js';
 import { night, onNight, runNightNow } from '../net/nightapi.js';
 import { go } from '../ui/router.js';
+import { lightsUrl } from './lights.js';
 import { renderRows, addRow } from '../ui/checkedit.js';
 import { newKey, itemsWord, MAX_ITEMS } from '../core/checklist.js';
 
@@ -32,9 +33,38 @@ var SOURCES = [
   { key: 'mail', name: 'Pošta', meta: 'v plánu · souhrny jen ke čtení', planned: true },
   { key: 'health', name: 'Zdraví — spánek, běhy', meta: 'export z hodinek · v plánu', planned: true },
   // lightsd is a separate app; this switch decides whether Kacey shows it.
-  { key: 'lights', name: 'Světla v místnosti', meta: 'lightsd :8080 · samostatná aplikace' },
-  { key: 'music', name: 'Hudba — Spotify', meta: 'nowplayingd :8081 · barvy obalu do světel · v plánu', planned: true }
+  { key: 'lights', name: 'Světla v místnosti', meta: 'lightsd :8080 · hlavní + u postele' },
+  // Off hides the header's mini player (views/miniplayer.js); nowplayingd itself runs on.
+  { key: 'music', name: 'Hudba — Spotify', meta: 'nowplayingd :8081 · barvy obalu do světel' }
 ];
+
+/* "osobní" → its switch key "cal_osobni", the same mapping the night run uses (nightstore.js). */
+function sourceKey(source) {
+  return 'cal_' + String(source || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+}
+
+var calCounts = null;      // { cal_osobni: 41, … } from /api/calendar/sources, or null before it answers
+
+function loadCalCounts() {
+  return fetch('/api/calendar/sources').then(function (r) { return r.ok ? r.json() : null; }).then(function (b) {
+    if (!b || !b.sources) return;
+    calCounts = {};
+    b.sources.forEach(function (s) { calCounts[sourceKey(s.source)] = s.count; });
+    if ($('ctrlSources')) fill($('ctrlSources'), SOURCES.map(function (r) { return toggleRow('sources', r); }));
+  }).catch(function () { /* no numbers rather than wrong ones */ });
+}
+
+function eventsWord(n) { return n + (n === 1 ? ' událost' : n > 1 && n < 5 ? ' události' : ' událostí'); }
+
+/** A row's meta with the number the design puts after it, when there is a real one. */
+function metaOf(group, row) {
+  if (group === 'sources' && calCounts && calCounts[row.key] != null) return row.meta + ' · ' + eventsWord(calCounts[row.key]);
+  if (group === 'memory' && row.key === 'journal') {
+    var n = ((store.data.journal || {}).entries || []).length;
+    return row.meta + (n ? ' · ' + n : '');
+  }
+  return row.meta;
+}
 
 var MEMORY = [
   { key: 'people', name: 'Lidé', meta: 'entity a vztahy' },
@@ -67,7 +97,7 @@ function toggleRow(group, row) {
     : sw;
 
   return el('div.srow', [
-    el('span.srow__text', [el('b', row.name), el('em', row.meta)]),
+    el('span.srow__text', [el('b', row.name), el('em', metaOf(group, row))]),
     el('span.srow__state' + (row.planned ? '.is-planned' : ''),
       row.planned ? 'zatím není' : (on ? 'používá se' : 'vypnuto')),
     wrap
@@ -97,8 +127,8 @@ function renderTools() {
 
   var denied = store.data.deniedTools || [];
   fill($('ctrlDenied'), denied.length
-    ? [el('p.muted-3', 'Trvale zakázané konfigurací serveru — přepínač tu není, protože by nic nedělal:'),
-       el('p.muted', denied.map(shortName).join(', '))]
+    ? [el('p.denied__lede', 'Trvale zakázané konfigurací serveru — přepínač tu není, protože by nic nedělal:'),
+       el('p.denied__list', denied.map(shortName).join(', '))]
     : null);
 }
 
@@ -129,7 +159,7 @@ var NIGHT_ROWS = [
   { key: 'enabled', type: 'switch', name: 'Noční běh', meta: 'po usnutí · kalendář 48 h + rutina' },
   { key: 'sleep_delay_min', type: 'step', name: 'Zpoždění po usnutí', meta: 'klid bez dotyku a hlasu',
     show: function (v) { return v + ' min'; }, step: function (v, d) { return Math.max(15, Math.min(180, v + d * 15)); } },
-  { key: 'fallback_on', type: 'switch', name: 'Záložní běh 04:00', meta: 'když spánek nepřijde' },
+  { key: 'fallback_on', type: 'switch', name: 'Záložní běh', meta: 'když spánek nepřijde nebo běh selže' },
   { key: 'morning_end', type: 'step', name: 'Konec rána bez interakce', meta: 'ranní obrazovka zhasne',
     show: function (v) { return v; }, step: function (v, d) { return hhmmPlus(v, d * 30); } },
   { key: 'screen_idle_min', type: 'step', name: 'Uspání obrazovky', meta: 'mimo ráno, bez dotyku',
@@ -153,8 +183,21 @@ function nightRow(row) {
         el('span.srow__value.num', row.show(v)),
         el('button.btn.btn--sm', { type: 'button', 'aria-label': 'Více', onclick: function () { setNight(row.key, row.step(v, 1)); } }, '+')
       ])];
-  return el('div.srow', [el('span.srow__text', [el('b', row.name), el('em', row.meta)])].concat(control));
+  // "Záložní běh 04:00": the name carries the hour that is set.
+  var name = row.key === 'fallback_on' ? row.name + ' ' + s.fallback : row.name;
+  return el('div.srow', [el('span.srow__text', [el('b', name), el('em', row.meta)])].concat(control));
 }
+
+/** "dnes", "včera" or "6. 10." */
+function dayWord(isoOrDate) {
+  var d = new Date(String(isoOrDate).length === 10 ? isoOrDate + 'T12:00' : isoOrDate);
+  var a = new Date(d); a.setHours(0, 0, 0, 0);
+  var t = new Date(); t.setHours(0, 0, 0, 0);
+  var ago = Math.round((t - a) / 864e5);
+  return ago === 0 ? 'dnes' : ago === 1 ? 'včera' : d.getDate() + '. ' + (d.getMonth() + 1) + '.';
+}
+
+function lightsPort() { return (lightsUrl().match(/:(\d+)/) || [])[1] || '8080'; }
 
 function hm(iso) {
   if (!iso) return '—';
@@ -168,20 +211,25 @@ function renderNightState() {
   if (!n) rows = [['STAV', 'server nehlásí noc', 'warn']];
   else {
     var sc = n.screen || {}, sl = n.sleep || {}, run = n.run || {}, last = run.last, ls = n.lightsd || {};
-    var sleepText = sl.state === 'asleep' ? 'spí od ' + hm(sl.since)
+    var sleepText = sl.state === 'asleep' ? 'potvrzen ' + hm(sl.since)
       : sl.state === 'winding_down' ? 'usíná do ' + hm(sl.until)
       : 'vzhůru' + (sl.reason === 'sunrise' ? ' · svítání' : '');
+    // "dnes 00:11 · ok · 41 s"
+    var secs = last && last.started_at && last.finished_at ? Math.round((new Date(last.finished_at) - new Date(last.started_at)) / 1000) : null;
     var lastText = last
-      ? last.logical_date.split('-').slice(1).reverse().map(Number).join('. ') + '. ' + hm(last.started_at) + ' · ' +
-        (last.status === 'done' ? 'ok · ' + last.tasks + ' úk., ' + last.proposals + ' návr.' : last.status === 'failed' ? 'selhal' : 'běží')
+      ? dayWord(last.started_at || last.logical_date) + ' ' + hm(last.started_at) + ' · ' +
+        (last.status === 'done' ? 'ok' : last.status === 'failed' ? 'selhal' : 'běží') + (secs != null && last.status !== 'running' ? ' · ' + secs + ' s' : '')
       : 'zatím žádný';
+    // "off · probudí svítání" when the screen is off and the sunrise will wake it.
+    var scWord = sc.state === 'off' && ls.wake_at ? 'off · probudí svítání'
+      : (sc.state && sc.state !== 'unknown' ? sc.state : 'neznámý') + (sc.reason ? ' · ' + sc.reason : '');
     rows = [
-      ['SCREEN', (sc.state || 'unknown') + (sc.reason ? ' · ' + sc.reason : '') + (sc.backend ? ' · ' + ({ backlight: 'podsvícení', xset: 'DPMS', none: 'neřízeno' }[sc.backend] || sc.backend) : ''), sc.backend === 'none' ? 'warn' : null],
+      ['SCREEN', scWord + (sc.backend === 'none' ? ' · neřízeno' : ''), sc.backend === 'none' ? 'warn' : null],
       ['LID', { open: 'otevřené', closed: 'zavřené', unknown: 'neznámé' }[sc.lid] || '—', sc.lid === 'closed' ? 'warn' : sc.lid === 'open' ? 'ok' : null],
       ['SLEEP', sleepText],
       ['LAST RUN', lastText, last ? (last.status === 'done' ? 'ok' : last.status === 'failed' ? 'bad' : null) : null],
       ['NEXT RUN', run.running ? 'běží pro ' + run.running : 'po usnutí' + (nightSettings().fallback_on ? ' · záloha ' + ((run.next && run.next.fallback) || '04:00') : '')],
-      ['SVÍTÁNÍ', ls.wake_at ? ls.wake_at + (ls.morning_peak_at ? ' · brief ' + ls.morning_peak_at : '') + ' · lightsd' : 'lightsd ' + (ls.mode === 'down' ? 'nedostupné' : '—'), ls.mode === 'down' ? 'warn' : null]
+      ['SVÍTÁNÍ', ls.wake_at ? ls.wake_at + ' · lightsd :' + lightsPort() : 'lightsd ' + (ls.mode === 'down' ? 'nedostupné' : '—'), ls.mode === 'down' ? 'warn' : null]
     ];
   }
   fill($('ctrlNightState'), rows.map(function (r) {
@@ -340,6 +388,7 @@ function initChecklist() {
 function render() {
   if (!$('ctrlSources')) return;
   renderChecklist();
+  if (!calCounts) loadCalCounts();
   renderMonitor();
   loadMonitor();
   fill($('ctrlSources'), SOURCES.map(function (r) { return toggleRow('sources', r); }));

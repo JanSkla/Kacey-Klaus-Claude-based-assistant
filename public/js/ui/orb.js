@@ -82,8 +82,10 @@ function paintMeter(v) {
   }
   for (var i = 0; i < meterBars.length; i++) {
     var phase = 1 - Math.abs((i / (meterBars.length - 1)) - 0.5) * 1.3;
-    var h = Math.max(3, v * 100 * phase);
+    var h = Math.max(7, v * 100 * phase);
     meterBars[i].style.height = h.toFixed(1) + '%';
+    // A bar lights up once it is loud enough to matter (Claude Design: line2 → acc).
+    meterBars[i].classList.toggle('is-hot', h > 57);
   }
 }
 

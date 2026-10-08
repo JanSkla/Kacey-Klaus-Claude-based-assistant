@@ -429,6 +429,7 @@ function fetchMissing(m) {
 /** Everything again from the server — Kacey may have just written to it. */
 export async function refreshCalendar() {
   payloads = {};
+  loadSourceTotals();
   return showMonth(month);
 }
 
@@ -518,7 +519,7 @@ function renderMonth() {
     return el('button.chip.chip--filter', {
       type: 'button',
       onclick: function () { showMonth(m.month); }
-    }, m.month + ' (' + m.count + ')');
+    }, monthChip(m.month) + ' (' + m.count + ')');
   }));
 }
 
@@ -591,6 +592,19 @@ function renderSpans() {
   }
 }
 
+/* Each source's events, all time (GET /api/calendar/sources): "osobní · 41",
+   the same number as the Controller's. Until it answers, this month's. */
+var sourceTotals = null;
+
+function loadSourceTotals() {
+  fetch('/api/calendar/sources').then(function (r) { return r.ok ? r.json() : null; }).then(function (b) {
+    if (!b || !b.sources) return;
+    sourceTotals = {};
+    b.sources.forEach(function (x) { sourceTotals[x.source] = x.count; });
+    renderSources();
+  }).catch(function () { /* the month's counts stay */ });
+}
+
 function renderSources() {
   var host = $('calSources');
   if (!host || !payload) return;
@@ -599,6 +613,7 @@ function renderSources() {
   payload.days.forEach(function (d) {
     d.events.forEach(function (e) { var s = sourceOf(e); counts[s] = (counts[s] || 0) + 1; });
   });
+  if (sourceTotals) Object.keys(sourceTotals).forEach(function (s) { counts[s] = sourceTotals[s]; });
   var names = Object.keys(counts).sort();
 
   // Tasks are always offered: a month with none can still get some.
@@ -620,6 +635,12 @@ function renderSources() {
       s + ' · ' + counts[s]
     ]);
   }));
+}
+
+/** "říjen", or "říjen 2027" outside the shown year. */
+function monthChip(ym) {
+  var p = ym.split('-').map(Number);
+  return MON_NOM[p[1] - 1] + (String(p[0]) !== String(month).slice(0, 4) ? ' ' + p[0] : '');
 }
 
 /* ---- the day lane ------------------------------------------------------- */

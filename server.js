@@ -805,6 +805,22 @@ app.post('/api/night/sunrise', express.json({ limit: '1kb' }), async (req, res) 
   }
 });
 
+/* How many events each calendar source holds, all time — the Controller's
+   "čte se z klaus_memory · 41 událostí". Read only, like /api/calendar. */
+app.get('/api/calendar/sources', async (_req, res) => {
+  let db;
+  try {
+    const { DatabaseSync } = await import('node:sqlite');
+    db = new DatabaseSync(KLAUS_DB, { readOnly: true });
+    const rows = db.prepare('SELECT source, COUNT(*) AS n FROM calendar_event GROUP BY source').all();
+    res.json({ sources: rows.map((r) => ({ source: r.source, count: Number(r.n) || 0 })) });
+  } catch (err) {
+    res.status(503).json({ error: `Kalendář nelze otevřít: ${err.message}` });
+  } finally {
+    try { db && db.close(); } catch { /* already closed */ }
+  }
+});
+
 /* The header's lights chip: what the room light shows right now, read from
    lightsd's status. Read only — the chip opens the Lights view to change it. */
 app.get('/api/lights/state', async (_req, res) => {

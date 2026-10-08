@@ -41,7 +41,7 @@ export function updateTelemetry() {
   var orb = orbState();
   setTm(tm.state, orb.toUpperCase(),
     orb === 'offline' || orb === 'error' ? 'bad' : null);
-  setTm(tm.mcp, telemetry.mcp, telemetry.mcp === 'connected' ? null : 'warn');
+  setTm(tm.mcp, telemetry.mcp, telemetry.mcp !== 'none' && telemetry.mcp !== '—' ? null : 'warn');
   setTm(tm.session, state.sessionId ? state.sessionId.slice(0, 8) : '—');
   setTm(tm.turns, String(telemetry.turns));
   setTm(tm.tool, telemetry.lastTool);
@@ -53,7 +53,7 @@ export function updateTelemetry() {
 
   if (head.mcp) {
     head.mcp.textContent = telemetry.mcp;
-    head.mcp.className = telemetry.mcp === 'connected' ? 'is-ok' : 'is-bad';
+    head.mcp.className = telemetry.mcp !== 'none' && telemetry.mcp !== '—' ? 'is-ok' : 'is-bad';
   }
   if (head.turns) head.turns.textContent = String(telemetry.turns);
 }
@@ -64,12 +64,23 @@ export function updateTelemetry() {
    once in the `ready` frame and then never changes. */
 export function setModel(name) {
   setTm(tm.model, name);
-  if (head.model) head.model.textContent = name;
+  // The header is short on room: "opus-5-5", the readout keeps the full id.
+  if (head.model) head.model.textContent = String(name).replace(/^claude-/, '');
+  paintStatsTitle();
 }
 
+/** The whole stats line as a tooltip, since a narrow header drops items. */
+function paintStatsTitle() {
+  var stats = document.querySelector('.top__stats');
+  var ver = document.getElementById('topVersion');
+  if (stats) stats.title = 'KC ' + (ver ? ver.textContent : '—') + ' · model ' + (tm.model ? tm.model.textContent : '—') + ' · mcp ' + telemetry.mcp;
+}
+
+/* The MCP servers by name ("klaus-memory"), or "none". */
 export function setMcp(list) {
-  telemetry.mcp = (Array.isArray(list) && list.length) ? 'connected' : 'none';
+  telemetry.mcp = (Array.isArray(list) && list.length) ? list.join(', ') : 'none';
   updateTelemetry();
+  paintStatsTitle();
 }
 
 export function noteTurn() {

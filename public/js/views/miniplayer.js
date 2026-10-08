@@ -20,6 +20,7 @@
 import { $ } from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import { KIOSK } from '../core/state.js';
+import * as store from '../core/store.js';
 
 var PORT = 8081;
 var VOLUME_STEP = 5;
@@ -119,7 +120,10 @@ function frame(now) {
 
 function render() {
   var track = status && status.track;
-  $('mini').hidden = !track;
+  // Controller → Zdroje → Hudba off: no mini player (nowplayingd plays on regardless).
+  var musicOff = ((store.data.settings || {}).sources || {}).music === false;
+  $('mini').hidden = !track || musicOff;
+  if (musicOff) { setOpen(false); return; }
   if (!track) { setOpen(false); return; }
 
   playing = !!status.playing;
@@ -306,6 +310,7 @@ function closeVisual() {
 export function initMiniPlayer() {
   if (!$('mini')) return;
   canvases = [$('miniDeck'), $('miniBig')];
+  store.onChange(function () { render(); });          // the Hudba switch in the Controller
   $('miniLink').href = nowplayingUrl();
   /* The kiosk has no tabs, and cage 0.2 crashes when the browser opens a
      second window, so the visual never gets one there: it is shown over this
