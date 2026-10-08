@@ -127,7 +127,7 @@ function renderTools() {
 
   var denied = store.data.deniedTools || [];
   fill($('ctrlDenied'), denied.length
-    ? [el('p.denied__lede', 'Trvale zakázané konfigurací serveru — přepínač tu není, protože by nic nedělal:'),
+    ? [el('p.denied__lede', ['Trvale zakázané konfigurací serveru', el('span.desk-only', ' — přepínač tu není, protože by nic nedělal'), ':']),
        el('p.denied__list', denied.map(shortName).join(', '))]
     : null);
 }

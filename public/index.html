@@ -109,7 +109,7 @@
     <button type="button" class="lightchip" id="lightChip" data-go="lights" title="Světla — otevřít ovládání" hidden>
       <svg class="lightchip__bulb" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
       <span class="lightchip__sw" id="lightChipSw" aria-hidden="true"></span>
-      <span id="lightChipLabel">—</span>
+      <span id="lightChipLabel" class="desk-only">—</span><span id="lightChipShort" class="phone-only num">—</span>
     </button>
     <button type="button" class="iconbtn" id="controllerBtn" aria-label="Controller — nastavení" title="Controller">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.5 7.5 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
@@ -190,7 +190,7 @@
       </div>
       <p class="status__hint" id="hint" aria-live="polite"></p>
       <p class="status__alert" id="alert" role="alert" hidden></p>
-      <p class="listening" id="listeningStrip" hidden>Poslouchám… řekni, co potřebuješ, nebo klepni na Stop.</p>
+      <p class="listening" id="listeningStrip" hidden>Poslouchám… řekni, co potřebuješ<span class="desk-only">, nebo klepni na Stop</span>.</p>
     </div>
 
     <div class="dock">
@@ -349,7 +349,7 @@
       <h2 class="card__title card__title--bar">Akce</h2>
       <div class="fnlist">
         <button type="button" class="btn btn--accent btn--fn phone-only" id="libNew">Nová relace deníku</button>
-        <button type="button" class="btn btn--fn" id="libReport">Měsíční přehled vzorců</button>
+        <button type="button" class="btn btn--fn" id="libReport">Měsíční přehled<span class="desk-only"> vzorců</span></button>
         <button type="button" class="btn btn--fn" id="libExport">Export</button>
       </div>
       <div class="card__foot card__foot--block">
@@ -499,7 +499,7 @@
     <div class="viewbar">
       <h2 class="card__title card__title--lg">Světla v místnosti</h2>
       <span class="muted-3" id="lightsWhere">samostatná aplikace</span>
-      <a class="link push" id="lightsOpen" href="#" target="_blank" rel="noopener">Otevřít samostatně ↗</a>
+      <a class="link push" id="lightsOpen" href="#" target="_blank" rel="noopener">Otevřít<span class="desk-only"> samostatně</span> ↗</a>
     </div>
     <iframe class="embed" id="lightsFrame" title="Světla v místnosti" hidden></iframe>
     <div class="card card--pad embed__off" id="lightsDown" hidden>
@@ -975,7 +975,7 @@
     <div class="runner__list" id="runList"></div>
     <form class="runner__add row" id="runAddForm">
       <input class="input" id="runAddInput" type="text" placeholder="Přidat položku — „boty“, „ručník“…" autocomplete="off" />
-      <button type="submit" class="btn">Přidat položku</button>
+      <button type="submit" class="btn">Přidat<span class="desk-only"> položku</span></button>
     </form>
     <div class="runner__foot">
       <span class="bar bar--grow"><span class="bar__fill" id="runBar"></span></span>
@@ -1065,21 +1065,21 @@
     </div>
 
     <div class="sheet__bar">
-      <span class="label">ŠTĚTEC</span>
+      <span class="label desk-only">ŠTĚTEC</span>
       <span class="chips" id="brushes"></span>
       <button type="button" class="btn btn--sm push" id="revertRoutine" disabled>Beze změn</button>
       <button type="button" class="btn btn--sm btn--dangerghost" id="askClearGrid">Vymazat vše</button>
     </div>
 
     <div class="dirty" id="routineDirty" hidden>
-      <span>Neuložené úpravy od otevření plánovače</span>
+      <span>Neuložené úpravy od otevření<span class="desk-only"> plánovače</span></span>
       <button type="button" class="btn btn--sm btn--outlineaccent" id="revertRoutineStrip">↶ Vrátit</button>
     </div>
 
     <div class="confirm" id="confirmClear" hidden>
       <span>
         <b>Vymazat celou rutinu?</b>
-        <em>Každý natřený blok i jeho poznámka zmizí. Kalendářních událostí se to netýká. Do zavření plánovače jde vrátit.</em>
+        <em>Každý natřený blok i<span class="desk-only"> jeho</span> poznámka zmizí.<span class="desk-only"> Kalendářních událostí se to netýká.</span> Do zavření plánovače jde vrátit.</em>
       </span>
       <button type="button" class="btn push" id="cancelClearGrid">Nechat být</button>
       <button type="button" class="btn btn--dangerfill" id="clearGrid">Vymazat vše</button>
@@ -1096,7 +1096,7 @@
         <b class="num" id="sleepLabelR">22:30</b>
         <button type="button" class="btn btn--step" id="sleepUpR">+</button>
       </span>
-      <span class="muted-3">šrafované hodiny jsou spánek — nejdou natřít</span>
+      <span class="muted-3 desk-only">šrafované hodiny jsou spánek — nejdou natřít</span>
     </div>
 
     <div class="sheet__body">
@@ -1162,17 +1162,18 @@
 
     <p class="vw__lede">
       Nahraj, jak říkáš „KC“. Kacey pak porovnává zvuk s tvými nahrávkami —
-      bez přepisu, bez sítě. Mluv tak, jak budeš mluvit potom, a v místnosti,
-      kde Kacey používáš.
+      bez přepisu, bez sítě.<span class="desk-only"> Mluv tak, jak budeš mluvit potom, a v místnosti,
+      kde Kacey používáš.</span>
     </p>
 
     <div class="vw__modes" role="group" aria-label="Způsob rozpoznání">
-      <button type="button" class="vw__mode" id="vwModeVoice" aria-pressed="false">můj hlas</button>
-      <button type="button" class="vw__mode" id="vwModeAsr" aria-pressed="true">přepis</button>
+      <button type="button" class="vw__mode" id="vwModeVoice" aria-pressed="false">Můj hlas</button>
+      <button type="button" class="vw__mode" id="vwModeAsr" aria-pressed="true">Přepis</button>
     </div>
+    <p class="vw__asrnote" id="vwAsrNote" hidden>Rozpoznávání přepisem porovnává slova, ne zvuk. Zapni ho jen tehdy, když porovnání zvuku v hlučné místnosti selhává.</p>
 
     <div class="vw__rec">
-      <button type="button" class="btn btn--accent" id="vwRec">nahrát vzorek</button>
+      <button type="button" class="btn btn--accent" id="vwRec">Nahrát vzorek</button>
       <span class="vw__recNote" id="vwRecNote" aria-live="polite"></span>
       <span class="vw__level" id="vwLevel" aria-hidden="true"></span>
     </div>
@@ -1189,19 +1190,21 @@
     </div>
 
     <label class="vw__sens" for="vwSens">
-      citlivost <input type="range" id="vwSens" min="0" max="100" step="1" value="50" />
+      Citlivost <input type="range" id="vwSens" min="0" max="100" step="1" value="50" />
       <output id="vwSensVal">50 · 1.00×</output>
     </label>
 
     <div class="vw__foot">
-      <button type="button" class="btn btn--dangerghost" id="vwClear">smazat vše</button>
+      <button type="button" class="btn btn--dangerghost" id="vwClear">Smazat vše</button>
     </div>
 
     <p class="sheet__note">
-      ▶ přehraje vzorek — takhle přesně ho Kacey slyší. Prostřední číslo je
+      <span class="desk-only">▶ přehraje vzorek — takhle přesně ho Kacey slyší. Prostřední číslo je
       vzdálenost od tvého posledního pokusu (zeleně = tenhle vzorek by stačil),
       pravé číslo vzdálenost od ostatních vzorků (červeně = řekl jsi to jinak).
-      Příliš vysoká citlivost budí Kacey uprostřed hovoru.
+      Příliš vysoká citlivost budí Kacey uprostřed hovoru.</span><span class="phone-only">▶ přehraje vzorek. Prostřední číslo je
+      vzdálenost od posledního pokusu (zeleně = stačil by), pravé od ostatních vzorků
+      (červeně = řekl jsi to jinak).</span>
     </p>
   </div>
 </div>

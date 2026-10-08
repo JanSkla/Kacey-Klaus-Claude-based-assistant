@@ -42,6 +42,9 @@ function paintLights(st) {
   chip.classList.toggle('is-on', !!st.on);
   var mode = st.mode === 'white' ? 'bílá' : st.mode ? 'barva' : '';
   $('lightChipLabel').textContent = st.on ? st.brightness + ' %' + (mode ? ' · ' + mode : '') : 'vypnuto';
+  // The phone's chip says only the brightness (Kacey Phone).
+  if ($('lightChipShort')) $('lightChipShort').textContent = st.on ? st.brightness + ' %' : 'vyp.';
+  chip.setAttribute('aria-label', 'Světla · ' + (st.on ? st.brightness + ' %' + (mode ? ', ' + mode : '') : 'vypnuto'));
   $('lightChipSw').style.background = st.on && st.css ? st.css : '';
   chip.title = 'Světla — ' + (st.name || 'lampa') + ' · ' + (st.on ? st.brightness + ' %' : 'vypnuto') + ' · otevřít ovládání';
 }

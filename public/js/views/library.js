@@ -127,9 +127,9 @@ function render() {
         deleteButton(e)
       ])
     ]);
-  }) : el('div.entry', { style: 'grid-column:1/-1;padding:28px' }, [
+  }) : el('div.entry.entry--empty', [
     el('h3', 'Žádný zápis neodpovídá.'),
-    el('p', 'Zruš filtr, nebo začni novou relaci a vymluv se z toho.'),
+    el('p.desk-only', 'Zruš filtr, nebo začni novou relaci a vymluv se z toho.'),
     el('button.btn.btn--accent', {
       type: 'button',
       onclick: function () { filter = 'all'; query = ''; $('libQuery').value = ''; render(); }

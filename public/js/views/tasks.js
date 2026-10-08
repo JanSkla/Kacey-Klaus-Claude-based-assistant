@@ -14,7 +14,7 @@
 import { $ } from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import * as store from '../core/store.js';
-import { bucketOf, dueLabel, logicalToday, parseDue } from '../core/due.js';
+import { bucketOf, dueLabel, logicalToday, parseDue, vTime } from '../core/due.js';
 import { go, onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { editRule } from './rules.js';
@@ -62,7 +62,9 @@ export function addTask(label, extra) {
     done: false, due_at: null
   }, extra || {});
   store.patch('tasks', function (list) { return list.concat([task]); });
-  say('Úkol přidán · ' + text + (task.due_at ? ' · ' + dueLabel(task.due_at) : ''));
+  // The line opens the new task's due date (Claude Design: toast "open").
+  say('Úkol přidán · ' + text + (task.due_at ? ' · ' + dueLabel(task.due_at) : ''), null,
+    function () { editingId = task.id; go('tasks'); renderTasks(); });
   return task;
 }
 
@@ -168,7 +170,7 @@ function ruleOf(id) {
 function acceptedWord(iso) {
   var d = new Date(iso);
   var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-  return (d.getHours() < 12 ? 'ráno ' : 'v ') + hm;
+  return d.getHours() < 12 ? 'ráno ' + hm : vTime(hm);
 }
 
 /* Why a generated task exists, under its row (Claude Design 5a):

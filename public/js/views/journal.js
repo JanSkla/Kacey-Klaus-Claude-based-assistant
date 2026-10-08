@@ -257,7 +257,10 @@ function paintRecState() {
   for (var i = 0; i < btns.length; i++) {
     btns[i].setAttribute('aria-pressed', String(dictating));
     // With text already in the entry, dictating again carries on from it.
-    btns[i].querySelector('[data-dictate-label]').textContent = dictating ? 'Pauza diktování'
+    // The phone's clock card says it short: "Diktovat" / "Pauza".
+    var short = !!btns[i].closest('.card--pad');
+    btns[i].querySelector('[data-dictate-label]').textContent = short ? (dictating ? 'Pauza' : 'Diktovat')
+      : dictating ? 'Pauza diktování'
       : ($('jText') && $('jText').value.trim() ? 'Pokračovat v diktování' : 'Diktovat');
   }
 }
@@ -281,17 +284,16 @@ function timeLabel(iso) {
 function renderUnfinished() {
   var list = entries().filter(function (e) { return e.unfinished; }).slice().reverse();
   fill($('jUnfinished'), list.length ? list.map(function (e) {
-    return el('button.btn.btn--fn', {
+    return el('button.btn.btn--fn' + (e.id === currentId ? '.is-current' : ''), {
       type: 'button',
-      style: e.id === currentId ? 'border-color:var(--acc)' : '',
       onclick: function () { openEntry(e.id); }
     }, [
       el('span', [
-        el('span.rowbtn__time', { style: e.id === currentId ? 'color:var(--acc)' : '' }, timeLabel(e.created)),
+        el('span.rowbtn__time', timeLabel(e.created)),
         el('span.rowbtn__title', (e.title || 'Bez názvu') + ' — ' + wordCount(e.text) + ' slov')
       ])
     ]);
-  }) : el('p.muted-3', { style: 'padding:0 12px 10px' }, 'Nic nedokončeného.'));
+  }) : el('p.muted-3.junfinished__empty', 'Nic nedokončeného.'));
 }
 
 /* ---- tags ---------------------------------------------------------------

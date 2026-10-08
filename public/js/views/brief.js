@@ -262,6 +262,7 @@ function renderLines() {
     }, text);
   }) : el('p.empty', 'Zatím žádný brief. Klepni na „Vygenerovat znovu“.'));
   $('briefPlay').textContent = playing ? 'Pauza' : 'Přečíst nahlas';
+  $('briefPlay').setAttribute('aria-pressed', String(!!playing));
 }
 
 function renderTiles() {
@@ -297,7 +298,7 @@ function renderInjected() {
   var t = taskSummary();
   var cal = todaySummary();
   var rows = [
-    { k: 'cal', name: 'Dnešní kalendář', meta: 'osobní · ' + cal.count + ' událostí' },
+    { k: 'cal', name: 'Dnešní kalendář', meta: 'osobní · ' + plural(cal.count, 'událost', 'události', 'událostí') },
     { k: 'tasks', name: 'Dnešní úkoly', meta: 'osobní · ' + t.due + ' na dnes, ' + t.overdue + ' po termínu' },
     { k: 'weather', name: 'Předpověď počasí', meta: 'neosobní' },
     { k: 'mail', name: 'Pošta', meta: 'nepřipojeno' }

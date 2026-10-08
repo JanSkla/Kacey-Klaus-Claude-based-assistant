@@ -135,12 +135,18 @@ function render() {
   var host = $('attachStrip');
   if (!host) return;
   host.hidden = items.length === 0;
+  // With a picture waiting, the composer says it can go as it is.
+  var input = $('input');
+  if (input) {
+    if (!input.dataset.placeholder) input.dataset.placeholder = input.placeholder;
+    input.placeholder = items.length ? 'Připiš vzkaz, nebo rovnou odešli' : input.dataset.placeholder;
+  }
   fill(host, items.map(function (item) {
     return el('span.attach', [
       el('img.attach__thumb', { src: item.url, alt: item.name }),
       el('span.attach__name', item.name),
       el('button.attach__x', {
-        type: 'button', 'aria-label': 'Odebrat přílohu ' + item.name,
+        type: 'button', 'aria-label': 'Odebrat obrázek ' + item.name,
         onclick: function () { remove(item.id); }
       }, '×')
     ]);

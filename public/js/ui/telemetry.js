@@ -34,6 +34,8 @@ function setTm(el, value, flag) {
   else el.removeAttribute('data-warn');
   if (flag === 'bad') el.setAttribute('data-bad', '1');
   else el.removeAttribute('data-bad');
+  if (flag === 'ok') el.setAttribute('data-ok', '1');
+  else el.removeAttribute('data-ok');
 }
 
 /* Subscribed to the orb in app.js, and called directly by the reporters below. */
@@ -41,7 +43,7 @@ export function updateTelemetry() {
   var orb = orbState();
   setTm(tm.state, orb.toUpperCase(),
     orb === 'offline' || orb === 'error' ? 'bad' : null);
-  setTm(tm.mcp, telemetry.mcp, telemetry.mcp !== 'none' && telemetry.mcp !== '—' ? null : 'warn');
+  setTm(tm.mcp, telemetry.mcp, telemetry.mcp !== 'none' && telemetry.mcp !== '—' ? 'ok' : 'warn');
   setTm(tm.session, state.sessionId ? state.sessionId.slice(0, 8) : '—');
   setTm(tm.turns, String(telemetry.turns));
   setTm(tm.tool, telemetry.lastTool);

@@ -253,6 +253,8 @@ function applyVwModeUI() {
   var canVoice = voiceWakeReady();
   vwModeVoice.setAttribute('aria-pressed', String(wantsVoice()));
   vwModeAsr.setAttribute('aria-pressed', String(!wantsVoice()));
+  var asrNote = document.getElementById('vwAsrNote');
+  if (asrNote) asrNote.hidden = wantsVoice();
   vwModeVoice.disabled = !canVoice;
   vwModeAsr.disabled = !nativeAvailable();
   vwModeAsr.title = nativeAvailable() ? 'Přepis řeči (Web Speech)' : 'Tento prohlížeč přepis řeči neumí';

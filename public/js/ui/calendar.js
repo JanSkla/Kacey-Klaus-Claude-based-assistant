@@ -896,9 +896,14 @@ function openEvent(e, topPx, col) {
   var place = 'top:' + (topPx || 0) + 'px';
   if (span > 1) place += ';left:clamp(0px, calc(' + ((col || 0) / span * 100) + '%), calc(100% - 340px))';
 
-  var box = el('div.card.card--pad.eventedit' + (span > 1 ? '.eventedit--col' : ''), {
+  var box = el('div.card.card--pad.eventedit.eventedit--event' + (span > 1 ? '.eventedit--col' : ''), {
     style: place
   }, [
+    // A phone bottom sheet gets its own head (Kacey Phone).
+    isPhone() ? el('div.psheet__head', [
+      el('h2.sheet__title', 'Událost'),
+      el('button.sheet__close.push', { type: 'button', 'data-psheet-close': true, 'aria-label': 'Zavřít' }, '×')
+    ]) : null,
     /* An unsure event leads with its "?" and says so; Kacey's reason (the
        note) gets a line of its own under the head. */
     unsure(e)
@@ -925,8 +930,9 @@ function openEvent(e, topPx, col) {
           if (pendingDelete !== e.event_id) {
             pendingDelete = e.event_id;
             btn.textContent = 'Opravdu smazat?';
+            btn.classList.add('btn--dangerfill');
             setTimeout(function () {
-              if (pendingDelete === e.event_id) { pendingDelete = null; btn.textContent = 'Smazat'; }
+              if (pendingDelete === e.event_id) { pendingDelete = null; btn.textContent = 'Smazat'; btn.classList.remove('btn--dangerfill'); }
             }, 4000);
             return;
           }
@@ -934,7 +940,7 @@ function openEvent(e, topPx, col) {
           writeEvent(e.event_id, 'delete');
         }
       }, 'Smazat'),
-      el('button.btn.btn--sm', {
+      el('button.btn.btn--sm.desk-only', {
         type: 'button', onclick: function () { if (sheetOpen(box)) closeSheet(); else box.remove(); }
       }, 'Zavřít')
     ]),
@@ -1052,7 +1058,8 @@ function undoOf(before) {
  * One change through /api/routine/alter, then a toast. `message` replaces the
  * server's summary; `undo` offers "Vrátit" for what was just written.
  */
-async function alterRoutine(op, message, undo) {
+/* `open` (optional): the toast line becomes a button that shows the day it changed. */
+async function alterRoutine(op, message, undo, open) {
   var before = {};
   (store.data.routine.overrides || []).forEach(function (o) { before[o.id] = true; });
   try {
@@ -1066,7 +1073,7 @@ async function alterRoutine(op, message, undo) {
     hideCard();
     await store.load();                // the overrides are in the app document; load() repaints
     var back = undo ? undoOf(before) : null;
-    say(message || out.summary, back ? { label: 'Vrátit', run: back } : null);
+    say(message || out.summary, back ? { label: 'Vrátit', run: back } : null, open || null);
     return out;
   } catch (err) {
     say('Nepovedlo se: ' + err.message);
@@ -1165,7 +1172,7 @@ function openBlock(day, r, topPx, col) {
     var why = el('input.input', { type: 'text', maxlength: '120', placeholder: 'nemoc, výlet…' });
     var apply = function () {
       alterRoutine({ op: 'cancel', date: day.date, from: fmtMin(r.s), to: fmtMin(r.e), category: r.cat, reason: why.value.trim() || undefined },
-        label + ' zrušeno jen pro ' + ds, true);
+        label + ' zrušeno jen pro ' + ds, true, function () { showRange(day.date, 1); });
     };
     why.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') apply(); });
     fill(body, [field('PROČ · NEPOVINNÉ', why), el('div.row', [button('.btn--accent', 'Zrušit ' + ds, apply), back()])]);
@@ -1191,7 +1198,8 @@ function openBlock(day, r, topPx, col) {
         var p = target.value.split('-').map(Number);
         alterRoutine({ op: 'move', date: day.date, from: fmtMin(r.s), to: fmtMin(r.e), category: r.cat,
                        to_date: target.value, new_from: s.value, new_to: e.value },
-          label + ' přesunuto na ' + DOW_SHORT[dowOf(target.value)] + ' ' + p[2] + '. ' + s.value, true);
+          label + ' přesunuto na ' + DOW_SHORT[dowOf(target.value)] + ' ' + p[2] + '. ' + s.value, true,
+          function () { showRange(target.value, 1); });
       }), back()])
     ]);
     target.focus();
@@ -1370,7 +1378,8 @@ async function applySick() {
   var out = await alterRoutine({
     op: 'cancel_range', from_date: dates[0], to_date: dates[n - 1],
     categories: sickCats.length ? sickCats : undefined, reason: why
-  }, 'Rutina zrušena na ' + n + (n === 1 ? ' den' : n < 5 ? ' dny' : ' dní') + ' · ' + why, true);
+  }, 'Rutina zrušena na ' + n + (n === 1 ? ' den' : n < 5 ? ' dny' : ' dní') + ' · ' + why, true,
+    function () { showRange(dates[0], 1); });
   if (out) openSick(false);
 }
 

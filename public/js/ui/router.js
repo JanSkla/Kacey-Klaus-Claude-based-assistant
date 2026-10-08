@@ -103,6 +103,9 @@ function openMore(open) {
   if (!sheet) return;
   sheet.hidden = !open;
   if (button) button.setAttribute('aria-expanded', String(open));
+  // The open sheet lights its tab; closing it gives the light back to the view's own.
+  if (open && button) button.setAttribute('aria-current', 'true');
+  else paintTabs(current);
 }
 
 export function initRouter() {

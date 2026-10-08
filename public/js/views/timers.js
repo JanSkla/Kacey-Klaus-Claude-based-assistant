@@ -68,7 +68,7 @@ function renderPresets() {
   fill($('namedPresets'), saved.length ? saved.map(function (p) {
     return el('button.btn', {
       type: 'button', onclick: function () { startTimer(p.secs, p.label); }
-    }, [el('span', p.label), el('span.num.muted-3', mmss(p.secs))]);
+    }, [el('span', p.label), el('span.num.preset__time', mmss(p.secs))]);
   }) : el('p.muted-3', 'Žádné uložené. Pojmenuj vlastní časovač a uloží se sem.'));
 }
 
