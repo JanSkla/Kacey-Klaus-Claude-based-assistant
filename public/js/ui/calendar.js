@@ -1341,9 +1341,114 @@ async function applySick() {
   if (out) openSick(false);
 }
 
+/* ---- the "Dnes" day timeline on the main view (Claude Design DayTimeline) --
+   The day as one compact lane, 06:00–23:00: the routine strip on the left,
+   events and timed tasks beside it, tasks without a time as chips on top, and
+   the now line. It reads the same data as the calendar lane. */
+
+var TL = { start: 360, end: 1380, pxh: 46, strip: 70, gutter: 46 };
+var tlScrolled = null;     // the date the timeline last jumped to "now" on
+var tlScrollPos = 0;       // where it was scrolled to (a hidden view reads 0)
+
+function tlTop(m) { return Math.round((Math.max(TL.start, Math.min(m, TL.end)) - TL.start) * TL.pxh / 60); }
+
+function renderTodayTimeline() {
+  var host = $('todayTimeline');
+  if (!host) return;
+  if (!payload) { fill(host, el('p.empty', 'Načítám kalendář…')); return; }
+  var today = payload.today;
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  var events = eventsOn(today);
+  var timedTasks = timedTasksOn(today);
+  // Tasks with no time today, and anything overdue that is still open.
+  var chips = dayTasksOn(today).map(function (x) { return { t: x.t, meta: 'dnes' }; })
+    .concat(tasks().filter(function (t) { return !t.done && bucketOf(t) === 'overdue'; })
+      .map(function (t) { return { t: t, meta: 'po termínu' }; }));
+
+  var nTasks = timedTasks.length + chips.length;
+  $('todayMeta').textContent = '· ' + events.length + (events.length === 1 ? ' událost' : events.length > 1 && events.length < 5 ? ' události' : ' událostí') +
+    ' · ' + nTasks + (nTasks === 1 ? ' úkol' : nTasks > 1 && nTasks < 5 ? ' úkoly' : ' úkolů') + ' · rutina';
+
+  var lane = [];
+  for (var h = Math.ceil(TL.start / 60); h < TL.end / 60; h++) {
+    lane.push(el('div.daytl__hour', { style: 'top:' + tlTop(h * 60) + 'px' }, el('span', ('0' + h).slice(-2) + ':00')));
+  }
+
+  routineDay(today).blocks.forEach(function (r) {
+    if (r.e <= TL.start || r.s >= TL.end) return;
+    var cat = CATS[r.cat];
+    if (!cat) return;
+    var gone = !!GONE[r.state];
+    var len = r.e - r.s;
+    var name = (r.src === 'added' ? '+ ' : '') + (r.note || cat.label);
+    lane.push(el('div.daytl__rblock' + (gone ? '.is-cancelled' : '') + (len >= 45 ? '' : '.is-short'), {
+      title: [name, fmtMin(r.s) + '–' + fmtMin(r.e), whereOf(r), gone ? 'zrušeno jen pro tento den' : r.src === 'added' ? 'přidáno jen pro tento den' : '']
+        .filter(Boolean).join(' · '),
+      style: 'top:' + tlTop(r.s) + 'px;height:' + Math.max(tlTop(r.e) - tlTop(r.s), 14) + 'px;' + rpaint(r, gone ? 4 : 6, cat.color)
+    }, [
+      el('b', { style: 'color:' + (gone ? 'var(--ink3)' : cat.color) }, name),
+      el('em', gone ? 'zrušeno' : fmtMin(r.s) + '–' + fmtMin(r.e)),
+      !gone && r.room && len >= 75 ? el('em.daytl__where', r.room) : null
+    ]));
+  });
+
+  events.filter(function (e) { return !e.all_day; }).forEach(function (e) {
+    var s = minutesOf(e.starts_at);
+    var en = e.ends_at ? minutesOf(e.ends_at) : s + 30;
+    if (en <= s) en = s + 30;
+    if (en <= TL.start || s >= TL.end) return;
+    var hgt = Math.max(tlTop(en) - tlTop(s), 32);
+    var tall = hgt >= 49;
+    var running = nowMin >= s && nowMin < en;
+    lane.push(el('button.daytl__event' + (tall ? '' : '.is-short') + (running ? '.is-now' : '') + (unsure(e) ? '.is-tentative' : ''), {
+      type: 'button', title: clockOf(e.starts_at) + ' ' + (e.title || '(bez názvu)') + ' · ' + sourceOf(e),
+      style: 'top:' + tlTop(s) + 'px;height:' + hgt + 'px;' + edge(4, e),
+      onclick: function () { selected = today; span = 1; go('calendar'); }
+    }, [
+      el('b', [unsureMark(e), e.title || '(bez názvu)']),
+      tall ? el('em', clockOf(e.starts_at) + ' · ' + unsureWord(e) + (running ? 'zbývá ' + (en - nowMin) + ' min · ' : '') + sourceOf(e)) : null
+    ]));
+  });
+
+  timedTasks.forEach(function (x) {
+    var t = x.t, s = x.p.minutes;
+    if (s >= TL.end) return;
+    var late = bucketOf(t) === 'overdue';
+    lane.push(el('button.daytl__task' + (t.done ? '.is-done' : '') + (late ? '.is-late' : ''), {
+      type: 'button', 'aria-pressed': String(!!t.done),
+      title: t.label + ' · ' + x.p.time + ' · ' + (t.done ? 'klepnutím vrátíš' : 'klepnutím odškrtneš'),
+      style: 'top:' + tlTop(s) + 'px;height:' + Math.max(tlTop(s + (t.duration || 30)) - tlTop(s), 28) + 'px',
+      onclick: function () { tickTask(t); }
+    }, [el('span.eblock__check', { 'aria-hidden': 'true' }, t.done ? '✓' : ''), el('b', t.label), el('em', x.p.time)]));
+  });
+
+  var showNow = nowMin >= TL.start && nowMin <= TL.end;
+  if (showNow) lane.push(el('span.daytl__now', { style: 'top:' + tlTop(nowMin) + 'px' }, el('span', fmtMin(nowMin))));
+
+  var scroller = el('div.daytl__scroll', el('div.daytl__lane', { style: 'height:' + tlTop(TL.end) + 'px' }, lane));
+  scroller.addEventListener('scroll', function () { if (scroller.offsetHeight) tlScrollPos = scroller.scrollTop; });
+  fill(host, [
+    chips.length ? el('div.daytl__chips', chips.map(function (c) {
+      return el('button.daytl__chip' + (c.t.done ? '.is-done' : ''), {
+        type: 'button', 'aria-pressed': String(!!c.t.done), title: 'úkol · klepnutím odškrtneš',
+        onclick: function () { tickTask(c.t); }
+      }, [el('span.eblock__check', { 'aria-hidden': 'true' }, c.t.done ? '✓' : ''), el('b', c.t.label), el('em', c.meta)]);
+    })) : null,
+    scroller
+  ]);
+  // Opens on "now" once a day; after that it stays where it was scrolled to.
+  if (tlScrolled !== today && host.offsetHeight) {
+    scroller.scrollTop = tlScrollPos = Math.max(0, (showNow ? tlTop(nowMin) : 0) - 40);
+    tlScrolled = today;
+  } else {
+    scroller.scrollTop = tlScrollPos;
+  }
+}
+
 /* ---- the "Today" panel on the main view --------------------------------- */
 
 export function renderTodayAgenda() {
+  renderTodayTimeline();
   var host = $('todayAgenda');
   if (!host) return;
   if (!payload) { fill(host, el('p.empty', 'Načítám kalendář…')); return; }
@@ -1454,7 +1559,6 @@ export function initCalendar(opts) {
   $('calSourcesOpen').addEventListener('click', function () { openSheet($('calSourcesSheet')); });
   $('calReloadM').addEventListener('click', function () { refreshCalendar(); say('Kalendář načten znovu.'); });
   $('calReload').addEventListener('click', refreshCalendar);
-  $('calSync').addEventListener('click', function () { refreshCalendar(); say('Kalendář načten znovu.'); });
 
   /* The routine on the shown date: add for the day, sick days, back to default. */
   $('routineAdd').addEventListener('click', function () { openAdd(selected); });
@@ -1480,6 +1584,7 @@ export function initCalendar(opts) {
 
   onEnter('calendar', function () { if (!payload) refreshCalendar(); else render(); });
   store.onChange(function () { if (payload) render(); });
+  onEnter('main', function () { if (payload) renderTodayTimeline(); });
 
   refreshCalendar();
   // The "now" line and the "x min left" labels go stale on their own.

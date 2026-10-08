@@ -46,9 +46,10 @@ function paintRail() {
 
   $('stateBig').textContent = words[0];
   $('stateShort').textContent = STATE_SHORT[orb] || STATE_SHORT.idle;
-  $('stateSub').textContent = orb === 'idle'
-    ? words[1] + ' ' + turnCount() + ' tahů v téhle relaci.'
-    : words[1];
+  // The state strip: the word, and under it the turns so far; the sentence
+  // that explains the state rides along as its tooltip.
+  $('stateSub').textContent = turnCount() + ' tahů';
+  $('stateBig').title = words[1];
 
   $('listeningStrip').hidden = !state.listening;
   $('micLabel').textContent = state.listening ? 'Stop' : 'Mluvit';

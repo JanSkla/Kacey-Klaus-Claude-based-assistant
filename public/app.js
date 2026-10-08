@@ -106,6 +106,7 @@ import { initMiniPlayer } from './js/views/miniplayer.js';
 import { initMorning } from './js/views/morning.js';
 import { initProposals } from './js/views/proposals.js';
 import { initRules } from './js/views/rules.js';
+import { initSidenav } from './js/ui/sidenav.js';
 
 /* =======================================================================
    1. THE ORB'S FOLLOWERS
@@ -172,6 +173,7 @@ initMain();
 initMorning();
 initProposals();
 initRules();
+initSidenav();
 initActivity();
 initVoicecast();
 initMiniPlayer();
@@ -213,6 +215,10 @@ dom.muteBtn.addEventListener('click', function () {
   if (state.muted) cancelSpeech(); else primeTTS();
   applyMuteToUI();
 });
+// The header's "bez hlasu" / "KC neposlouchá" chips turn the voice back on.
+document.getElementById('mutedChip').addEventListener('click', function () { dom.muteBtn.click(); });
+document.getElementById('wakeOffChip').addEventListener('click', function () { toggleWake(); });
+dom.voiceSel.addEventListener('change', applyMuteToUI);   // the meta line names the voice
 
 dom.langSel.addEventListener('change', function () {
   var v = dom.langSel.value;

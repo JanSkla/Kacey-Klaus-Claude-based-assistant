@@ -44,7 +44,8 @@ export function applyLangToUI() {
 export function applyMuteToUI() {
   var s = t();
   var label = state.muted ? s.muteOff : s.muteOn;
-  dom.muteBtn.setAttribute('aria-pressed', String(state.muted));
+  // The Controller's switch reads "Číst odpovědi nahlas": pressed = speaking.
+  dom.muteBtn.setAttribute('aria-pressed', String(!state.muted));
   dom.muteBtn.setAttribute('aria-label', label);
   dom.muteBtn.title = label;
   if (!hasSynth() && state.voice === 'browser') {
@@ -54,4 +55,14 @@ export function applyMuteToUI() {
   } else {
     dom.muteBtn.disabled = false;
   }
+  var stateEl = document.getElementById('ttsState');
+  if (stateEl) {
+    stateEl.textContent = state.muted ? 'vypnuto' : 'zapnuto';
+    stateEl.classList.toggle('is-acc', !state.muted);
+    var voice = dom.voiceSel && dom.voiceSel.selectedOptions && dom.voiceSel.selectedOptions[0];
+    document.getElementById('ttsMeta').textContent = state.muted ? 'Kacey jen píše — nic nečte nahlas'
+      : 'odpovědi zní z reproduktorů' + (voice ? ' · ' + voice.textContent : '');
+  }
+  var chip = document.getElementById('mutedChip');
+  if (chip) chip.hidden = !state.muted;
 }

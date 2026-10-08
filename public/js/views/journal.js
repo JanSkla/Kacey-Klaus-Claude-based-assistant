@@ -253,7 +253,9 @@ function paintRecState() {
   var btns = document.querySelectorAll('[data-dictate]');
   for (var i = 0; i < btns.length; i++) {
     btns[i].setAttribute('aria-pressed', String(dictating));
-    btns[i].querySelector('[data-dictate-label]').textContent = dictating ? 'Pauza diktování' : 'Diktovat';
+    // With text already in the entry, dictating again carries on from it.
+    btns[i].querySelector('[data-dictate-label]').textContent = dictating ? 'Pauza diktování'
+      : ($('jText') && $('jText').value.trim() ? 'Pokračovat v diktování' : 'Diktovat');
   }
 }
 

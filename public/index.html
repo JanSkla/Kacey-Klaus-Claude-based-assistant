@@ -44,6 +44,9 @@
     <span class="conn__short" id="stateShort"></span>
   </span>
 
+  <button type="button" class="topchip" id="mutedChip" title="Zapnout čtení odpovědí" hidden>bez hlasu</button>
+  <button type="button" class="topchip" id="wakeOffChip" title="Znovu poslouchat „KC“" hidden>KC neposlouchá</button>
+
   <span class="top__stats">
     <span>KC <b id="topVersion">—</b></span>
     <span>model <b id="topModel">—</b></span>
@@ -102,7 +105,15 @@
         <a class="mini__link" id="miniLink" target="_blank" rel="noopener">Otevřít vizuál na celou obrazovku<span class="mini__hint">dvojklepnutí</span></a>
       </div>
     </span>
-    <button type="button" class="btn" id="controllerBtn">Controller</button>
+    <!-- What the room light shows (lightsd, read only): opens the Lights view. ui/lightchip.js -->
+    <button type="button" class="lightchip" id="lightChip" data-go="lights" title="Světla — otevřít ovládání" hidden>
+      <svg class="lightchip__bulb" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span class="lightchip__sw" id="lightChipSw" aria-hidden="true"></span>
+      <span id="lightChipLabel">—</span>
+    </button>
+    <button type="button" class="iconbtn" id="controllerBtn" aria-label="Controller — nastavení" title="Controller">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.5 7.5 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    </button>
   </span>
 </header>
 
@@ -113,22 +124,56 @@
 
 <main class="views" id="views">
 
+<!-- ================= NAVIGATION (desktop) =================
+     The phone has the tab bar and "Víc" instead. router.js marks the
+     current item; ui/sidenav.js keeps the badges. -->
+<nav class="sidenav" aria-label="Hlavní navigace">
+  <div class="sidenav__group">
+    <button type="button" class="sidenav__item sidenav__item--big" data-go="main">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg>
+      <span class="sidenav__label">Chat</span><span class="sidenav__badge" id="navBadgeMain"></span>
+    </button>
+    <button type="button" class="sidenav__item sidenav__item--big" data-go="calendar">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3.5 5h17v15h-17zM3.5 10h17M8 3.5v3M16 3.5v3"/></svg>
+      <span class="sidenav__label">Kalendář</span><span class="sidenav__badge" id="navBadgeCal"></span>
+    </button>
+    <button type="button" class="sidenav__item sidenav__item--big" data-go="tasks">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h4v4H4zM4 14h4v4H4zM11 9h9M11 16h9"/></svg>
+      <span class="sidenav__label">Úkoly</span><span class="sidenav__badge" id="navBadgeTasks"></span>
+    </button>
+    <button type="button" class="sidenav__item sidenav__item--big" data-go="journal">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 4h11a1 1 0 0 1 1 1v15H6zM6 4a2 2 0 0 0-2 2v14h2"/></svg>
+      <span class="sidenav__label">Deník</span>
+    </button>
+  </div>
+  <div class="sidenav__group sidenav__group--more">
+    <p class="sidenav__head">DALŠÍ</p>
+    <button type="button" class="sidenav__item" data-go="library">Knihovna deníku</button>
+    <button type="button" class="sidenav__item" data-go="timer">Časovače</button>
+    <button type="button" class="sidenav__item" data-go="brief">Ranní brief</button>
+    <button type="button" class="sidenav__item" data-go="morning">Ráno<span class="sidenav__badge">↗</span></button>
+    <button type="button" class="sidenav__item" data-go="rules">Pravidla</button>
+  </div>
+</nav>
+
 <!-- ================= MAIN ================= -->
-<section class="view view--triple" data-view="main">
+<section class="view view--home" data-view="main">
 
   <div class="col col--stack">
     <section class="card">
       <div class="card__head">
-        <h2 class="card__title">Dnes</h2>
-        <button type="button" class="link" data-go="calendar">Celý kalendář</button>
+        <h2 class="card__title card__title--meta">Dnes <span class="card__meta desk-only" id="todayMeta"></span></h2>
+        <button type="button" class="link" data-go="calendar">Kalendář</button>
       </div>
-      <div class="card__body card__body--scroll" id="todayAgenda"></div>
+      <div class="card__body card__body--scroll phone-only" id="todayAgenda"></div>
+      <!-- The day as a lane: routine, events, timed tasks, the now line (calendar.js). -->
+      <div class="daytl desk-only" id="todayTimeline"></div>
     </section>
 
     <section class="card">
       <div class="card__head">
         <h2 class="card__title">Dnešní úkoly</h2>
-        <button type="button" class="link" data-go="tasks">Všechny úkoly</button>
+        <button type="button" class="link push" data-go="tasks">Všechny úkoly</button>
       </div>
       <div class="card__body card__body--scroll" id="todayTasks"></div>
       <form class="card__foot row" id="todayTaskForm">
@@ -186,23 +231,9 @@
         </span>
         <span class="nextcard__label" id="todayToggleLabel">Dnes ▾</span>
       </button>
-      <button type="button" class="btn btn--block" id="askNext">Zeptat se na to</button>
+      <button type="button" class="btn btn--block" id="askNext">Zeptat se<span class="phone-only"> na to</span></button>
     </section>
 
-    <section class="card">
-      <h2 class="card__title card__title--bar">Funkce</h2>
-      <div class="fnlist">
-        <button type="button" class="btn btn--accent btn--fn" data-go="brief">Ranní brief</button>
-        <button type="button" class="btn btn--fn" data-go="morning">Ráno <span class="btn__meta" id="fnMorningMeta">· checklist</span></button>
-        <button type="button" class="btn btn--fn" data-go="rules">Pravidla <span class="btn__meta" id="fnRulesMeta"></span></button>
-        <button type="button" class="btn btn--fn" data-go="journal">Deník</button>
-        <button type="button" class="btn btn--fn" data-go="library">Knihovna deníku</button>
-        <button type="button" class="btn btn--fn" data-go="calendar">Kalendář</button>
-        <button type="button" class="btn btn--fn" data-go="tasks">Úkoly</button>
-        <button type="button" class="btn btn--fn" data-go="timer">Časovače</button>
-        <button type="button" class="btn btn--fn" data-go="lights">Světla</button>
-      </div>
-    </section>
   </div>
 </section>
 
@@ -224,7 +255,6 @@
   </section>
 
   <div class="col col--rail">
-    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
     <section class="card card--pad">
       <h2 class="card__title">Hotovo dnes</h2>
       <p class="big" id="doneRatio">0 / 0</p>
@@ -236,10 +266,8 @@
       </div>
     </section>
     <section class="card">
-      <h2 class="card__title card__title--bar">Funkce</h2>
+      <h2 class="card__title card__title--bar">Akce</h2>
       <div class="fnlist">
-        <button type="button" class="btn btn--accent btn--fn" data-go="calendar">Kalendář</button>
-        <button type="button" class="btn btn--fn" data-go="brief">Ranní brief</button>
         <button type="button" class="btn btn--fn" id="clearDone">Smazat hotové</button>
       </div>
     </section>
@@ -287,18 +315,16 @@
 
   <div class="col col--rail">
     <section class="card">
-      <button type="button" class="btn btn--back btn--block" data-go="main">← Zpět na hlavní</button>
       <h2 class="card__title card__title--bar">Nedokončené</h2>
       <div class="fnlist" id="jUnfinished"></div>
     </section>
     <section class="card">
-      <h2 class="card__title card__title--bar">Funkce</h2>
+      <h2 class="card__title card__title--bar">Akce</h2>
       <div class="fnlist">
         <button type="button" class="btn btn--fn phone-only" id="jChatOpen">KC chat</button>
-        <button type="button" class="btn btn--accent btn--fn" data-go="library">Knihovna deníku</button>
         <button type="button" class="btn btn--fn" id="jNew">Nová relace</button>
         <button type="button" class="btn btn--fn" id="jTag">Otagovat zápis</button>
-        <button type="button" class="btn btn--fn desk-only" data-go="calendar">Kalendář</button>
+        <button type="button" class="btn btn--fn phone-only" data-go="library">Knihovna deníku</button>
       </div>
     </section>
   </div>
@@ -319,11 +345,10 @@
   </section>
 
   <div class="col col--rail">
-    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
     <section class="card">
-      <h2 class="card__title card__title--bar">Funkce</h2>
+      <h2 class="card__title card__title--bar">Akce</h2>
       <div class="fnlist">
-        <button type="button" class="btn btn--accent btn--fn" id="libNew">Nová relace deníku</button>
+        <button type="button" class="btn btn--accent btn--fn phone-only" id="libNew">Nová relace deníku</button>
         <button type="button" class="btn btn--fn" id="libReport">Měsíční přehled vzorců</button>
         <button type="button" class="btn btn--fn" id="libExport">Export</button>
       </div>
@@ -336,7 +361,7 @@
 </section>
 
 <!-- ================= CALENDAR ================= -->
-<section class="view view--triple" data-view="calendar" hidden>
+<section class="view view--cal" data-view="calendar" hidden>
   <section class="card">
     <div class="card__head">
       <button type="button" class="cal__monthbtn" id="calMonthToggle" aria-expanded="false">
@@ -406,18 +431,6 @@
     </div>
   </section>
 
-  <div class="col col--rail">
-    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
-    <section class="card">
-      <h2 class="card__title card__title--bar">Funkce</h2>
-      <div class="fnlist">
-        <button type="button" class="btn btn--accent btn--fn" data-go="brief">Ranní brief</button>
-        <button type="button" class="btn btn--fn" data-go="tasks">Úkoly</button>
-        <button type="button" class="btn btn--fn" data-go="journal">Deník</button>
-        <button type="button" class="btn btn--fn" id="calSync">Načíst znovu</button>
-      </div>
-    </section>
-  </div>
 </section>
 
 <!-- ================= DAILY BRIEF ================= -->
@@ -463,7 +476,6 @@
   </section>
 
   <div class="col col--rail">
-    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
     <section class="card">
       <h2 class="card__title card__title--bar">Vkládaná data</h2>
       <div class="fnlist fnlist--tight" id="briefInjected"></div>
@@ -473,8 +485,6 @@
       <textarea class="prompt" id="briefPrompt" spellcheck="false"></textarea>
       <div class="fnlist">
         <button type="button" class="btn btn--accent btn--fn" id="briefRegen">Vygenerovat znovu</button>
-        <button type="button" class="btn btn--fn" data-go="tasks">Otevřít úkoly</button>
-        <button type="button" class="btn btn--fn" data-go="calendar">Otevřít kalendář</button>
       </div>
     </section>
   </div>
@@ -486,7 +496,6 @@
 <section class="view view--full" data-view="lights" hidden>
   <div class="col">
     <div class="viewbar">
-      <button type="button" class="btn btn--sm" data-go="main">← Zpět na hlavní</button>
       <h2 class="card__title card__title--lg">Světla v místnosti</h2>
       <span class="muted-3" id="lightsWhere">samostatná aplikace</span>
       <a class="link push" id="lightsOpen" href="#" target="_blank" rel="noopener">Otevřít samostatně ↗</a>
@@ -539,7 +548,6 @@
   </section>
 
   <div class="col col--rail">
-    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
     <div class="col col--scroll" id="activeTimers"></div>
   </div>
 </section>
@@ -578,6 +586,16 @@
 
       <div>
         <h3 class="subhead">Hlas</h3>
+        <div class="srow">
+          <span class="srow__text"><b>Číst odpovědi nahlas</b><em id="ttsMeta">—</em></span>
+          <span class="srow__state" id="ttsState" aria-live="polite">—</span>
+          <button type="button" class="switch" id="mute" aria-pressed="true"><span class="switch__knob"></span></button>
+        </div>
+        <div class="srow">
+          <span class="srow__text"><b>Poslouchat „KC“</b><em id="wakeMeta">—</em></span>
+          <span class="srow__state" id="wakeState" aria-live="polite">—</span>
+          <button type="button" class="switch" id="wake" aria-pressed="true"><span class="switch__knob"></span></button>
+        </div>
         <dl class="readout">
           <div class="readout__row"><dt>SPEAKER</dt><dd id="tmVoice">—</dd></div>
           <div class="readout__row"><dt>LANG</dt><dd id="tmLang">—</dd></div>
@@ -594,10 +612,6 @@
             <option value="cs-CZ">Čeština</option>
             <option value="en-US">English</option>
           </select>
-        </div>
-        <div class="ctrlrow">
-          <button type="button" class="btn" id="mute" aria-pressed="false">Ztlumit odpovědi</button>
-          <button type="button" class="btn" id="wake" aria-pressed="true">Budicí slovo</button>
         </div>
         <button type="button" class="btn btn--outlineaccent btn--block" id="vwOpen" aria-expanded="false" aria-controls="vwPanel">Nahrát vzorky budicího slova</button>
 
@@ -648,7 +662,6 @@
   </section>
 
   <div class="col col--rail">
-    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
     <section class="card">
       <h2 class="card__title card__title--bar">Barva akcentu</h2>
       <div class="presets" id="huePresets">
@@ -662,7 +675,7 @@
       <p class="muted card__foot card__foot--block">Povrchy zůstávají neutrálně šedé — mění se jen akcent.</p>
     </section>
     <section class="card">
-      <h2 class="card__title card__title--bar">Funkce</h2>
+      <h2 class="card__title card__title--bar">Akce</h2>
       <div class="fnlist">
         <button type="button" class="btn btn--fn" id="testVoice">Test reproduktoru</button>
         <button type="button" class="btn btn--fn btn--danger" id="restartSession">Restartovat relaci</button>
@@ -891,7 +904,6 @@
   </section>
 
   <div class="col col--rail rules__side">
-    <button type="button" class="btn btn--back" data-go="main">← Zpět na hlavní</button>
     <section class="card rules__preview">
       <h2 class="card__title card__title--bar">Náhled · 7 dní</h2>
       <p class="muted rules__pvlede">V příštích 7 dnech by vytvořilo:</p>

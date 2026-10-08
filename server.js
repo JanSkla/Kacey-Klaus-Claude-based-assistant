@@ -795,6 +795,24 @@ app.post('/api/night/sunrise', express.json({ limit: '1kb' }), async (req, res) 
   }
 });
 
+/* The header's lights chip: what the room light shows right now, read from
+   lightsd's status. Read only — the chip opens the Lights view to change it. */
+app.get('/api/lights/state', async (_req, res) => {
+  try {
+    const status = await fetch(`${LIGHTSD_URL}/api/status`, { signal: AbortSignal.timeout(3000) }).then((r) => r.json());
+    const lamp = (status.lights || [])[0];
+    const out = lamp && lamp.output;
+    if (!out) return res.json({ ok: true, on: false, known: false });
+    const color = out.color || {};
+    res.json({
+      ok: true, known: true, on: !!out.on, name: lamp.name || lamp.id,
+      brightness: Math.round(Number(color.brightness) || 0), mode: color.mode || null, css: color.css || null,
+    });
+  } catch (err) {
+    res.status(502).json({ ok: false, error: `lightsd neodpovídá (${err.message})` });
+  }
+});
+
 /* ---------------------------------------------------------------------------
  * Internal calendar — READ ONLY.
  *

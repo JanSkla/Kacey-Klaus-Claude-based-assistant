@@ -22,14 +22,19 @@ import { editRule } from './rules.js';
 /* `optional` groups only appear when something is in them. */
 var GROUPS = [
   { key: 'overdue', name: 'Po termínu', emptyText: 'Nic po termínu. Dobře.' },
-  { key: 'today', name: 'Dnes', emptyText: 'Na dnešek už nic.' },
+  { key: 'today', name: 'Dnes', emptyText: 'Na dnešek nic nezbývá.' },
   { key: 'week', name: 'Tento týden', emptyText: 'Tento týden už nic dalšího.' },
   { key: 'later', name: 'Později', optional: true },
   { key: 'none', name: 'Bez termínu', optional: true },
   { key: 'past', name: 'Hotové dřív', optional: true }
 ];
 
-var DURATIONS = [15, 30, 45, 60, 90, 120, 180];
+var DURATIONS = [15, 30, 60, 90, 120];
+
+/** '15 min', '1 h', '1 h 30'. */
+function durWord(m) {
+  return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) : '');
+}
 
 var showDone = true;
 var editingId = null;      // the task whose due date is open for editing
@@ -164,8 +169,10 @@ function dueEditor(t) {
   var p = parseDue(t.due_at) || {};
   var date = el('input.input.input--when', { type: 'date', value: p.date || '', 'aria-label': 'Datum' });
   var time = el('input.input.input--when', { type: 'time', value: p.time || '', step: 300, 'aria-label': 'Čas' });
-  var dur = el('select.select.input--when', { 'aria-label': 'Délka' }, DURATIONS.map(function (m) {
-    return el('option', { value: String(m), selected: (t.duration || 30) === m ? '' : null }, m + ' min');
+  // A length set elsewhere (Kacey, an older list) stays choosable.
+  var lengths = DURATIONS.indexOf(t.duration || 30) === -1 ? DURATIONS.concat([t.duration]).sort(function (a, b) { return a - b; }) : DURATIONS;
+  var dur = el('select.select.input--when', { 'aria-label': 'Délka' }, lengths.map(function (m) {
+    return el('option', { value: String(m), selected: (t.duration || 30) === m ? '' : null }, durWord(m));
   }));
   function syncDur() { dur.hidden = !time.value; }
   time.addEventListener('input', syncDur);
@@ -187,7 +194,7 @@ function dueEditor(t) {
       }, 'Bez termínu') : null,
       el('button.btn.btn--sm', { type: 'button', onclick: close }, 'Zrušit')
     ]),
-    el('p.muted-3.taskwhen__note', 'Úkol s časem se ukáže i v kalendáři.')
+    el('p.muted-3.taskwhen__note', 'S časem se úkol ukáže v kalendáři. Esc zavře.')
   ]);
   form.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
@@ -231,7 +238,7 @@ export function renderTasks() {
   }));
 
   var s = taskSummary();
-  var counts = s.due + ' dnes · ' + s.open + ' otevřených · ' + s.overdue + ' po termínu';
+  var counts = s.due + ' na dnes · ' + s.open + ' otevřených · ' + s.overdue + ' po termínu';
   $('taskCounts').textContent = counts;
   $('taskCountsM').textContent = counts;
   // The phone carries a second pair of these controls in its summary card.

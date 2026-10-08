@@ -221,6 +221,15 @@ export function applyWakeUI() {
   dom.wakeBtn.setAttribute('aria-label', label);
   dom.wakeBtn.title = label + ' · ' + t().wakeCfgHint;
   dom.wakeBtn.disabled = !SR || wakeBlocked;
+  var stateEl = document.getElementById('wakeState');
+  if (stateEl) {
+    stateEl.textContent = wakeBlocked ? 'nejde' : on ? 'zapnuto' : 'vypnuto';
+    stateEl.classList.toggle('is-acc', on);
+    document.getElementById('wakeMeta').textContent = wakeBlocked ? label
+      : on ? 'mikrofon čeká na „KC“' : 'mikrofon je zavřený — mluvit jde jen tlačítkem';
+  }
+  var chip = document.getElementById('wakeOffChip');
+  if (chip) chip.hidden = on || !SR;
   refreshVoiceStateLabel();
 }
 

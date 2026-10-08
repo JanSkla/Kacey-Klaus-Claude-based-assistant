@@ -80,6 +80,13 @@ function paintTabs(view) {
     if (tabs[i].getAttribute('data-tab') === view) tabs[i].setAttribute('aria-current', 'true');
     else tabs[i].removeAttribute('aria-current');
   }
+  // The desktop sidebar and the header's Controller gear, the same way.
+  var items = document.querySelectorAll('.sidenav [data-go], #controllerBtn, #lightChip');
+  for (var j = 0; j < items.length; j++) {
+    var target = items[j].id === 'controllerBtn' ? 'controller' : items[j].getAttribute('data-go');
+    if (target === view) items[j].setAttribute('aria-current', 'page');
+    else items[j].removeAttribute('aria-current');
+  }
 }
 
 function openMore(open) {

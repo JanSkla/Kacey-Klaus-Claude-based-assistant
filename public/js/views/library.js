@@ -68,7 +68,7 @@ function renderFilters() {
     return el('button.chip.chip--filter', {
       type: 'button', 'aria-pressed': String(filter === f),
       onclick: function () { filter = f; render(); }
-    }, f === 'all' ? 'Vše' : f === 'unfinished' ? 'Rozepsané' : f);
+    }, f === 'all' ? 'Vše' : f === 'unfinished' ? 'Nedokončené' : f.charAt(0).toUpperCase() + f.slice(1));
   }));
 }
 
@@ -110,8 +110,8 @@ function render() {
   fill($('libEntries'), list.length ? list.map(function (e) {
     return el('article.entry' + (e.unfinished ? '.is-unfinished' : ''), [
       el('div.entry__head', [
-        el('span.entry__when', whenLabel(e.created) + (e.unfinished ? ' · rozepsané' : '')),
-        el('span', wordCount(e.text) + ' sl.')
+        el('span.entry__when', whenLabel(e.created) + (e.unfinished ? ' · nedokončeno' : '')),
+        el('span', wordCount(e.text) + ' slov')
       ]),
       el('h3', e.title || 'Bez názvu'),
       el('p', excerpt(e.text)),
@@ -128,8 +128,8 @@ function render() {
       ])
     ]);
   }) : el('div.entry', { style: 'grid-column:1/-1;padding:28px' }, [
-    el('h3', 'Nic neodpovídá.'),
-    el('p', 'Zruš filtr, nebo začni novou relaci a promluv si o tom.'),
+    el('h3', 'Žádný zápis neodpovídá.'),
+    el('p', 'Zruš filtr, nebo začni novou relaci a vymluv se z toho.'),
     el('button.btn.btn--accent', {
       type: 'button',
       onclick: function () { filter = 'all'; query = ''; $('libQuery').value = ''; render(); }
