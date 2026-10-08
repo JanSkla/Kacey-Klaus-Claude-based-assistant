@@ -39,7 +39,8 @@ export function freshRecord(date, items) {
     delivered: null,
     why: null,
     last_interaction_at: null,
-    items: items.map((i) => ({ key: i.key, label: i.label, done: false, done_at: null })),
+    // A one-off item ("jen zítra" / "jen dnes") keeps that mark and where it came from.
+    items: items.map((i) => ({ key: i.key, label: i.label, done: false, done_at: null, ...(i.once ? { once: true, note: i.note || '' } : {}) })),
   };
 }
 
@@ -101,6 +102,8 @@ export function historyEntry(rec) {
   return {
     done: rec.items.filter((i) => i.done).map((i) => i.key),
     total: rec.items.length,
+    // The words too: the list can be edited, and an old day should still read.
+    labels: Object.fromEntries(rec.items.map((i) => [i.key, i.label])),
     delivered: rec.delivered,
     why: rec.why,
     end_reason: rec.end_reason,

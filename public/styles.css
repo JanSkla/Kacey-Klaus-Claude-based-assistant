@@ -379,6 +379,50 @@ body[data-view="morning"] .sidenav, body[data-view="proposals"] .sidenav { displ
   margin: 0 0 6px; font-size: 14px; font-weight: 600;
   border-bottom: 1px solid var(--line); padding-bottom: 8px;
 }
+/* A group heading with a count and a link on the right. */
+.subhead--row { display: flex; align-items: baseline; gap: 10px; }
+.subhead__meta { font-size: 13px; font-weight: 400; color: var(--ink3); }
+.subhead--row .link { font-weight: 400; }
+
+/* ---- the morning checklist editor (ui/checkedit.js) ----
+   Controller: numbered rows with ↑ ↓ ×. Morning (1f): ⋮⋮ handle, big type. */
+.checkedit__row { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid #2e2e2e; }
+.checkedit__num { width: 22px; flex: none; text-align: right; font-size: 12px; color: var(--ink3); }
+.checkedit__input {
+  flex: 1; min-width: 0; padding: 7px 8px; font: inherit; font-size: 14px; color: var(--ink);
+  background: none; border: 1px solid transparent;
+}
+.checkedit__input:hover { border-color: var(--line2); }
+.checkedit__input:focus { outline: none; border-color: var(--acc); background: var(--bg); }
+.checkedit__badge { flex: none; padding: 1px 6px; font-size: 12px; color: var(--ink2); border: 1px solid var(--line2); white-space: nowrap; }
+.checkedit__arrow, .checkedit__x {
+  width: 30px; height: 30px; flex: none; padding: 0; cursor: pointer;
+  background: none; border: 0; font: inherit; font-size: 14px; color: var(--ink3);
+}
+.checkedit__x { font-size: 16px; }
+.checkedit__arrow:hover:not(:disabled) { color: var(--ink); }
+.checkedit__arrow:disabled { color: var(--line2); cursor: default; }
+.checkedit__x:hover { color: var(--err); }
+.checkedit__add { display: flex; gap: 8px; margin-top: 10px; }
+.checkedit__add .input { padding: 8px 10px; }
+.checkedit__add .input:focus { outline: 2px solid var(--acc); outline-offset: -1px; }
+.checkedit__addbtn { padding: 0 14px; }
+.srow__note--sm { font-size: 13px; }
+
+/* The morning variant (1f): legible from bed. */
+.checkedit--morning .checkedit__row { min-height: 54px; gap: 8px; padding: 0; }
+.checkedit--morning .checkedit__row.is-dragging { background: var(--l2); }
+.checkedit--morning .checkedit__row.is-target { box-shadow: inset 0 2px 0 var(--acc); }
+.checkedit__handle { width: 28px; flex: none; text-align: center; font-size: 18px; color: var(--ink3); cursor: grab; touch-action: none; user-select: none; }
+.checkedit__handle.is-off { visibility: hidden; }
+.checkedit--morning .checkedit__input { font-size: 19px; padding: 8px 10px; }
+.checkedit--morning .checkedit__badge { font-size: 13px; padding: 2px 8px; }
+.checkedit--morning .checkedit__x { width: 48px; height: 48px; font-size: 22px; color: var(--ink2); border: 1px solid var(--line2); }
+.checkedit--morning .checkedit__x:hover { color: var(--err); border-color: var(--err); }
+.checkedit__add--morning { margin-top: 10px; }
+.checkedit__add--morning .input { height: 52px; padding: 0 12px; font-size: 18px; border-color: var(--acc); }
+.checkedit__add--morning .seg__opt { height: 52px; padding: 0 14px; font-size: 15px; }
+.checkedit__add--morning .checkedit__addbtn { height: 52px; padding: 0 18px; font-size: 16px; }
 .clock { margin: 0; font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--acc); }
 .clock--sm { font-size: 30px; min-width: 104px; text-align: center; }
 
@@ -728,33 +772,34 @@ button.rblock:hover { filter: brightness(1.3); }
 .sickform__preview { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2); }
 .sickform__preview.is-warn { color: var(--warn); }
 .sheet__box--narrow { width: min(520px, 100%); }
-/* ---- the Dnes day timeline on the main view (Claude Design DayTimeline) ----
-   06:00–23:00 at 46px an hour: the routine strip (70px) on the left, events
-   and timed tasks beside it, untimed tasks as chips on top, the now line. */
-.daytl { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* ---- the day timeline (Claude Design DayTimeline; calendar.js renderDayTimeline) ----
+   The routine strip on the left, events and timed tasks beside it, untimed
+   tasks as chips on top, the now line. Sizes come from the host:
+   --tl-strip (70 main, 132 morning), --tl-gutter (46/52), --tl-fs (13/15). */
+.daytl { --tl-strip: 70px; --tl-gutter: 46px; --tl-fs: 13px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .daytl__chips { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 6px; }
 .daytl__chip {
-  display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px;
-  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; min-height: calc(var(--tl-fs) * 2 + 6px); padding: 0 10px;
+  font: inherit; font-size: var(--tl-fs); text-align: left; cursor: pointer;
   background: var(--l1); border: 1px dashed var(--line2); border-left: 4px solid var(--acc); color: var(--ink);
 }
 .daytl__chip b, .daytl__task b { flex: 1; min-width: 0; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.daytl__chip em, .daytl__task em { flex: none; font-size: 12px; font-style: normal; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.daytl__chip em, .daytl__task em { flex: none; font-size: calc(var(--tl-fs) - 1px); font-style: normal; color: var(--ink3); font-variant-numeric: tabular-nums; }
 .daytl__chip.is-done b, .daytl__task.is-done b { color: var(--ink3); text-decoration: line-through; }
 .daytl__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 8px 12px 0; }
-.daytl__lane { position: relative; margin-left: 46px; }
-.daytl__hour { position: absolute; left: -46px; right: 0; border-top: 1px solid #2e2e2e; }
-.daytl__hour span { position: absolute; left: 0; top: -9px; padding-right: 6px; background: var(--l1); font-size: 11px; color: var(--ink3); font-variant-numeric: tabular-nums; }
-.daytl__rblock { position: absolute; left: 0; width: 70px; overflow: hidden; padding: 4px 4px 0 6px; }
+.daytl__lane { position: relative; margin-left: var(--tl-gutter); }
+.daytl__hour { position: absolute; left: calc(var(--tl-gutter) * -1); right: 0; border-top: 1px solid #2e2e2e; }
+.daytl__hour span { position: absolute; left: 0; top: -9px; padding-right: 6px; background: var(--l1); font-size: max(11px, calc(var(--tl-fs) - 2px)); color: var(--ink3); font-variant-numeric: tabular-nums; }
+.daytl__rblock { position: absolute; left: 0; width: var(--tl-strip); overflow: hidden; padding: 4px 4px 0 6px; }
 .daytl__rblock.is-short { padding-top: 1px; }
 .daytl__rblock.is-short em { display: none; }
 .daytl__rblock.is-cancelled { outline: 1px dashed var(--line2); outline-offset: -1px; padding-left: 8px; }
 .daytl__rblock.is-cancelled b { text-decoration: line-through; }
-.daytl__rblock b { display: block; font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.daytl__rblock em { display: block; font-size: 11px; font-style: normal; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.daytl__rblock b { display: block; font-size: calc(var(--tl-fs) - 2px); font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.daytl__rblock em { display: block; font-size: max(11px, calc(var(--tl-fs) - 3px)); font-style: normal; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .daytl__rblock em.daytl__where { color: var(--ink2); }
 .daytl__event {
-  position: absolute; left: 76px; right: 0; z-index: 1; overflow: hidden;
+  position: absolute; left: calc(var(--tl-strip) + 6px); right: 0; z-index: 1; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-start; padding: 5px 10px;
   text-align: left; font: inherit; color: var(--ink); cursor: pointer;
   background: var(--l2); border: 1px solid var(--line2);
@@ -763,21 +808,26 @@ button.rblock:hover { filter: brightness(1.3); }
 .daytl__event.is-short { justify-content: center; padding: 0 10px; }
 .daytl__event.is-now { border-color: var(--acc); }
 .daytl__event.is-tentative { background: var(--l1); border: 2px dotted var(--line2); }
-.daytl__event b { display: flex; align-items: center; font-size: 13px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.daytl__event em { display: block; font-size: 12px; font-style: normal; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.daytl__event b { display: flex; align-items: center; font-size: var(--tl-fs); font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.daytl__event em { display: block; font-size: calc(var(--tl-fs) - 1px); font-style: normal; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .daytl__event.is-now em { color: var(--acc); }
+.daytl__taskwrap { position: absolute; left: calc(var(--tl-strip) + 6px); right: 0; z-index: 2; }
 .daytl__task {
-  position: absolute; left: 76px; right: 0; z-index: 2; overflow: hidden;
-  display: flex; align-items: center; gap: 8px; padding: 0 10px;
-  text-align: left; font: inherit; font-size: 13px; cursor: pointer; color: var(--ink);
+  width: 100%; overflow: hidden; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  text-align: left; font: inherit; font-size: var(--tl-fs); cursor: pointer; color: var(--ink);
   background: var(--l1); border: 1px dashed var(--line2); border-left: 4px solid var(--acc);
 }
 .daytl__task b { font-weight: 600; }
 .daytl__task.is-late { border-left-color: var(--err); }
-.daytl__now { position: absolute; left: -46px; right: 0; height: 2px; z-index: 3; background: var(--acc); pointer-events: none; }
+.daytl__task.is-warn { border-left-color: var(--warn); }
+.daytl__task.is-warn em { color: var(--warn); }
+/* A rule's caveat under its task: "Možná jen jedna — …". */
+.daytl__warn { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; padding: 0 2px; font-size: calc(var(--tl-fs) - 1px); color: var(--warn); }
+.daytl__warn::before { content: ""; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--warn); }
+.daytl__now { position: absolute; left: calc(var(--tl-gutter) * -1); right: 0; height: 2px; z-index: 3; background: var(--acc); pointer-events: none; }
 .daytl__now span {
   position: absolute; left: 0; top: -9px; padding: 0 4px; line-height: 18px;
-  background: var(--acc); color: var(--on-acc); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  background: var(--acc); color: var(--on-acc); font-size: max(11px, calc(var(--tl-fs) - 2px)); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .eblock {
   position: absolute; left: 118px; right: 10px; overflow: hidden; padding: 8px 12px;
@@ -1131,6 +1181,13 @@ button.rblock:hover { filter: brightness(1.3); }
 .toast[hidden] { display: none; }
 .toast__action { flex: 0 0 auto; font-weight: 600; background: var(--l3); border-color: var(--acc); color: var(--acc); }
 .toast__action[hidden] { display: none; }
+.toast__open {
+  display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0;
+  background: none; border: 0; font: inherit; font-size: 14px; color: var(--ink); text-align: left; cursor: pointer;
+}
+.toast__open:hover { text-decoration: underline; }
+.toast__open[hidden] { display: none; }
+.toast__arrow { color: var(--acc); }
 .toast__x { margin-left: auto; background: none; border: 0; color: var(--ink2); font-size: 16px; cursor: pointer; padding: 0 4px; }
 .toast__x:hover { color: var(--ink); }
 
@@ -1173,10 +1230,27 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
 .morning__note { margin: 0; display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--l1); border: 1px solid var(--line); font-size: 15px; color: var(--ink2); }
 .morning__brief { flex: 1; }
 .morning__player .btn { min-height: 56px; font-size: 16px; }
+.morning__player #mPlay { padding: 0 28px; font-size: 18px; font-weight: 600; }
+.morning__player #mPlayClock { font-size: 16px; color: var(--ink2); margin: 0; }
 .morning__count { font-size: 22px; font-weight: 600; }
 .morning__check { flex: 0 0 auto; }
-.morning__check .card__head { border-bottom: 0; padding-bottom: 8px; }
-.morning__rules { flex: 1; }
+.morning__check .card__head { border-bottom: 0; padding: 12px 16px 8px; }
+.morning__check .card__title--lg, .morning__today .card__title--lg { font-size: 16px; }
+.morning__edit { min-height: 40px; padding: 0 14px; font-size: 15px; }
+.bleedbar__lights { font-size: 14px; color: var(--ink3); }
+/* Dnes: the day timeline, filling the column under the checklist. */
+.morning__today { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.morning__todayhead { align-items: baseline; gap: 12px; padding: 12px 16px; }
+.morning__todaymeta { font-size: 14px; color: var(--ink3); }
+.morning__todayhead .link { font-size: 14px; }
+.morning__todayhead .push + .link { margin-left: 0; }
+/* 1f: the checklist editor over the morning. */
+.checkedit-box .sheet__head { gap: 12px; padding: 14px 16px 10px; }
+.checkedit-box .sheet__title { font-size: 18px; letter-spacing: .04em; }
+.checkedit-box__paused { font-size: 15px; color: var(--ink3); }
+.checkedit-box__done { min-height: 44px; padding: 0 20px; font-size: 16px; }
+.checkedit-box .sheet__body { padding: 0 12px 12px; }
+.checkedit-box__hint { margin: 10px 0 0; font-size: 14px; color: var(--ink3); }
 
 /* The brief read from bed: bigger, and the current line washed in the accent. */
 .brieflines--big { padding: 8px 0; gap: 0; }
@@ -1213,15 +1287,8 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
 .checkitem__sub { font-size: 14px; color: var(--ink2); }
 .checkitem__go { font-size: 22px; color: var(--acc); }
 
-.ruletask { display: flex; gap: 14px; align-items: flex-start; padding: 10px 16px; border-bottom: 1px solid #2e2e2e; }
-.ruletask .check { margin-top: 5px; }
-.ruletask__text { flex: 1; min-width: 0; }
-.ruletask__label { display: block; font-size: 18px; }
-.ruletask.is-done .ruletask__label { color: var(--ink3); text-decoration: line-through; }
-.ruletask__origin { display: block; font-size: 14px; color: var(--ink2); }
-.ruletask__warn, .task__warn { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 14px; color: var(--warn); }
-.ruletask__warn::before, .task__warn::before { content: ""; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--warn); }
-.ruletask__when { font-size: 16px; color: var(--ink2); }
+.task__warn { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 14px; color: var(--warn); }
+.task__warn::before { content: ""; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--warn); }
 
 .morningdone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 40px; text-align: center; }
 .morningdone p { margin: 0; }
@@ -1943,21 +2010,48 @@ html.is-night body:not([data-view="morning"]) { filter: brightness(.42); }
   .clockbig { font-size: 60px; }
   .morning__date { margin-top: 6px; font-size: 15px; }
   .morning__note { font-size: 13px; padding: 8px 12px; }
-  .morning__brief, .morning__rules { flex: 0 0 auto; }
+  .morning__brief, .morning__today { flex: 0 0 auto; }
   .brieflines--big .briefline--big { padding: 8px 14px; font-size: 16px; }
   .briefline__tag { font-size: 12px; }
   .morning__player .btn { min-height: 48px; font-size: 14px; }
+  .morning__player #mPlay { flex: 1.3 1 0; padding: 0 12px; font-size: 15px; }
+  .morning__player #mReplay { flex: 1 1 0; }
+  /* The progress is a full-width strip over the two buttons. */
+  .morning__player { flex-wrap: wrap; padding: 10px; gap: 8px; }
+  .morning__player .bar { order: -1; flex: 1 1 100%; height: 4px; margin: -10px -10px 0; }
   .morning__count { font-size: 17px; }
+  .morning__check .card__head { padding: 6px 6px 6px 14px; }
+  .morning__check .card__title--lg { font-size: 14px; }
+  .morning__edit { min-height: 44px; padding: 0 12px; font-size: 13px; background: none; border: 0; color: var(--acc); }
+  .morning__check .segbar { height: 6px; gap: 3px; padding: 0 14px 10px; }
+  .morning__todayhead { padding: 10px 14px; }
+  .morning__todayhead .card__title--lg { font-size: 14px; }
+  .morning__todaymeta { font-size: 12px; }
+  .morning__todayhead .link { font-size: 13px; }
+  .morning__today .daytl { flex: 0 0 440px; }
+  /* The bar on a phone: "Ráno", a short state, "Na hlavní" as a link. */
+  .bleedbar__home { min-height: 44px; padding: 0 12px; margin-left: auto; background: none; border: 0; color: var(--acc); font-size: 13px; }
+  /* 1f as a bottom sheet. */
+  .morning__editsheet { align-items: flex-end; padding: 52px 8px 8px; }
+  .checkedit-box .sheet__head { padding: 6px 6px 6px 14px; }
+  .checkedit-box .sheet__title { font-size: 15px; letter-spacing: 0; }
+  .checkedit-box__done { min-height: 44px; padding: 0 16px; font-size: 14px; }
+  .checkedit--morning .checkedit__row { min-height: 52px; gap: 4px; }
+  .checkedit__handle { width: 24px; }
+  .checkedit--morning .checkedit__input { font-size: 16px; padding: 8px; }
+  .checkedit--morning .checkedit__badge { font-size: 11px; padding: 1px 6px; }
+  .checkedit--morning .checkedit__x { width: 44px; height: 44px; font-size: 20px; border: 0; }
+  .checkedit__add--morning { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
+  .checkedit__add--morning .input { grid-column: 1 / -1; height: 48px; padding: 0 10px; font-size: 16px; }
+  .checkedit__add--morning .checkedit__seg { display: contents; }
+  .checkedit__add--morning .seg__opt { height: 48px; font-size: 14px; margin-left: 0; }
+  .checkedit__add--morning .checkedit__addbtn { height: 48px; padding: 0 14px; font-size: 14px; }
   .checkgrid { grid-template-columns: 1fr; gap: 6px; padding: 0 10px 10px; }
   .checkitem { min-height: 56px; gap: 12px; padding: 6px 12px; }
   .checkitem__box { flex-basis: 26px; width: 26px; height: 26px; font-size: 16px; }
   .checkitem__label { font-size: 17px; }
   .checkitem__sub { font-size: 12px; }
-  .ruletask { min-height: 56px; padding: 10px 14px; gap: 12px; }
-  .ruletask__label { font-size: 15px; }
-  .ruletask__origin, .ruletask__warn { font-size: 12px; }
-  .ruletask__when { font-size: 13px; }
-  .morningdone { align-items: stretch; text-align: left; gap: 16px; padding: 24px; }
+    .morningdone { align-items: stretch; text-align: left; gap: 16px; padding: 24px; }
   .morningdone__time { font-size: 20px; }
   .morningdone__title { font-size: 44px; line-height: 1.1; }
   .morningdone__sum { font-size: 16px; }

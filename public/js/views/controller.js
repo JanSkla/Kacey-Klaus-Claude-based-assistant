@@ -21,6 +21,9 @@ import { onEnter, currentView } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { primeTTS, cancelSpeech, feedTTS, flushTTS } from '../voice/tts.js';
 import { night, onNight, runNightNow } from '../net/nightapi.js';
+import { go } from '../ui/router.js';
+import { renderRows, addRow } from '../ui/checkedit.js';
+import { newKey, itemsWord, MAX_ITEMS } from '../core/checklist.js';
 
 var SOURCES = [
   { key: 'cal_osobni', name: 'Kalendář · osobní', meta: 'čte se z klaus_memory' },
@@ -269,8 +272,74 @@ function renderMonitor() {
   ]);
 }
 
+/* ---- the morning checklist ---------------------------------------------------
+   The default list, for the coming mornings: today's record is not touched
+   (the morning screen's own editor does that). One-offs Kacey added for the
+   next morning show with "jen zítra" and can be renamed or removed here. */
+
+function checklist() { return store.data.morning || { items: [], once: [] }; }
+
+function patchChecklist(fn) {
+  store.patch('morning', function (m) {
+    var cur = m || { items: [], once: [] };
+    return fn({ items: cur.items.slice(), once: cur.once.slice() });
+  });
+}
+
+function renderChecklist() {
+  if (!$('ctrlCheckRows')) return;
+  var c = checklist();
+  var rows = c.items.map(function (i) { return { key: i.key, label: i.label }; })
+    .concat(c.once.map(function (o) { return { key: o.key, label: o.label, once: true, note: o.note }; }));
+  $('ctrlCheckCount').textContent = itemsWord(c.items.length) + (c.once.length ? ' · ' + c.once.length + ' jen zítra' : '');
+  renderRows($('ctrlCheckRows'), rows, {
+    variant: 'ctrl',
+    onRename: function (key, label) {
+      patchChecklist(function (m) {
+        m.items = m.items.map(function (i) { return i.key === key ? { key: i.key, label: label } : i; });
+        m.once = m.once.map(function (o) { return o.key === key ? Object.assign({}, o, { label: label }) : o; });
+        return m;
+      });
+    },
+    onRemove: function (key) {
+      var before = checklist();
+      var gone = rows.filter(function (r) { return r.key === key; })[0];
+      patchChecklist(function (m) {
+        m.items = m.items.filter(function (i) { return i.key !== key; });
+        m.once = m.once.filter(function (o) { return o.key !== key; });
+        return m;
+      });
+      say((gone ? gone.label : 'Položka') + ' odebráno z ranního checklistu', {
+        label: 'Vrátit', run: function () { store.patch('morning', before); }
+      });
+    },
+    onMove: function (key, to) {
+      patchChecklist(function (m) {
+        var from = m.items.findIndex(function (i) { return i.key === key; });
+        if (from < 0) return m;
+        var item = m.items.splice(from, 1)[0];
+        m.items.splice(to, 0, item);
+        return m;
+      });
+    }
+  });
+}
+
+function initChecklist() {
+  if (!$('ctrlCheckAdd')) return;
+  $('ctrlCheckAdd').appendChild(addRow({
+    variant: 'ctrl',
+    onAdd: function (label) {
+      if (checklist().items.length >= MAX_ITEMS) { say('Checklist má už ' + MAX_ITEMS + ' položek.'); return; }
+      patchChecklist(function (m) { m.items.push({ key: newKey(), label: label }); return m; });
+      say(label + ' přidáno do ranního checklistu · od zítřka', null, function () { go('morning'); });
+    }
+  }));
+}
+
 function render() {
   if (!$('ctrlSources')) return;
+  renderChecklist();
   renderMonitor();
   loadMonitor();
   fill($('ctrlSources'), SOURCES.map(function (r) { return toggleRow('sources', r); }));
@@ -296,6 +365,7 @@ export function initController(restartSession) {
   });
 
   $('ctrlRunNight').addEventListener('click', function () { runNow(false); });
+  initChecklist();
 
   onEnter('controller', render);
   setInterval(function () { if (currentView() === 'controller' && !monitorBusy) loadMonitor(); }, 5000);

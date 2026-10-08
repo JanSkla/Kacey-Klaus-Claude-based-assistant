@@ -19,10 +19,14 @@ import * as store from '../core/store.js';
 import { go, onEnter, currentView } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { sendFrame } from '../net/protocol.js';
-import { night, onNight, loadMorning, tickMorning, morningIdle, loadProposals, loadRules } from '../net/nightapi.js';
+import { night, onNight, loadMorning, tickMorning, morningIdle, loadProposals, loadRules, editMorningToday } from '../net/nightapi.js';
 import { makeLinePlayer, clockText } from './lineplayer.js';
-import { tasks, toggleTask } from './tasks.js';
-import { parseDue, logicalToday } from '../core/due.js';
+import { tasks } from './tasks.js';
+import { parseDue } from '../core/due.js';
+import { renderDayTimeline, todayEvents } from '../ui/calendar.js';
+import { isPhone } from '../ui/psheet.js';
+import { renderRows, addRow } from '../ui/checkedit.js';
+import { newKey, MAX_ITEMS } from '../core/checklist.js';
 import { feedTTS, flushTTS, primeTTS } from '../voice/tts.js';
 
 var player = makeLinePlayer(function (what) {
@@ -31,6 +35,8 @@ var player = makeLinePlayer(function (what) {
 });
 var clockTimer = 0;
 var saidDone = false;
+var editing = false;       // the checklist editor (1f) is open: the brief waits
+var lights = null;         // GET /api/lights/state, for the bar
 
 var DAYS = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
 var MONTHS = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
@@ -60,15 +66,25 @@ function onMorningFrame(m) {
 
 /* ---- rendering ---------------------------------------------------------------- */
 
+/* "Ráno · brief hraje" on the bar; on a phone the short word, "hraje". */
 function renderBar() {
   var r = rec();
-  var st = !r ? 'Ráno' : r.state === 'done' ? 'Ráno · hotovo'
-    : player.playing() ? 'Ráno · brief hraje'
-    : player.finished() ? 'Ráno · brief dočten' : 'Ráno';
-  $('mState').textContent = st;
-  $('mStateDot').setAttribute('data-st', r && r.state === 'done' ? 'ok' : player.playing() ? 'acc' : 'pend');
-  var ls = night.state && night.state.lightsd;
-  $('mLights').textContent = ls && ls.mode !== 'down' ? (ls.sleeping ? 'světla · noc' : 'světla · den') : 'světla · lightsd nedostupné';
+  var st = !r ? ['Ráno', ''] : r.state === 'done' ? ['Ráno · hotovo', 'hotovo']
+    : editing ? ['Ráno · úprava checklistu', 'úprava']
+    : player.playing() ? ['Ráno · brief hraje', 'hraje']
+    : player.finished() ? ['Ráno · brief dočten', 'dočteno'] : ['Ráno', ''];
+  $('mState').textContent = st[0];
+  $('mStateShort').textContent = st[1];
+  $('mStateDot').setAttribute('data-st', r && r.state === 'done' ? 'ok' : player.playing() && !editing ? 'acc' : 'pend');
+  $('mLights').textContent = !lights || !lights.ok || !lights.known ? 'světla · lightsd nedostupné'
+    : lights.on ? 'světla ' + lights.brightness + ' %' + (lights.mode === 'white' ? ' · bílá' : lights.mode ? ' · barva' : '')
+    : 'světla vypnuto';
+}
+
+function loadLights() {
+  fetch('/api/lights/state', { cache: 'no-store' }).then(function (r) { return r.json(); })
+    .then(function (st) { lights = st; renderBar(); })
+    .catch(function () { lights = null; renderBar(); });
 }
 
 function renderClock() {
@@ -137,48 +153,143 @@ function renderChecklist() {
   }));
 }
 
-/* Today's tasks the night's rules made: which rule, and the overlap caveat. */
-function ruleTasks() {
-  var today = logicalToday();
-  return tasks().filter(function (t) {
-    var p = parseDue(t.due_at);
-    return t.origin === 'rule' && p && p.date === today;
-  }).sort(function (a, b) { return a.due_at < b.due_at ? -1 : 1; });
-}
+/* ---- Dnes: the day as a lane (Claude Design 1a–1f) ------------------------------
+   The same timeline as main's Dnes card, sized for the bedside screen; tasks a
+   rule made say so ("pravidlo · 07:45", "pravidlo Domácnost"). */
 
-function ruleName(id) {
+/** The ruleset a rule-made task came from: "Domácnost". */
+function rulesetOf(task) {
   var sets = night.rulesets || [];
   for (var i = 0; i < sets.length; i++) {
-    for (var j = 0; j < sets[i].rules.length; j++) if (sets[i].rules[j].id === id) return sets[i].rules[j].name;
+    for (var j = 0; j < sets[i].rules.length; j++) if (sets[i].rules[j].id === task.rule_id) return sets[i].name;
   }
-  return null;
+  return '';
 }
 
-function renderRuleTasks() {
-  var list = ruleTasks();
-  fill($('mRuleTasks'), list.length ? list.map(function (t) {
-    var p = parseDue(t.due_at);
-    var name = ruleName(t.rule_id);
-    return el('div.ruletask' + (t.done ? '.is-done' : ''), [
-      el('button.check', {
-        type: 'button', 'aria-pressed': String(!!t.done), 'aria-label': 'Přepnout úkol',
-        onclick: function () { toggleTask(t.id); }
-      }, t.done ? '✓' : ''),
-      el('span.ruletask__text', [
-        el('span.ruletask__label', t.label),
-        el('span.ruletask__origin', (name ? 'pravidlo ' + name : 'pravidlo') + (t.reason ? ' · ' + t.reason : '')),
-        t.note ? el('span.ruletask__warn', t.note) : null
-      ]),
-      el('span.ruletask__when.num', p && p.time ? p.time : 'dnes')
-    ]);
-  }) : el('p.empty', 'Pravidla na dnešek nic nepřidala.'));
+function renderToday() {
+  var phone = isPhone();
+  renderDayTimeline($('mToday'), {
+    start: 360, end: 1320, pxh: phone ? 38 : 44, strip: phone ? 92 : 132, gutter: phone ? 44 : 52, fs: phone ? 13 : 15,
+    nowOffset: phone ? 20 : 24, follow: true, metaEl: $('mTodayMeta'), metaFirst: true, ruleName: rulesetOf
+  });
 }
 
+/* ---- the checklist editor (1f) ------------------------------------------------------
+   Today's list, changed at once (POST /api/morning/today). An item for every
+   morning changes the default list too (the app section `morning`, the same
+   list as Controller → Ranní checklist); "jen dnes" ones live on today only. */
+
+function editable() { return items().filter(function (i) { return !i.auto && i.key !== 'proposals'; }); }
+
+function saveToday(list) {
+  return editMorningToday(list.map(function (i) { return { key: i.key, label: i.label, once: !!i.once }; }))
+    .catch(function (e) { say('Nepovedlo se: ' + e.message); });
+}
+
+function patchDefaults(fn) {
+  store.patch('morning', function (m) {
+    var cur = m || { items: [], once: [] };
+    return fn({ items: cur.items.slice(), once: cur.once.slice() });
+  });
+}
+
+/** Today's every-morning items in their new order, then those the default list has and today does not. */
+function followOrder(m, list) {
+  var keys = list.filter(function (i) { return !i.once; }).map(function (i) { return i.key; });
+  var byKey = {};
+  m.items.forEach(function (i) { byKey[i.key] = i; });
+  m.items = keys.filter(function (k) { return byKey[k]; }).map(function (k) { return byKey[k]; })
+    .concat(m.items.filter(function (i) { return keys.indexOf(i.key) === -1; }));
+  return m;
+}
+
+function renderEditor() {
+  if (!editing) return;
+  var list = editable();
+  renderRows($('mEditRows'), list, {
+    variant: 'morning',
+    onRename: function (key, label) {
+      saveToday(list.map(function (i) { return i.key === key ? Object.assign({}, i, { label: label }) : i; }));
+      patchDefaults(function (m) {
+        m.items = m.items.map(function (i) { return i.key === key ? { key: key, label: label } : i; });
+        return m;
+      });
+    },
+    onRemove: function (key) {
+      var gone = list.filter(function (i) { return i.key === key; })[0];
+      var beforeToday = list.slice(), beforeDefault = store.data.morning;
+      saveToday(list.filter(function (i) { return i.key !== key; }));
+      if (gone && !gone.once) patchDefaults(function (m) { m.items = m.items.filter(function (i) { return i.key !== key; }); return m; });
+      say((gone ? gone.label : 'Položka') + ' odebráno z ranního checklistu', {
+        label: 'Vrátit', run: function () { saveToday(beforeToday); store.patch('morning', beforeDefault); }
+      });
+    },
+    onMove: function (key, to) {
+      var fixed = list.filter(function (i) { return !i.once; });
+      var from = fixed.findIndex(function (i) { return i.key === key; });
+      if (from < 0) return;
+      fixed.splice(to, 0, fixed.splice(from, 1)[0]);
+      var next = fixed.concat(list.filter(function (i) { return i.once; }));
+      saveToday(next);
+      patchDefaults(function (m) { return followOrder(m, next); });
+    }
+  });
+}
+
+function openEditor(open) {
+  editing = open;
+  $('mEditSheet').hidden = !open;
+  $('mEdit').setAttribute('aria-expanded', String(open));
+  if (open) {
+    player.play(false);             // "brief stojí"
+    renderEditor();
+    var first = $('mEditRows').querySelector('input');
+    if (first) first.focus();
+  }
+  renderBar();
+}
+
+function initEditor() {
+  $('mEdit').addEventListener('click', function () { openEditor(true); });
+  $('mEditDone').addEventListener('click', function () { openEditor(false); });
+  var sheet = $('mEditSheet');
+  sheet.addEventListener('click', function (ev) { if (ev.target === sheet) openEditor(false); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && editing) { openEditor(false); ev.stopImmediatePropagation(); ev.preventDefault(); }
+  }, true);
+  $('mEditAdd').appendChild(addRow({
+    variant: 'morning',
+    onAdd: function (label, once) {
+      var list = editable();
+      if (list.length >= MAX_ITEMS) { say('Checklist má už ' + MAX_ITEMS + ' položek.'); return; }
+      var item = { key: newKey(), label: label, once: once };
+      // A new every-morning item goes before today's one-offs.
+      var fixed = list.filter(function (i) { return !i.once; }), extra = list.filter(function (i) { return i.once; });
+      saveToday(once ? list.concat([item]) : fixed.concat([item], extra));
+      if (!once) patchDefaults(function (m) { m.items.push({ key: item.key, label: label }); return m; });
+    }
+  }));
+}
+
+/** "v 8:00" / "ve 12:30" — Czech says "ve" before the hours that start with a consonant cluster. */
+export function vTime(hhmm) {
+  var h = Number(String(hhmm).slice(0, 2));
+  return ([2, 3, 4, 12, 13, 14, 20, 21, 22, 23].indexOf(h) !== -1 ? 've ' : 'v ') + hhmm;
+}
+
+/** What comes next today: the earliest future event or timed task. "zubař v 10:30". */
 function nextThing() {
   var now = new Date();
-  var t = tasks().filter(function (x) { var p = parseDue(x.due_at); return !x.done && p && p.time && new Date(x.due_at) > now; })
-    .sort(function (a, b) { return a.due_at < b.due_at ? -1 : 1; })[0];
-  return t ? t.label.toLowerCase() + ' v ' + t.due_at.slice(11, 16) : null;
+  var nowM = now.getHours() * 60 + now.getMinutes();
+  var list = todayEvents().filter(function (e) { return e.start > nowM; })
+    .map(function (e) { return { at: e.start, title: e.title }; })
+    .concat(tasks().filter(function (x) { var p = parseDue(x.due_at); return !x.done && p && p.time && new Date(x.due_at) > now; })
+      .map(function (x) { var p = parseDue(x.due_at); return { at: p.minutes, title: x.label }; }))
+    .sort(function (a, b) { return a.at - b.at; });
+  var t = list[0];
+  if (!t) return null;
+  var hm2 = ('0' + Math.floor(t.at / 60)).slice(-2) + ':' + ('0' + (t.at % 60)).slice(-2);
+  return t.title.charAt(0).toLowerCase() + t.title.slice(1) + ' ' + vTime(hm2);
 }
 
 function renderDone() {
@@ -204,7 +315,7 @@ function renderDone() {
 
 function render() {
   if (!$('mLines') || currentView() !== 'morning') return;
-  renderBar(); renderClock(); renderPlayer(); renderChecklist(); renderRuleTasks(); renderDone();
+  renderBar(); renderClock(); renderPlayer(); renderChecklist(); renderToday(); renderDone(); renderEditor();
 }
 
 /* ---- around the app ---------------------------------------------------------------
@@ -237,6 +348,7 @@ export function initMorning() {
   if (!$('mLines')) return;
 
   $('mPlay').addEventListener('click', function () { player.play(!player.playing()); });
+  initEditor();
   $('mReplay').addEventListener('click', function () { player.jump(player.finished() ? player.lines().length - 1 : player.index()); });
   $('mIdle').addEventListener('click', function () {
     morningIdle().catch(function () { /* the screen is the server's */ });
@@ -245,7 +357,8 @@ export function initMorning() {
 
   onEnter('morning', function () {
     clearInterval(clockTimer);
-    clockTimer = setInterval(renderClock, 15000);
+    clockTimer = setInterval(function () { renderClock(); renderToday(); }, 15000);
+    loadLights();
     // Opened by hand (the rail, Víc): show today's brief without playing it.
     loadMorning().then(function () {
       var r = rec();
@@ -255,7 +368,7 @@ export function initMorning() {
     render();
   });
   ['main', 'tasks', 'journal', 'library', 'calendar', 'brief', 'timer', 'controller', 'lights', 'rules']
-    .forEach(function (v) { onEnter(v, function () { clearInterval(clockTimer); player.stop(); }); });
+    .forEach(function (v) { onEnter(v, function () { clearInterval(clockTimer); player.stop(); if (editing) openEditor(false); }); });
 
   onNight(function (what) {
     if (what === 'morning') onMorningFrame(night.morning);

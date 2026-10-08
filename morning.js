@@ -12,7 +12,8 @@
  */
 
 import { kvGet, kvSet } from './db.js';
-import { MORNING_ITEMS } from './config.js';
+import { morningChecklist, setSection } from './appstate.js';
+import { itemsFor, pruneOnce, newKey, MAX_ITEMS, MAX_LABEL } from './public/js/core/checklist.js';
 import * as nightstore from './nightstore.js';
 import * as screen from './screen.js';
 import { writeBrief, currentBriefHash, makeSdkRunner } from './dream.js';
@@ -69,7 +70,12 @@ function today(now) {
     }
     archive(rec);
   }
-  rec = freshRecord(date, MORNING_ITEMS);
+  /* The checklist as edited (Controller, the morning screen, Kacey): every
+     morning's items, then this date's one-offs. One-offs whose morning has
+     passed are dropped from the list now. */
+  const list = morningChecklist();
+  rec = freshRecord(date, itemsFor(list, date));
+  if (list.once.some((o) => o.date < date)) setSection('morning', pruneOnce(list, date));
   save(rec);
   return rec;
 }
@@ -202,6 +208,41 @@ export function tick(key, done, now = new Date()) {
   save(rec);
   const step = morningStep(rec, now, {});
   if (rec.state === 'active' && step.end === 'done') end(rec, 'done', now);
+  else push();
+  return record();
+}
+
+/**
+ * The morning screen's checklist editor (Claude Design 1f): today's items as
+ * the screen now wants them — order, labels, one-offs ("jen dnes"). A ticked
+ * item keeps its tick by key; a new one starts unticked; the self-ticking
+ * "Projít návrhy" item stays where it was. The default list for later
+ * mornings is the app section `morning`, saved by the page alongside.
+ */
+export function editToday(list, now = new Date()) {
+  const rec = today(now);
+  const byKey = new Map(rec.items.map((i) => [i.key, i]));
+  const auto = rec.items.filter((i) => i.auto);
+  const seen = new Set();
+  const next = [];
+  for (const raw of Array.isArray(list) ? list : []) {
+    const label = String(raw && raw.label || '').trim().replace(/\s+/g, ' ').slice(0, MAX_LABEL);
+    if (!label || next.length >= MAX_ITEMS) continue;
+    const old = raw.key && byKey.get(raw.key);
+    if (old && old.auto) continue;
+    let key = old ? old.key : (typeof raw.key === 'string' && /^[a-z0-9_-]{1,40}$/i.test(raw.key) ? raw.key : newKey());
+    if (seen.has(key)) key = newKey();
+    seen.add(key);
+    next.push({
+      key, label, done: old ? old.done : false, done_at: old ? old.done_at : null,
+      ...(raw.once || (old && old.once) ? { once: true, note: (old && old.note) || '' } : {}),
+    });
+  }
+  rec.items = next.concat(auto);
+  if (rec.state === 'active') rec.last_interaction_at = now.toISOString();
+  save(rec);
+  // Removing the last unticked item can finish the morning.
+  if (rec.state === 'active' && next.length && morningStep(rec, now, {}).end === 'done') end(rec, 'done', now);
   else push();
   return record();
 }

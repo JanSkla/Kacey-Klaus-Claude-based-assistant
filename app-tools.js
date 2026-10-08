@@ -25,6 +25,8 @@ import * as appstate from './appstate.js';
 import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
 import { CATEGORY_KEYS, KINDS } from './public/js/core/routine-cats.js';
+import { MAX_ITEMS, newKey } from './public/js/core/checklist.js';
+import { logicalDateOf } from './rules.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
 import * as notifications from './notifications.js';
@@ -734,12 +736,52 @@ const notificationsRead = tool(
   },
 );
 
+/* ---- the morning checklist -------------------------------------------------- */
+
+function nextDay(date) {
+  const d = new Date(date + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+const morningAdd = tool(
+  'app_morning_add',
+  'Přidej položku do ranního checklistu (ranní obrazovka u postele). Bez `once` platí každé ráno ' +
+    'od příštího; s `once: true` jen na jedno, nejbližší ráno ("jen zítra"). Úkoly s termínem patří ' +
+    'do app_task_add, ne sem — sem jen to, co se dělá hned po probuzení.',
+  {
+    label: z.string().max(80).describe('Co udělat ráno, krátce: "Vzít léky", "Zalít kytky".'),
+    once: z.boolean().optional().describe('true = jen na příští ráno, pak zmizí.'),
+  },
+  async ({ label, once }) => {
+    const text = String(label || '').trim();
+    if (!text) return fail('Prázdná položka.');
+    const before = appstate.morningChecklist();
+    const list = { items: before.items.slice(), once: before.once.slice() };
+    const now = new Date();
+    if (once) {
+      if (list.once.length >= MAX_ITEMS) return fail('Jednorázových položek je už moc. Nic se nepřidalo.');
+      const date = nextDay(logicalDateOf(now));
+      const hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+      list.once.push({ key: newKey(), label: text, date, note: `Kacey přidala v ${hm} z konverzace` });
+      appstate.setSection('morning', list);
+      onWrite('morning', before);
+      return ok(`Přidáno jen na ráno ${date}: ${text}`);
+    }
+    if (list.items.length >= MAX_ITEMS) return fail(`Checklist má už ${MAX_ITEMS} položek. Nic se nepřidalo.`);
+    list.items.push({ key: newKey(), label: text });
+    appstate.setSection('morning', list);
+    onWrite('morning', before);
+    return ok(`Přidáno do ranního checklistu, platí od příštího rána: ${text}`);
+  },
+);
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, journalAdd,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative,
-  notificationsRead,
+  notificationsRead, morningAdd,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
@@ -747,7 +789,7 @@ export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours', 'app_routine_alter',
   'app_task_add', 'app_task_update', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
-  'app_calendar_tentative', 'app_notifications',
+  'app_calendar_tentative', 'app_notifications', 'app_morning_add',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 export function makeAppServer() {

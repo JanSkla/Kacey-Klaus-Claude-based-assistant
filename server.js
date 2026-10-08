@@ -744,6 +744,15 @@ app.post('/api/morning/tick', express.json({ limit: '2kb' }), (req, res) => {
   }
 });
 
+/* The morning screen's checklist editor: today's items in their new order. */
+app.post('/api/morning/today', express.json({ limit: '16kb' }), (req, res) => {
+  try {
+    res.json({ ok: true, morning: morning.editToday(req.body?.items) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 /* "Přehrát brief teď": start the morning by hand — no lid check, no clock. */
 app.post('/api/morning/start', async (_req, res) => {
   res.json({ ok: true, morning: await morning.startMorning(new Date(), { manual: true }) });

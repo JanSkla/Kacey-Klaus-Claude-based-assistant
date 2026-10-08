@@ -645,6 +645,14 @@
         <button type="button" class="btn btn--block ctrl__runnight" id="ctrlRunNight">Spustit noční běh teď</button>
       </div>
 
+      <!-- The morning checklist for the coming mornings (ui/checkedit.js). -->
+      <div>
+        <h3 class="subhead subhead--row">Ranní checklist <span class="subhead__meta" id="ctrlCheckCount"></span><button type="button" class="link push" data-go="morning">Jak to vypadá ráno</button></h3>
+        <div class="checkedit checkedit--ctrl" id="ctrlCheckRows"></div>
+        <div id="ctrlCheckAdd"></div>
+        <p class="srow__note srow__note--sm">Změny platí od příštího rána; upravit to jde i přímo na ranní obrazovce. Kacey položku přidá i z konverzace — co má platit jen na jedno ráno, nese štítek „jen zítra“. „Projít návrhy od Kacey“ se přidá samo, když nějaké návrhy jsou.</p>
+      </div>
+
       <!-- monitor.js: Moonlight over the kiosk, the PC's virtual display -->
       <div>
         <h3 class="subhead">Druhý monitor</h3>
@@ -690,10 +698,10 @@
 <section class="view view--bleed" data-view="morning" hidden>
   <div class="bleedbar">
     <span class="top__mark" aria-hidden="true"></span>
-    <b class="bleedbar__name">Kacey</b>
-    <span class="bleedbar__state"><span class="bleedbar__dot" id="mStateDot" data-st="pend" aria-hidden="true"></span><span id="mState">Ráno</span></span>
-    <span class="muted-3 push desk-only" id="mLights">—</span>
-    <button type="button" class="btn btn--sm" data-go="main">Na hlavní</button>
+    <b class="bleedbar__name"><span class="desk-only">Kacey</span><span class="phone-only">Ráno</span></b>
+    <span class="bleedbar__state"><span class="bleedbar__dot" id="mStateDot" data-st="pend" aria-hidden="true"></span><span class="desk-only" id="mState">Ráno</span><span class="phone-only" id="mStateShort"></span></span>
+    <span class="bleedbar__lights push desk-only" id="mLights">—</span>
+    <button type="button" class="btn btn--sm bleedbar__home" data-go="main">Na hlavní</button>
   </div>
 
   <div class="morning" id="mLive">
@@ -718,16 +726,20 @@
         <div class="card__head">
           <h2 class="card__title card__title--lg">Ranní checklist</h2>
           <span class="morning__count num push" id="mCount">0 / 0</span>
+          <button type="button" class="btn morning__edit" id="mEdit" aria-haspopup="dialog" aria-controls="mEditSheet">Upravit</button>
         </div>
         <div class="segbar" id="mSegs" aria-hidden="true"></div>
         <div class="checkgrid" id="mCheck"></div>
       </section>
-      <section class="card morning__rules">
-        <div class="card__head">
-          <h2 class="card__title card__title--lg">Dnes od pravidel</h2>
-          <button type="button" class="link push" data-go="rules">Pravidla</button>
+      <!-- The day as a lane, the rules' tasks named (calendar.js renderDayTimeline). -->
+      <section class="card morning__today">
+        <div class="card__head morning__todayhead">
+          <h2 class="card__title card__title--lg">Dnes</h2>
+          <span class="morning__todaymeta" id="mTodayMeta"></span>
+          <button type="button" class="link push desk-only" data-go="rules">Pravidla</button>
+          <button type="button" class="link morning__callink" data-go="calendar">Kalendář</button>
         </div>
-        <div class="card__body card__body--scroll" id="mRuleTasks"></div>
+        <div class="daytl" id="mToday"></div>
       </section>
     </div>
   </div>
@@ -741,7 +753,23 @@
       <button type="button" class="btn btn--lg btn--accent" id="mIdle">Zpět do klidu</button>
       <button type="button" class="btn btn--lg desk-only" data-go="main">Na hlavní</button>
     </div>
-    <p class="muted-3">Obrazovka zhasne za 30 s.</p>
+    <p class="muted-3"><span class="desk-only">Obrazovka zhasne za 30 s.</span><span class="phone-only">Obrazovka notebooku zhasne za 30 s.</span></p>
+  </div>
+
+  <!-- 1f: the checklist edited from bed. Changes apply at once (ui/checkedit.js). -->
+  <div class="sheet morning__editsheet" id="mEditSheet" hidden>
+    <div class="sheet__box checkedit-box" role="dialog" aria-modal="true" aria-labelledby="mEditTitle">
+      <div class="sheet__head">
+        <h2 class="sheet__title" id="mEditTitle"><span class="desk-only">Upravit ranní checklist</span><span class="phone-only">Upravit checklist</span></h2>
+        <span class="checkedit-box__paused desk-only">brief stojí</span>
+        <button type="button" class="btn btn--accent push checkedit-box__done" id="mEditDone">Hotovo</button>
+      </div>
+      <div class="sheet__body">
+        <div class="checkedit checkedit--morning" id="mEditRows"></div>
+        <div id="mEditAdd"></div>
+        <p class="checkedit-box__hint desk-only">Přetažením změníš pořadí. Změny platí hned; stejný seznam je v Controlleru → Ranní checklist.</p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1163,6 +1191,8 @@
 
 <div class="toast" id="toast" role="status" hidden>
   <span id="toastText"></span>
+  <!-- The "open" toast: the whole line leads to what it is about (→). -->
+  <button type="button" class="toast__open" id="toastOpen" title="Otevřít" hidden><span id="toastOpenText"></span><span class="toast__arrow" aria-hidden="true">→</span></button>
   <button type="button" class="btn btn--sm toast__action" id="toastAction" hidden></button>
   <button type="button" class="toast__x" id="toastClose" aria-label="Zavřít">×</button>
 </div>

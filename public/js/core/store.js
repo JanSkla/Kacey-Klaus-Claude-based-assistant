@@ -30,6 +30,8 @@ export var data = {
   routine: { grid: {}, notes: {}, info: {}, wake: 420, sleep: 1350, overrides: [] },
   timers: { presets: [] },
   checklists: {},
+  /* The morning checklist for the coming mornings (core/checklist.js). */
+  morning: { items: [], once: [] },
   /* Read-only, from the server: the tools refused by configuration. Not a
      section, so it is never written back. */
   deniedTools: [],

@@ -107,6 +107,11 @@ export function tickMorning(key, done) {
   return send('/api/morning/tick', 'POST', { key: key, done: done }).then(function (b) { night.morningRec = b.morning; emit('morningRec'); return b; });
 }
 
+/** The morning screen's checklist editor: today's items in their new order. */
+export function editMorningToday(items) {
+  return send('/api/morning/today', 'POST', { items: items }).then(function (b) { night.morningRec = b.morning; emit('morningRec'); return b; });
+}
+
 export function startMorningNow() { return send('/api/morning/start', 'POST'); }
 export function morningIdle() { return send('/api/morning/idle', 'POST'); }
 

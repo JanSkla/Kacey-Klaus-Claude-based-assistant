@@ -23,7 +23,8 @@
 import { readFileSync, renameSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { HERE, LOGICAL_DAY_START_HOUR } from './config.js';
+import { HERE, LOGICAL_DAY_START_HOUR, MORNING_ITEMS } from './config.js';
+import { normalizeChecklist } from './public/js/core/checklist.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 import { KIND_KEYS } from './public/js/core/routine-cats.js';
@@ -33,14 +34,14 @@ export const LEGACY_STATE_PATH =
   process.env.KACEY_STATE_PATH || path.join(HERE, 'data', 'app-state.json');
 
 /** Sections a client may replace. Anything else is refused. */
-export const SECTIONS = ['tasks', 'journal', 'routine', 'timers', 'checklists', 'settings'];
+export const SECTIONS = ['tasks', 'journal', 'routine', 'timers', 'checklists', 'settings', 'morning'];
 
 const DEFAULT_SETTINGS = {
   hue: 193,
   wakeMin: 405,
   briefPrompt: 'Shrň mi den. Mluv, drž se pod třemi minutami, začni tím, co se pohnulo nebo je po termínu.',
   injected: { cal: true, tasks: true, weather: true, mail: false },
-  sources: { cal_osobni: true, cal_prace: true, cal_rodina: true, mail: false, health: true, lights: true },
+  sources: { cal_osobni: true, cal_prace: true, cal_rodina: true, mail: false, health: true, lights: true, music: true },
   memory: { people: true, work: true, health: true, journal: true, dreams: false },
   calOn: {},
   tools: {},
@@ -293,6 +294,14 @@ function writeRoutine(value) {
   });
 }
 
+/* ---- the morning checklist ----------------------------------------------- */
+
+/** The morning checklist (public/js/core/checklist.js): kv `morning.checklist`,
+    or config's MORNING_ITEMS until somebody edits it. */
+export function morningChecklist() {
+  return normalizeChecklist(kvGet('morning.checklist', null), { items: MORNING_ITEMS, once: [] });
+}
+
 /* ---- the document -------------------------------------------------------- */
 
 export function get() {
@@ -307,6 +316,7 @@ export function get() {
     timers: { presets: kvGet('timers.presets', DEFAULT_PRESETS) },
     checklists: kvGet('checklists', {}),
     settings: { ...DEFAULT_SETTINGS, ...kvGet('settings', {}) },
+    morning: morningChecklist(),
   };
 }
 
@@ -321,6 +331,7 @@ export function setSection(name, value, opts = {}) {
     case 'timers': kvSet('timers.presets', (value && value.presets) || []); break;
     case 'checklists': kvSet('checklists', value || {}); break;
     case 'settings': kvSet('settings', value || {}); break;
+    case 'morning': kvSet('morning.checklist', normalizeChecklist(value, morningChecklist())); break;
     default: break;
   }
   return get()[name];
