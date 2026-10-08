@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 const dir = mkdtempSync(path.join(os.tmpdir(), 'kacey-dream-'));
 process.env.KLAUS_DB = path.join(dir, 'test.db');
 process.env.KACEY_STATE_PATH = path.join(dir, 'no-such-file.json');
+process.env.KACEY_WEATHER = 'off';               // never the network
 process.env.KACEY_BRIEF_AUDIO_DIR = path.join(dir, 'brief-audio');
 
 // Thursday 10 January 2030 is the planned day; the run happens at 00:40 that night.

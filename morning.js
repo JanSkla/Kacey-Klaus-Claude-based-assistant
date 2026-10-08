@@ -18,6 +18,8 @@ import * as nightstore from './nightstore.js';
 import * as screen from './screen.js';
 import { writeBrief, currentBriefHash, makeSdkRunner } from './dream.js';
 import { logicalDateOf } from './rules.js';
+import { briefChanges } from './nightplan.js';
+import { weatherKept } from './weather.js';
 import {
   freshRecord, withProposals, morningStep, historyEntry, peakInstant, PROPOSALS_KEY,
 } from './morningplan.js';
@@ -108,7 +110,12 @@ async function refresh(rec, now, why = 'hash') {
     trigger: 'refresh', peakAt: rec.peak_at ? rec.peak_at.slice(11, 16) : null,
   }).then((d) => {
     const r = record();
-    if (r && r.logical_date === d.logical_date) { r.rewritten_at = new Date().toISOString(); save(r); }
+    if (r && r.logical_date === d.logical_date) {
+      r.rewritten_at = new Date().toISOString();
+      // What moved since the night's brief: "zubař z 09:00 na 10:30" (1d).
+      r.changes = draft && draft.logical_date === d.logical_date ? briefChanges(draft.basis, d.basis) : [];
+      save(r);
+    }
     return d;
   }).catch((err) => { log(`rewrite failed, the night's brief stands: ${err.message}`); return null; })
     .finally(() => { refreshing = null; push(); });
@@ -311,6 +318,8 @@ export function morningState() {
     ...rec,
     brief: draft && draft.logical_date === rec.logical_date
       ? { lines: draft.lines, audio: draft.audio || [], made_at: draft.made_at, trigger: draft.trigger } : null,
+    // The date line's "11 °C, odpoledne přeháňky": the brief's, else whatever was fetched since.
+    weather: (draft && draft.logical_date === rec.logical_date && draft.weather) || weatherKept(rec.logical_date) || null,
   };
 }
 

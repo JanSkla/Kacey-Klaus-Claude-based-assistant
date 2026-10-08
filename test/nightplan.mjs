@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 
 import {
   isRecurring, eligibleEvents, extractJson, parseReasoning, postValidate, expiredProposals,
-  briefInputHash, splitBriefLines, buildReasoningInput, briefContext, MAX_PROPOSALS,
+  briefInputHash, splitBriefLines, buildReasoningInput, briefContext, briefBasis, briefChanges, routineLine, MAX_PROPOSALS,
 } from '../nightplan.js';
 
 let passed = 0;
@@ -180,6 +180,40 @@ test('nothing local_only reaches the cloud inputs', () => {
   assert.ok(!ctx.includes('Doktor') && !ctx.includes('Tajné'));
   assert.match(ctx, /Zubař/);
   assert.match(ctx, /čekající na potvrzení: 2/);
+});
+
+const STAT = { s: 480, e: 570, cat: 'study', note: 'Statistika', room: 'T1:B1-12', kind: 'pr' };
+
+test('the brief reads the day’s routine (1.7)', () => {
+  assert.equal(routineLine(STAT), '- 08:00–09:30 Statistika (přednáška) v T1:B1-12 [Studium]');
+  assert.equal(routineLine({ s: 720, e: 960, cat: 'work' }), '- 12:00–16:00 Práce');
+  const ctx = briefContext({ date: D, events: [], tasks: [], created: [], pendingProposals: 0, routine: [STAT] });
+  assert.match(ctx, /Rutina na 2026-10-01:\n- 08:00–09:30 Statistika/);
+  assert.match(ctx, /Návrhy dnes nemám\. Hezký den\./);
+});
+
+test('the weather goes in when known, and is left out otherwise', () => {
+  const on = { weather: true };
+  assert.match(briefContext({ date: D, events: [], tasks: [], created: [], injected: on, weather: '11 °C, odpoledne přeháňky' }), /Počasí: 11 °C, odpoledne přeháňky\./);
+  assert.match(briefContext({ date: D, events: [], tasks: [], created: [], injected: on }), /Počasí: nevím/);
+});
+
+test('a cancelled routine block changes the brief hash; no routine keeps the old hash', () => {
+  const h = briefInputHash({ date: D, events: [zubar], tasks });
+  assert.equal(briefInputHash({ date: D, events: [zubar], tasks, routine: [] }), h);
+  assert.notEqual(briefInputHash({ date: D, events: [zubar], tasks, routine: [STAT] }), h);
+});
+
+test('the rewrite says what moved, came and went (1d)', () => {
+  const before = briefBasis({ date: D, events: [zubar], tasks: [], routine: [STAT] });
+  const moved = { ...zubar, starts_at: at(2026, 10, 1, 10, 30).toISOString() };
+  const after = briefBasis({ date: D, events: [moved, gym], tasks: [], routine: [] });
+  const ch = briefChanges(before, after);
+  assert.deepEqual(ch.find((c) => c.kind === 'moved'), { kind: 'moved', title: 'Zubař MUDr. Nová', from: '09:00', to: '10:30' });
+  assert.ok(ch.some((c) => c.kind === 'added' && c.title === gym.title));
+  assert.ok(ch.some((c) => c.kind === 'removed' && c.title === 'Statistika' && c.from === '08:00'));
+  assert.deepEqual(briefChanges(before, before), []);
+  assert.deepEqual(briefChanges(undefined, after), [], 'a draft from before the basis existed');
 });
 
 console.log(`nightplan: ${passed} passed${process.exitCode ? ', SOME FAILED' : ''}`);

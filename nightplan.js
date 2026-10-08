@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { normalizeDue, addDays } from './public/js/core/due.js';
 import { dayRangeOf } from './calendar-days.js';
 import { eventMatchesRule, normalizeText, logicalStart, tokens } from './rules.js';
+import { CATS, KINDS } from './public/js/core/routine-cats.js';
 
 export const MAX_PROPOSALS = 5;
 export const OVERLAP_NOTE = 'Možná jen jedna — kalendář a rutina se překrývají.';
@@ -190,7 +191,7 @@ export function expiredProposals(list, now) {
  * cloud-safe events and the open tasks due by then. Canonical JSON — sorted,
  * only the fields that matter — so reordering rows is not a "change".
  */
-export function briefInputHash({ date, events, tasks }) {
+export function briefInputHash({ date, events, tasks, routine }) {
   const dayEnd = logicalStart(addDays(date, 1)).getTime();
   const ev = events
     .filter((e) => e.sensitivity !== 'local_only')
@@ -202,7 +203,48 @@ export function briefInputHash({ date, events, tasks }) {
     .filter((t) => new Date(t.due_at.length === 10 ? `${t.due_at}T12:00` : t.due_at).getTime() < dayEnd)
     .map((t) => [t.id, t.label, t.due_at])
     .sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  return createHash('sha256').update(JSON.stringify({ ev, tk })).digest('hex');
+  // The day's routine counts too: a cancelled lecture makes the brief untrue.
+  // Left out when there is none, so a hash from before the routine still matches.
+  const rt = (routine || []).map((b) => [b.s, b.e, b.cat, b.note || '', b.room || '']);
+  return createHash('sha256').update(JSON.stringify(rt.length ? { ev, tk, rt } : { ev, tk })).digest('hex');
+}
+
+/**
+ * What a brief was written from, readable: the day's events, timed tasks and
+ * routine blocks as `{ key, title, at }` ("HH:MM", or "celý den"). Kept with the
+ * draft so the T−5 rewrite can say what moved (briefChanges). Pure.
+ */
+export function briefBasis({ date, events, tasks = [], routine = [] }) {
+  const dayEnd = logicalStart(addDays(date, 1)).getTime();
+  const ev = events
+    .filter((e) => e.sensitivity !== 'local_only')
+    .map((e) => ({ e, r: dayRangeOf(e) }))
+    .filter(({ r }) => r && r.first <= date && r.last >= date)
+    .map(({ e, r }) => ({ key: `e:${e.event_id}`, title: e.title, at: r.allDay ? 'celý den' : local(e.starts_at).slice(11, 16) }));
+  const tk = tasks
+    .filter((t) => t.sensitivity !== 'local_only' && !t.done && t.due_at && t.due_at.length > 10)
+    .filter((t) => new Date(t.due_at).getTime() < dayEnd)
+    .map((t) => ({ key: `t:${t.id}`, title: t.label, at: local(t.due_at).slice(11, 16) }));
+  const rt = routine.map((b) => ({ key: `r:${b.cat}:${b.note || ''}`, title: b.note || CATS[b.cat]?.label || b.cat, at: hm(b.s) }));
+  return [...ev, ...tk, ...rt];
+}
+
+/**
+ * The difference between two bases, as the morning's rewrite note says it:
+ * `[{ kind: 'moved'|'added'|'removed', title, from, to }]`, earliest first. Pure.
+ */
+export function briefChanges(before, after) {
+  if (!Array.isArray(before) || !Array.isArray(after)) return [];
+  const old = new Map(before.map((x) => [x.key, x]));
+  const now = new Map(after.map((x) => [x.key, x]));
+  const out = [];
+  for (const x of after) {
+    const o = old.get(x.key);
+    if (!o) out.push({ kind: 'added', title: x.title, from: null, to: x.at });
+    else if (o.at !== x.at) out.push({ kind: 'moved', title: x.title, from: o.at, to: x.at });
+  }
+  for (const o of before) if (!now.has(o.key)) out.push({ kind: 'removed', title: o.title, from: o.at, to: null });
+  return out.sort((a, b) => String(a.to || a.from).localeCompare(String(b.to || b.from)));
 }
 
 /** One line per sentence, as brief.js splits a reply: the brief is tapped through line by line. */
@@ -212,7 +254,18 @@ export function splitBriefLines(text) {
 }
 
 /** What the brief is written from, in words, like brief.js's contextBlock() but with the real rows. */
-export function briefContext({ date, events, tasks, created, pendingProposals, injected = {} }) {
+function hm(mins) { return String(Math.floor(mins / 60) % 24).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0'); }
+
+/** "- 08:00–09:30 Statistika (přednáška) v T1:B1-12" — one routine block for the brief's input. */
+export function routineLine(b) {
+  const name = b.note || CATS[b.cat]?.label || b.cat;
+  const kind = b.kind && KINDS[b.kind] ? ` (${KINDS[b.kind].label})` : '';
+  const room = b.room ? ` v ${b.room}` : '';
+  const cat = b.note && CATS[b.cat] ? ` [${CATS[b.cat].label}]` : '';
+  return `- ${hm(b.s)}–${hm(b.e)} ${name}${kind}${room}${cat}`;
+}
+
+export function briefContext({ date, events, tasks, created, pendingProposals, injected = {}, routine = null, weather = null }) {
   const parts = [];
   if (injected.cal !== false) {
     const day = events
@@ -224,6 +277,9 @@ export function briefContext({ date, events, tasks, created, pendingProposals, i
       });
     parts.push(`Kalendář na ${date}:\n${day.length ? day.join('\n') : '- nic'}`);
   }
+  if (routine) {
+    parts.push(`Rutina na ${date}:\n${routine.length ? routine.map(routineLine).join('\n') : '- nic'}`);
+  }
   if (injected.tasks !== false) {
     const dayEnd = logicalStart(addDays(date, 1)).getTime();
     const due = tasks.filter((t) => t.sensitivity !== 'local_only' && !t.done && t.due_at
@@ -233,7 +289,10 @@ export function briefContext({ date, events, tasks, created, pendingProposals, i
     if (made.length) parts.push(`V noci podle pravidel přidáno:\n${made.map((c) => `- ${c.label} (${c.reason})`).join('\n')}`);
   }
   if (pendingProposals) parts.push(`Návrhy od Kacey čekající na potvrzení: ${pendingProposals}.`);
-  if (injected.weather) parts.push('Počasí: použij, co víš, nebo ho vynech, když ho nemáš.');
+  if (injected.weather) {
+    parts.push(weather ? `Počasí: ${weather}.` : 'Počasí: nevím — vynech ho.');
+  }
+  if (!pendingProposals) parts.push('Návrhy dnes nejsou: brief končí větou „Návrhy dnes nemám. Hezký den.“');
   return parts.length ? '\n\nData k dispozici:\n' + parts.join('\n\n') : '';
 }
 

@@ -32,9 +32,11 @@ import { transact, kvGet } from './db.js';
 import { addDays } from './public/js/core/due.js';
 import { previewRules, logicalStart, hhmmOf } from './rules.js';
 import { dayOf as routineDay, activeBlocks } from './public/js/core/routine-day.js';
+import { dayView as routineDayView } from './routine-days.js';
+import { weatherFor, weatherLine } from './weather.js';
 import {
   eligibleEvents, buildReasoningInput, parseReasoning, postValidate, briefInputHash,
-  splitBriefLines, briefContext, OVERLAP_NOTE,
+  splitBriefLines, briefContext, briefBasis, OVERLAP_NOTE,
 } from './nightplan.js';
 
 const log = (...a) => console.log('[night]', ...a);
@@ -318,8 +320,11 @@ export async function writeBrief({ date, runner, persona, synth = null, trigger 
   const events = nightstore.readCalendar(new Date(start.getTime() - DAY), new Date(start.getTime() + 2 * DAY),
     { sources: doc.settings.sources });
   const pending = nightstore.listProposals({ status: 'pending' }).length;
+  const routine = routineFor(date);
+  const weather = doc.settings.injected?.weather !== false ? await weatherFor(date) : null;
   const prompt = (doc.settings.briefPrompt || 'Shrň mi den.') +
-    briefContext({ date, events, tasks: doc.tasks, created, pendingProposals: pending, injected: doc.settings.injected }) +
+    briefContext({ date, events, tasks: doc.tasks, created, pendingProposals: pending, injected: doc.settings.injected,
+      routine, weather: weatherLine(weather) }) +
     `\n\n(Píšeš ranní brief pro den ${date} předem${peakAt ? `; přečte se nahlas v ${peakAt}` : ''}. ` +
     'Mluv k pánovi, jako bys mu ho říkala ráno. Žádné nadpisy ani odrážky.)';
   const text = await runner({ system: persona ? persona(date) : FALLBACK_PERSONA, prompt, memory: false });
@@ -327,7 +332,10 @@ export async function writeBrief({ date, runner, persona, synth = null, trigger 
   if (!lines.length) throw new Error('prázdný brief');
   const draft = {
     logical_date: date, lines, made_at: new Date().toISOString(),
-    input_hash: briefInputHash({ date, events, tasks: doc.tasks }), trigger,
+    input_hash: briefInputHash({ date, events, tasks: doc.tasks, routine }), trigger,
+    weather: weather ? { temp_c: weather.temp_c, summary_day: weather.summary_day, summary_short: weather.summary_short } : null,
+    // What the brief was written from, so a rewrite can say what moved (morning 1d).
+    basis: briefBasis({ date, events, tasks: doc.tasks, routine }),
     audio: synth ? await renderBriefAudio(date, lines, synth) : [],
   };
   nightstore.saveBriefDraft(draft);
@@ -340,7 +348,12 @@ export function currentBriefHash(date) {
   const start = logicalStart(date);
   const events = nightstore.readCalendar(new Date(start.getTime() - DAY), new Date(start.getTime() + 2 * DAY),
     { sources: doc.settings.sources });
-  return briefInputHash({ date, events, tasks: doc.tasks });
+  return briefInputHash({ date, events, tasks: doc.tasks, routine: routineFor(date) });
+}
+
+/** The routine's active blocks on `date`, overrides applied (routine-days.js). */
+function routineFor(date) {
+  try { return activeBlocks(routineDayView(date)); } catch (err) { log(`routine for the brief: ${err.message}`); return []; }
 }
 
 /* ---- the run ------------------------------------------------------------------ */

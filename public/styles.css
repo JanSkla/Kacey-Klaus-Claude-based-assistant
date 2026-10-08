@@ -1265,7 +1265,11 @@ body[data-view="morning"] .top, body[data-view="proposals"] .top { display: none
 .morning__main, .morning__side { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .clockbig { margin: 0; font-size: 112px; font-weight: 600; line-height: 1; letter-spacing: -.03em; }
 .morning__date { margin: 10px 0 0; font-size: 24px; color: var(--ink2); }
-.morning__note { margin: 0; display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--l1); border: 1px solid var(--line); font-size: 15px; color: var(--ink2); }
+.morning__note { margin: 0; padding: 8px 14px; background: var(--l1); border: 1px solid var(--line); font-size: 15px; color: var(--ink2); }
+.morning__notehead { margin: 0; display: flex; align-items: center; gap: 10px; }
+.morning__notemore { margin-left: auto; font-size: 14px; }
+.morning__notelist { margin: 6px 0 2px 18px; padding: 0; list-style: none; font-size: 14px; }
+.morning__notelist li { padding: 3px 0; }
 .morning__brief { flex: 1; }
 .morning__player .btn { min-height: 56px; font-size: 16px; }
 .morning__player #mPlay { padding: 0 28px; font-size: 18px; font-weight: 600; }
@@ -2098,6 +2102,8 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .clockbig { font-size: 60px; }
   .morning__date { margin-top: 6px; font-size: 15px; }
   .morning__note { font-size: 13px; padding: 8px 12px; }
+  .morning__notehead { align-items: flex-start; }
+  .morning__notehead .bleedbar__dot { margin-top: 6px; }
   .morning__brief, .morning__today { flex: 0 0 auto; }
   .brieflines--big .briefline--big { padding: 8px 14px; font-size: 16px; }
   .briefline__tag { font-size: 12px; }

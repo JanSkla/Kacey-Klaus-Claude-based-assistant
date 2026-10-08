@@ -711,7 +711,11 @@
         <p class="clockbig num" id="mClock">--:--</p>
         <p class="morning__date" id="mDate"></p>
       </div>
-      <p class="morning__note" id="mRewrite" hidden><span class="bleedbar__dot" data-st="acc" aria-hidden="true"></span><span id="mRewriteText"></span></p>
+      <div class="morning__note" id="mRewrite" hidden>
+        <p class="morning__notehead"><span class="bleedbar__dot" data-st="acc" aria-hidden="true"></span><span id="mRewriteText"></span>
+          <button type="button" class="link morning__notemore" id="mRewriteMore" aria-controls="mRewriteList" aria-expanded="false" hidden>Co se změnilo</button></p>
+        <ul class="morning__notelist" id="mRewriteList" hidden></ul>
+      </div>
       <section class="card morning__brief">
         <div class="card__body card__body--scroll brieflines brieflines--big" id="mLines"></div>
         <div class="card__foot row morning__player">

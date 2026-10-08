@@ -90,7 +90,11 @@ function loadLights() {
 function renderClock() {
   var now = new Date();
   $('mClock').textContent = hm(now);
-  $('mDate').textContent = DAYS[now.getDay()] + ' ' + now.getDate() + '. ' + MONTHS[now.getMonth()];
+  // "Středa 24. září · 11 °C, odpoledne přeháňky"; the phone: "St 24. září · 11 °C, přeháňky".
+  var w = rec() && rec().weather, phone = isPhone();
+  var day = phone ? DAYS[now.getDay()].slice(0, 2) : DAYS[now.getDay()];
+  var wx = w ? [w.temp_c != null ? w.temp_c + ' °C' : null, phone ? w.summary_short : w.summary_day].filter(Boolean).join(', ') : '';
+  $('mDate').textContent = day + ' ' + now.getDate() + '. ' + MONTHS[now.getMonth()] + (wx ? ' · ' + wx : '');
   $('mDoneClock').textContent = hm(now);
 }
 
@@ -286,15 +290,42 @@ function nextThing() {
   return t.title.charAt(0).toLowerCase() + t.title.slice(1) + ' ' + vTime(hm2);
 }
 
+/* ---- the rewrite note (1d) ------------------------------------------------ */
+
+/* One change in words. Gender-neutral on purpose: the title can be anything
+   ("Zubař", "Statistika", "Vyzvednout balík"), so no "se posunul/a/o". */
+function changeWord(c, short) {
+  var t = c.title;
+  if (c.kind === 'moved') return short ? t + ' na ' + c.to : t + ' z ' + c.from + ' na ' + c.to;
+  if (c.kind === 'added') return 'nově ' + t + (c.to === 'celý den' ? '' : ' ' + vTime(c.to));
+  return 'odpadá ' + t + (c.from === 'celý den' ? '' : ' ' + vTime(c.from));
+}
+
+function changesWord(n) { return n + (n >= 2 && n <= 4 ? ' změny' : ' změn'); }
+
+var rewriteOpen = false;
+
+function renderRewrite(r) {
+  var list = r.changes || [], phone = isPhone();
+  var what = list.length === 1 ? changeWord(list[0], phone)
+    : list.length ? 'od noci ' + changesWord(list.length)
+    : 'od noci se změnil kalendář nebo úkoly';
+  $('mRewriteText').textContent = 'Brief přepsán ' + vTime(hm(new Date(r.rewritten_at))) + ' — ' + what + '.';
+  var more = $('mRewriteMore');
+  more.hidden = phone || !list.length;
+  more.setAttribute('aria-expanded', String(rewriteOpen));
+  var box = $('mRewriteList');
+  box.hidden = phone || !rewriteOpen || !list.length;
+  box.replaceChildren.apply(box, list.map(function (c) { return el('li', changeWord(c, false)); }));
+}
+
 function renderDone() {
   var r = rec();
   var done = !!(r && r.state === 'done');
   $('mLive').hidden = done;
   $('mDone').hidden = !done;
   $('mRewrite').hidden = done || !(r && r.rewritten_at);
-  if (r && r.rewritten_at) {
-    $('mRewriteText').textContent = 'Brief přepsán v ' + hm(new Date(r.rewritten_at)) + ' — od noci se změnil kalendář nebo úkoly.';
-  }
+  if (r && r.rewritten_at) renderRewrite(r);
   if (!done) return;
   var list = items();
   renderSegs($('mDoneSegs'), list);
@@ -342,6 +373,7 @@ export function initMorning() {
   if (!$('mLines')) return;
 
   $('mPlay').addEventListener('click', function () { player.play(!player.playing()); });
+  $('mRewriteMore').addEventListener('click', function () { rewriteOpen = !rewriteOpen; renderDone(); });
   initEditor();
   $('mReplay').addEventListener('click', function () { player.jump(player.finished() ? player.lines().length - 1 : player.index()); });
   $('mIdle').addEventListener('click', function () {
