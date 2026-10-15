@@ -382,3 +382,43 @@ export const MORNING_ITEMS = [
   { key: 'breakfast', label: 'Snídaně' },
   { key: 'dress', label: 'Obléct se' },
 ];
+
+// ---------------------------------------------------------------------------
+// Improving the app from the chat (selfupdate.js, Claude Design "Kacey Self-Update")
+// ---------------------------------------------------------------------------
+
+/* This process is a preview of a kaceyFeature/ branch, started by selfupdate.js
+   for the side-by-side comparison. A preview serves the page and a chat, and
+   nothing else: no night routine, no screen, no lights, no music ducking, and
+   a copy of the database (selfupdate.js sets KLAUS_DB to it). */
+export const PREVIEW = process.env.KACEY_PREVIEW === '1';
+
+/* KACEY_SELFUPDATE=off removes the feature: Kacey gets no tool for it and the
+   page shows no chip. Always off in a preview, which must never start a
+   preview of its own. */
+export const SELFUPDATE = !PREVIEW && String(process.env.KACEY_SELFUPDATE || '').toLowerCase() !== 'off';
+
+/* Where the branches are checked out while they are worked on (git worktrees),
+   one folder per feature. Outside the repo, so the running app never sees them. */
+export const UPGRADE_DIR = process.env.KACEY_UPGRADE_DIR || path.join(HERE, '..', 'kacey-upgrades');
+
+/* The preview of a branch listens here, on the same interface as Kacey. */
+export const PREVIEW_PORT = Number(process.env.KACEY_PREVIEW_PORT) || PORT + 10;
+
+/* The coding agent that writes the feature. Not Kacey: a Claude Code session
+   with file tools, confined to the branch's folder. Effort is high by default —
+   nobody waits on it word by word, and a sloppy draft costs a revision. */
+export const UPGRADE_MODEL = process.env.KACEY_UPGRADE_MODEL || MODEL;
+export const UPGRADE_EFFORT = EFFORTS.includes(process.env.KACEY_UPGRADE_EFFORT) ? process.env.KACEY_UPGRADE_EFFORT : 'high';
+
+/* How a switch to the new version restarts the service. Empty (the default):
+   if systemd runs Kacey with Restart=always or on-failure, she exits and
+   systemd starts the new code; otherwise the page says to restart by hand.
+   Set to a command (e.g. "sudo -n systemctl restart kacey", with a sudoers
+   rule for it) to restart that way instead. */
+export const UPGRADE_RESTART_CMD = process.env.KACEY_RESTART_CMD || '';
+export const SERVICE_UNIT = process.env.KACEY_UNIT || 'kacey';
+
+/* The checkout that runs — what the branches start from and are merged into.
+   Only the tests point it elsewhere (a scratch repo). */
+export const UPGRADE_REPO = process.env.KACEY_UPGRADE_REPO || HERE;

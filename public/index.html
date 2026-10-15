@@ -57,6 +57,23 @@
 
   <span class="top__end">
     <span class="top__view" id="viewLabel">main</span>
+    <!-- Improving the app from the chat (views/upgrade.js): one chip carries the
+         job's state — busy (accent, pulsing, progress underline), Ke schválení
+         (warn), Nová verze připravena (ok). -->
+    <span class="upchipwrap" id="upChipWrap" hidden>
+      <button type="button" class="upchip" id="upChip" data-st="busy" aria-expanded="false" aria-controls="upDrop">
+        <span class="upchip__dot" aria-hidden="true"></span><span id="upChipLabel"></span>
+        <span class="upchip__prog" id="upChipProg" aria-hidden="true"></span>
+      </button>
+      <div class="updrop" id="upDrop" role="dialog" aria-label="Vylepšení aplikace" hidden>
+        <div class="updrop__head"><b id="upDropTitle"></b><span id="upDropSub"></span></div>
+        <ol class="upsteps" id="upDropSteps"></ol>
+        <div class="updrop__foot">
+          <button type="button" class="link" id="upDropChat">Ukázat v chatu</button>
+          <button type="button" class="link link--muted" id="upDropStop">Zastavit a zahodit</button>
+        </div>
+      </div>
+    </span>
     <!-- What is playing on kaceybody (nowplayingd, :8081): views/miniplayer.js -->
     <span class="mini" id="mini" hidden>
       <span class="mini__bar">
@@ -190,6 +207,15 @@
 
   <div class="col col--chat">
     <div class="card card--flush chatbox">
+      <!-- The conversation history (ui/history.js): earlier chats, resumable. -->
+      <button type="button" class="histbtn" id="histBtn" aria-label="Historie konverzací" title="Historie konverzací"
+              aria-expanded="false" aria-controls="histPanel">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="histpanel" id="histPanel" role="dialog" aria-label="Historie konverzací" hidden>
+        <div class="histpanel__head"><b>Historie konverzací</b><button type="button" class="btn btn--sm" id="histNew">Nová konverzace</button></div>
+        <div class="histpanel__list" id="histList"></div>
+      </div>
       <div class="logwrap" id="logwrap">
         <ol class="log" id="log" role="log" aria-live="polite" aria-atomic="false" aria-relevant="additions" aria-label="Conversation"></ol>
       </div>
@@ -239,6 +265,80 @@
       <button type="button" class="btn btn--block" id="askNext">Zeptat se<span class="phone-only"> na to</span></button>
     </section>
 
+  </div>
+</section>
+
+<!-- ================= UPGRADE: the comparison =================
+     Claude Design "Kacey Self-Update" 1d/1h/1g. Both versions live: the
+     running app on the left, the kaceyFeature branch's preview (a second Kacey
+     on its own port) on the right; a phone toggles between them.
+     views/upgrade.js. -->
+<section class="view view--full view--upgrade" data-view="upgrade" hidden>
+  <div class="upbar">
+    <div class="upbar__text">
+      <b class="upbar__title" id="upTitle"></b>
+      <span class="upbar__sub"><code id="upBranch"></code> · <span id="upSub"></span></span>
+      <span class="upbar__err" id="upErr" hidden></span>
+    </div>
+    <span class="uprevs" id="upRevs" role="group" aria-label="Revize" hidden></span>
+    <button type="button" class="btn upbar__btn desk-only" id="upDiscard">Zamítnout</button>
+    <button type="button" class="btn upbar__btn desk-only" id="upRefineBtn" aria-expanded="false" aria-controls="upRefine">Upravit promptem</button>
+    <button type="button" class="btn btn--accent upbar__btn upbar__go desk-only" id="upApprove">Schválit a dokončit</button>
+  </div>
+
+  <div class="upwhich phone-only" role="group" aria-label="Verze">
+    <button type="button" class="upwhich__opt" data-up-show="old" aria-pressed="false"><span class="upwhich__dot upwhich__dot--old" aria-hidden="true"></span>Původní</button>
+    <button type="button" class="upwhich__opt" data-up-show="new" aria-pressed="true"><span class="upwhich__dot" aria-hidden="true"></span>Nová</button>
+  </div>
+
+  <div class="upgrid" id="upGrid">
+    <div class="upsplit" id="upSplit" data-show="new">
+      <div class="uppane uppane--old">
+        <div class="uppane__head"><span class="uppane__dot uppane__dot--old" aria-hidden="true"></span><b>PŮVODNÍ</b><span id="upOldMeta"></span></div>
+        <div class="uppane__body" id="upOldBody"><iframe class="uppane__frame" id="upOld" title="Původní verze"></iframe></div>
+      </div>
+      <div class="upsplit__handle" id="upHandle" role="separator" aria-orientation="vertical" aria-label="Posunout dělič"
+           title="Táhni · dvojklik = 50 / 50" tabindex="0"><span aria-hidden="true"></span></div>
+      <div class="uppane uppane--new">
+        <div class="uppane__head"><span class="uppane__dot" aria-hidden="true"></span><b>NOVÁ</b><span id="upNewMeta"></span></div>
+        <div class="uppane__body" id="upNewBody">
+          <iframe class="uppane__frame" id="upNew" title="Nová verze"></iframe>
+          <div class="upbusy" id="upBusy" hidden>
+            <span class="upbusy__line"><span class="upbusy__dot" aria-hidden="true"></span><span id="upBusyLabel"></span></span>
+            <span class="upbusy__step" id="upBusyStep"></span>
+          </div>
+        </div>
+      </div>
+      <span class="upsplit__label num" id="upSplitLabel" aria-hidden="true">50 / 50</span>
+    </div>
+
+    <!-- Upravit promptem: a new revision on the same branch. Desktop: a column;
+         phone: a bottom sheet. -->
+    <aside class="uprefine" id="upRefine" aria-label="Upravit návrh" hidden>
+      <div class="uprefine__head"><b>Upravit návrh</b><span class="uprefine__next" id="upNextRev"></span>
+        <button type="button" class="uprefine__x" id="upRefineClose" aria-label="Zavřít">×</button></div>
+      <div class="uprefine__body">
+        <details class="uprefine__hist" id="upHistBox" open>
+          <summary>Historie zadání<span id="upHistCount"></span></summary>
+          <div class="uprefine__list" id="upHist"></div>
+        </details>
+      </div>
+      <div class="uprefine__foot">
+        <textarea class="input uprefine__text" id="upRefineText" rows="4" placeholder="Co mám na návrhu změnit?"></textarea>
+        <button type="button" class="uprestore" id="upRestore" hidden>
+          <svg viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M18 28A12 12 0 1 0 6 16v6.2l-3.6-3.6L1 20l6 6 6-6-1.4-1.4L8 22.2V16a10 10 0 1 1 10 10z" fill="currentColor"/></svg>
+          <span class="uprestore__text"><span>Obnovit předchozí revizi</span><span class="uprestore__sub" id="upRestoreSub"></span></span>
+        </button>
+        <button type="button" class="btn btn--accent uprefine__go" id="upRefineGo" disabled>Vytvořit revizi</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- phone: the decisions dock under the preview -->
+  <div class="upacts phone-only">
+    <button type="button" class="btn" id="upDiscardM">Zamítnout</button>
+    <button type="button" class="btn" id="upRefineM">Upravit</button>
+    <button type="button" class="btn btn--accent" id="upApproveM">Schválit</button>
   </div>
 </section>
 
@@ -1226,6 +1326,25 @@
       (červeně = řekl jsi to jinak).</span>
     </p>
   </div>
+</div>
+
+<!-- Improving the app (views/upgrade.js): the popup (confirm, questions,
+     cancel, discard), the "ready" notice, and the switch. -->
+<div class="upmodal" id="upModal" hidden></div>
+<div class="uptoast" id="upToast" role="status" hidden>
+  <div class="uptoast__body">
+    <b class="uptoast__title" id="upToastTitle"></b>
+    <span class="uptoast__sub" id="upToastSub"></span>
+    <div class="uptoast__acts">
+      <button type="button" class="btn uptoast__go" id="upToastGo"></button>
+      <button type="button" class="btn" id="upToastLater">Později</button>
+    </div>
+  </div>
+</div>
+<div class="upswitch" id="upSwitch" role="status" hidden>
+  <span class="upswitch__dot" aria-hidden="true"></span>
+  <span id="upSwitchText">Přepínám…</span>
+  <span class="upswitch__note" id="upSwitchNote" hidden></span>
 </div>
 
 <div class="toast" id="toast" role="status" hidden>

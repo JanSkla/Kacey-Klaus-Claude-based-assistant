@@ -776,6 +776,51 @@ const morningAdd = tool(
   },
 );
 
+/* ---- improving the app itself (selfupdate.js) ---------------------------- */
+
+/* Kacey cannot change her own code; this hands the request to selfupdate.js,
+   which shows the owner a popup (confirmation, or up to three questions) and,
+   once confirmed, has a coding agent draft it on a kaceyFeature/ branch.
+   server.js registers the handler (setUpgradeHandler) only where the feature
+   is on, so a preview never offers it. */
+let onUpgrade = null;
+export function setUpgradeHandler(fn) { onUpgrade = typeof fn === 'function' ? fn : null; }
+
+const VIEW_NAMES = ['main', 'tasks', 'calendar', 'journal', 'library', 'brief', 'timer', 'controller', 'rules', 'morning', 'lights'];
+
+function makeUpgradeRequest(ctx) {
+  return tool(
+    'app_upgrade_request',
+    'Pán chce NOVOU FUNKCI nebo ZMĚNU APLIKACE samotné (obrazovky, ovládání, chování Kacey jako programu) — ' +
+      '„přidej funkci…“, „chci, aby úkoly šly třídit…“, „předělej kalendář…“. Neslouží pro data (přidat úkol, ' +
+      'změnit rutinu, zapsat do deníku) — na ta máš jiné nástroje. Otevře pánovi okno se zadáním; po potvrzení ' +
+      'změnu navrhne programátorský agent na vlastní větvi a pán ji porovná vedle běžící verze. ' +
+      'Otázky (questions) přidej jen tehdy, když rozsah nejde rozumně odhadnout — nejvýš tři, každá s výchozí volbou.',
+    {
+      title: z.string().min(3).max(80).describe('Název vylepšení česky, „Oblast — co“: "Úkoly — třídění podle skupin"'),
+      short: z.string().min(3).max(40).describe('Krátký název do čipu a karty: "Úkoly — skupiny"'),
+      slug: z.string().min(2).max(40).describe('ASCII pro název větve: "ukoly-skupiny"'),
+      request: z.string().min(3).max(1000).describe('Co pán řekl, jeho slovy'),
+      bullets: z.array(z.string().min(3).max(120)).min(1).max(5).describe('„Co navrhnu“ — 2–4 konkrétní body'),
+      area: z.string().min(2).max(120).describe('Kde se to projeví: "Úkoly · Dnešní úkoly na domovské"'),
+      platforms: z.array(z.enum(['desktop', 'telefon'])).min(1).max(2),
+      view: z.enum(VIEW_NAMES).describe('Obrazovka, na které je změna nejlíp vidět (porovnání se otevře na ní)'),
+      questions: z.array(z.object({
+        title: z.string().min(3).max(100).describe('Otázka: "Jak vznikají skupiny?"'),
+        key: z.string().min(2).max(24).describe('Krátký popisek do shrnutí: "Skupiny"'),
+        multi: z.boolean().describe('Jde vybrat víc možností'),
+        options: z.array(z.string().min(1).max(60)).min(2).max(5),
+        default: z.array(z.number().int().min(0).max(4)).min(1).max(5).describe('Index(y) výchozí volby'),
+      })).max(3).optional(),
+    },
+    async (args) => {
+      if (!onUpgrade) return ok('Vylepšování aplikace tu není zapnuté. Řekni to pánovi jednou větou.');
+      const r = onUpgrade(args, ctx?.sessionId?.() || null);
+      return ok(r.text);
+    },
+  );
+}
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
@@ -789,10 +834,11 @@ export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours', 'app_routine_alter',
   'app_task_add', 'app_task_update', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
-  'app_calendar_tentative', 'app_notifications', 'app_morning_add',
+  'app_calendar_tentative', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
-export function makeAppServer() {
+/** `ctx.sessionId()` names the chat that asks for an improvement (the history marks it). */
+export function makeAppServer(ctx = {}) {
   return createSdkMcpServer({
     name: APP_SERVER_NAME,
     version: '1.0.0',
@@ -805,7 +851,8 @@ export function makeAppServer() {
       'ty patří do kalendáře přes klaus-memory. Změna jen pro konkrétní den (nemoc, zrušený nebo posunutý trénink) ' +
       'je app_routine_alter, ne app_routine_paint — výchozí týden zůstane. Před úpravou si přečti stav přes app_read. ' +
       'Když uživatel pošle obrázek rozvrhu, přečti ho a natři přes app_routine_paint ' +
-      's replace: true; u každé hodiny vyplň note (předmět), room (místnost) a who (vyučující).',
-    tools: APP_TOOLS,
+      's replace: true; u každé hodiny vyplň note (předmět), room (místnost) a who (vyučující). ' +
+      'Novou funkci nebo změnu aplikace samotné předáš přes app_upgrade_request.',
+    tools: [...APP_TOOLS, makeUpgradeRequest(ctx)],
   });
 }

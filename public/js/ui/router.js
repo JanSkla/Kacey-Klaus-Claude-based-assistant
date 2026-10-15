@@ -14,13 +14,13 @@ import { clear as clearToast } from './toast.js';
 import { closeSheet } from './psheet.js';
 
 var VIEWS = ['main', 'tasks', 'journal', 'library', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus',
-  'morning', 'proposals', 'rules'];
+  'morning', 'proposals', 'rules', 'upgrade'];
 
 var LABELS = {
   main: 'main', tasks: 'úkoly', journal: 'deník', library: 'knihovna deníku',
   calendar: 'kalendář', brief: 'ranní brief', timer: 'časovače', lights: 'světla',
   controller: 'controller', task: 'úkol probíhá', focus: 'focus',
-  morning: 'ráno', proposals: 'návrhy', rules: 'pravidla'
+  morning: 'ráno', proposals: 'návrhy', rules: 'pravidla', upgrade: 'porovnání verzí'
 };
 
 /* What the phone header says. The desktop header keeps the small label on the
@@ -29,7 +29,7 @@ var TITLES = {
   main: 'Kacey', tasks: 'Úkoly', journal: 'Deník', library: 'Knihovna deníku',
   calendar: 'Kalendář', brief: 'Ranní brief', timer: 'Časovače', lights: 'Světla',
   controller: 'Controller', task: 'Úkol', focus: 'Focus',
-  morning: 'Ráno', proposals: 'Návrhy', rules: 'Pravidla'
+  morning: 'Ráno', proposals: 'Návrhy', rules: 'Pravidla', upgrade: 'Porovnání'
 };
 
 var current = 'main';

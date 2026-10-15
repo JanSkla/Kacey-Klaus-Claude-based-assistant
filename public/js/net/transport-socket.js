@@ -9,11 +9,13 @@
    and be honest about whether it currently can.
    ========================================================================= */
 
-export function makeSocketTransport(onServer, onConn) {
+export function makeSocketTransport(onServer, onConn, query) {
   var ws = null, tries = 0, timer = 0, dead = false;
 
+  /* `query`: ?embed=1 for a framed copy, ?resume=<id> to pick up a conversation
+     from the history (ui/history.js). */
   function url() {
-    return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+    return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws' + (query ? '?' + query : '');
   }
 
   function connect() {

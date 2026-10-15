@@ -12,7 +12,7 @@
        able to break an older page.
    ========================================================================= */
 
-import { state, MOCK } from '../core/state.js';
+import { state, MOCK, EMBED } from '../core/state.js';
 import { t } from '../core/i18n.js';
 import * as dom from '../core/dom.js';
 import { syncOrb } from '../ui/orb.js';
@@ -33,6 +33,7 @@ import { receiveNightState, receiveMorning, refresh as refreshNight } from './ni
 import { makeSocketTransport } from './transport-socket.js';
 import { makeMockTransport } from './transport-mock.js';
 import { announceVoicePage, onVoiceWake, onVoiceStop } from '../voice/voicecast.js';
+import { receiveUpgrade, noteVersion } from '../views/upgrade.js';
 
 var transport = null;
 var toolDepth = 0;
@@ -97,7 +98,14 @@ export function onServer(msg) {
       setMcp(msg.mcpServers);
       features = Array.isArray(msg.features) ? msg.features.filter(function (f) { return typeof f === 'string'; }) : [];
       flashHint(info, false, 4200);
-      announceVoicePage(true);
+      if (!EMBED) announceVoicePage(true);
+      // A new release came up under this page (the switch): reload into it.
+      noteVersion(typeof msg.version === 'string' ? msg.version : '');
+      break;
+
+    case 'upgrade':
+      /* Improving the app from the chat (selfupdate.js): the job's state. */
+      if (!EMBED) receiveUpgrade(msg);
       break;
 
     case 'voice_wake':
@@ -316,12 +324,24 @@ export function interrupt() {
    Owned here rather than in app.js: the pipeline is the only thing that talks
    to it, and `submit` has to be handed to the mock so ?say= can drive a turn. */
 
+/* What the socket asks for: a framed copy, or a conversation to resume. */
+var resumeId = null;
+
 export function startTransport() {
+  var query = EMBED ? 'embed=1' : resumeId ? 'resume=' + encodeURIComponent(resumeId) : '';
   transport = MOCK
     ? makeMockTransport(onServer, onConn, submit)
-    : makeSocketTransport(onServer, onConn);
+    : makeSocketTransport(onServer, onConn, query);
   onConn('connecting');
   transport.start();
+}
+
+/** A new connection — a new Claude session, or `id` resumed from the history. */
+export function reconnect(id) {
+  resumeId = id || null;
+  if (transport) transport.stop();
+  state.sessionId = null;
+  setTimeout(startTransport, 150);
 }
 
 /* One frame out from a caller that is not submit(): the interrupt sent when the

@@ -588,6 +588,28 @@ shows a fixed morning checklist. It is **not** klaus_memory's consolidation
 described above: the tasks section gains generated rows and optimistic
 concurrency, and new server modules join `server.js`.
 
+### Improving the app from the chat
+
+[selfupdate.js](selfupdate.js) owns one job at a time, kept in kv `upgrade.job` and
+broadcast as `upgrade` frames. Kacey only *asks* (`app_upgrade_request` in
+app-tools.js); she never touches code. The work happens elsewhere:
+
+```
+ confirm / questions ──start──► drafting ──► review ◄──refine── refining
+   (popup, nothing yet)          │  git worktree      │  ▲
+                                 │  kaceyFeature/x    │  └─ each prompt = a commit
+                                 │  agent + commit    │
+                                 │  preview :8092     ├──approve──► finalizing ──► ready ──switch──► merge + restart
+                                 └────────────────────┴──discard──► (branch deleted or kept)
+```
+
+Three boundaries keep the running app safe until the owner switches: the coding
+agent's file tools are confined to the worktree by `canUseTool` and its shell to
+checks and tests; the preview is a separate process with `KACEY_PREVIEW=1` (a
+database copy, no night routine, no screen, lights, music or Google writes); and
+the only write to this checkout is the merge in `switchNow()`. A restart mid-step
+loses the step, never the branch (`initSelfUpdate` falls back to `review`).
+
 ## Invariants
 
 Break one of these and something will go wrong in a way that is hard to trace

@@ -64,7 +64,7 @@
    by relative URL at runtime.
    ========================================================================= */
 
-import { state, MOCK, LANGS, LS_LANG, LS_MUTED, LS_VOICE } from './js/core/state.js';
+import { state, MOCK, EMBED, LANGS, LS_LANG, LS_MUTED, LS_VOICE } from './js/core/state.js';
 import * as store from './js/core/store.js';
 import { t } from './js/core/i18n.js';
 import * as dom from './js/core/dom.js';
@@ -108,6 +108,8 @@ import { initNightView } from './js/views/nightview.js';
 import { initProposals } from './js/views/proposals.js';
 import { initRules } from './js/views/rules.js';
 import { initSidenav } from './js/ui/sidenav.js';
+import { initUpgrade } from './js/views/upgrade.js';
+import { initHistory } from './js/ui/history.js';
 
 /* =======================================================================
    1. THE ORB'S FOLLOWERS
@@ -138,6 +140,9 @@ try {
 } catch (e) { /* private mode: defaults are fine */ }
 
 restoreWakePref();     // the wake word owns its own key
+
+/* A framed copy in the comparison never speaks and never listens. */
+if (EMBED) { state.muted = true; document.documentElement.classList.add('is-embed'); }
 
 /* =======================================================================
    3. WIRING
@@ -176,10 +181,11 @@ initNightView();
 initProposals();
 initRules();
 initSidenav();
-initActivity();
-initVoicecast();
+if (!EMBED) { initActivity(); initVoicecast(); }
 initMiniPlayer();
 initSheets();
+initUpgrade();
+initHistory();
 initRouter();
 initShare();          // after the router: a share lands in the chat view
 
@@ -263,8 +269,10 @@ if (dom.wakeBtn) {
   applyWakeUI();
   // Dull but unwedgeable: re-evaluate rather than hooking every transition
   // (dictation start/stop, TTS, tab switch, reconnect, engine timeout).
-  setInterval(superviseWake, 1500);
-  superviseWake();
+  if (!EMBED) {
+    setInterval(superviseWake, 1500);
+    superviseWake();
+  }
 }
 
 /* Barge-in gets its own, faster supervisor — and one that does not depend on

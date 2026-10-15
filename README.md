@@ -194,6 +194,34 @@ All environment variables, all with working defaults — see `.env.example`.
 | `KACEY_MONITOR_ARGS`      | `--display-mode fullscreen --audio-on-host --resolution 1920x1080` | After `stream <host> <app>`; audio stays on the PC |
 | `KACEY_WAYLAND_DISPLAY`   | `wayland-0`                            | The kiosk compositor's (cage) socket      |
 | `KACEY_RUNTIME_DIR`       | `/run/user/<Kacey's uid>`              | Where that socket lives                   |
+| `KACEY_SELFUPDATE`        | *(on)*                                 | `off` removes improving the app from the chat ([selfupdate.js](selfupdate.js)) |
+| `KACEY_UPGRADE_DIR`       | `../kacey-upgrades`                    | Where `kaceyFeature/*` branches are checked out (git worktrees) while worked on |
+| `KACEY_PREVIEW_PORT`      | `PORT + 10` (8092)                     | The branch's live preview in the comparison |
+| `KACEY_UPGRADE_MODEL`     | = `KACEY_MODEL`                        | The coding agent that writes the feature  |
+| `KACEY_UPGRADE_EFFORT`    | `high`                                 | Its effort                                |
+| `KACEY_RESTART_CMD`       | *(empty)*                              | How "Přepnout teď" restarts Kacey. Empty: exit and let systemd start the new code when the unit has `Restart=always`/`on-failure`, else say to restart by hand |
+| `KACEY_UNIT`              | `kacey`                                | The systemd unit whose `Restart=` that reads |
+
+### Improving the app from the chat
+
+"Přidej novou funkci do úkolů…" — Kacey calls `app_upgrade_request` and the page
+opens a popup: the brief to confirm, or up to three questions first. Confirmed,
+[selfupdate.js](selfupdate.js) checks out a `kaceyFeature/<slug>` branch as a git
+worktree in `KACEY_UPGRADE_DIR` and runs a Claude Code agent there (file tools
+confined to that folder, shell limited to checks and tests). The host commits the
+draft and starts it as a second Kacey on `KACEY_PREVIEW_PORT` (`KACEY_PREVIEW=1`: a
+copy of the database, no night routine, no screen, no music, no Google writes), and
+the page shows both versions side by side (`#upgrade`; a toggle on a phone). Every
+prompt from "Upravit promptem" is a new revision on the same branch. "Schválit a
+dokončit" sends the agent back to finish it for production; the host bumps the
+minor version and runs `npm test`. "Přepnout teď" merges the branch into this
+checkout and restarts. Nothing in the running checkout changes before that.
+
+For the one-tap switch on kaceybody, give the unit a restart policy once:
+`sudo systemctl edit kacey` → `[Service]` / `Restart=on-failure`. The comparison's
+right pane loads `http://<host>:8092`, so behind an https front (tailscale serve) the
+browser blocks it as mixed content — open Kacey over plain http on the tailnet, or
+serve the preview port too.
 
 `klaus_memory` is pure standard library (sqlite3/json/urllib) — there is nothing to
 `pip install`.
@@ -270,7 +298,14 @@ Server → client:
 { "type": "morning", "logical_date": "…", "lines": ["…"], "checklist": [ … ], "peak_at": "…", "manual": false }   // the sunrise peaked: open the morning
 { "type": "notifications", "fresh": [{ "id": "nt_…", "package": "com.instagram.android", "app": "Instagram", "kind": "message",
   "conversation": "…", "sender": "…", "posted_at": "…", "sensitive": false }], "removed": 0, "unread": { "all": 3, "dm": 1 } }   // the phone relayed something, or something was read
+{ "type": "upgrade", "enabled": true, "job": { "stage": "review", "title": "…", "branch": "kaceyFeature/…", "steps": [ … ], "cur": 2,
+  "revs": [{ "n": 1, "summary": "…" }], "viewRev": 1, "preview": { "port": 8092, "ready": true }, … }, "last": null }   // improving the app: on connect and on every change
 ```
+
+The socket takes two query parameters: `/ws?embed=1` is a copy of the page framed
+in the comparison (its Claude session starts only on a first message, and it sends
+no presence or voice frames), `/ws?resume=<session id>` picks up a conversation from
+the history.
 
 `features` lists the optional client frames the server understands. The server
 answers an unknown client frame with `error`, so the page sends `interaction`
@@ -315,6 +350,9 @@ HTTP:
 - `GET /api/notifications?package&kind=message|notification&unread=1&since&before&limit` · `GET /api/notifications/apps` (per app: total, unread, last)
 - `GET /api/notifications/threads?package=` (default Instagram) · `GET /api/notifications/thread?conversation=&package=` → a DM thread, oldest first
 - `POST /api/notifications/read { ids? | package, conversation? | all: true }` · `POST /api/notifications/summary { scope: all|dm, force? }` → a model-written summary of what is unread, cached until that changes; sensitive rows never reach the model
+- `GET /api/upgrade` → the same as the `upgrade` frame · `POST /api/upgrade/start { answers, note }` · `/cancel` · `/refine { text }` ·
+  `/restore` · `/rev { n }` · `/approve` · `/discard { keep }` · `/switch` → improving the app ([selfupdate.js](selfupdate.js)); a step that does not fit the stage answers **409**
+- `GET /api/chat/sessions` → earlier conversations (title, count, `upgrade`) · `GET /api/chat/sessions/:id` → its transcript, user and Kacey text only
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)
 

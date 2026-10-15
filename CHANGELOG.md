@@ -19,6 +19,18 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## Unreleased
 
+**Improving the app from the chat**
+- Ask Kacey for a new feature and a popup confirms the brief (or asks up to three
+  questions); a coding agent drafts it on a `kaceyFeature/` branch, a live preview
+  runs beside the current app for comparison (side by side; a toggle on a phone),
+  prompts make new revisions, approval finishes it for production with tests and a
+  version bump, and "Přepnout teď" merges and restarts ([selfupdate.js](selfupdate.js),
+  [public/js/views/upgrade.js](public/js/views/upgrade.js), Claude Design "Kacey Self-Update").
+- **Conversation history**: earlier chats are listed by day and can be resumed
+  ([public/js/ui/history.js](public/js/ui/history.js), `/api/chat/sessions`).
+- New settings: `KACEY_SELFUPDATE`, `KACEY_UPGRADE_DIR`, `KACEY_PREVIEW_PORT`,
+  `KACEY_UPGRADE_MODEL`, `KACEY_UPGRADE_EFFORT`, `KACEY_RESTART_CMD`, `KACEY_UNIT`.
+
 **The routine on concrete dates**
 - The weekly routine is now the default week, and a single date can diverge
   from it: a run cancelled while sick, the gym moved to the evening, a one-off

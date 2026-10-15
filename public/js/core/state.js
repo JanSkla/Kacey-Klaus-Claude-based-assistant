@@ -22,6 +22,10 @@ export var MOCK = /(?:^|[?&])mock=1(?:&|$)/.test(location.search);
    that page plays the morning brief by itself — a phone that happens to be
    open at 07:00 must not start talking too. */
 export var KIOSK = /(?:^|[?&])kiosk=1(?:&|$)/.test(location.search);
+/* A copy of the app framed in the self-update comparison (views/upgrade.js):
+   silent, no microphone, no presence, and it shows no improvement chip of its
+   own. The server starts its Claude session only if someone writes to it. */
+export var EMBED = /(?:^|[?&])embed=1(?:&|$)/.test(location.search);
 
 export var state = {
   lang: 'cs-CZ',

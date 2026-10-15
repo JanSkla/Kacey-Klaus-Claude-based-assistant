@@ -11,7 +11,7 @@
 
 import express from 'express';
 import { WebSocketServer } from 'ws';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
@@ -22,7 +22,8 @@ import { logicalDayOf, dayRangeOf, dayIndex } from './calendar-days.js';
 import * as nightstore from './nightstore.js';
 import { nextItem, createVoiceBridge, createDucker } from './voicebridge.js';
 import { RuleSchema, explainIssues } from './rules.js';
-import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener } from './app-tools.js';
+import { makeAppServer, APP_SERVER_NAME, APP_TOOL_NAMES, setWriteListener, setUpgradeHandler } from './app-tools.js';
+import * as selfupdate from './selfupdate.js';
 import {
   startNight, stopNight, noteInteraction, backToSleep, noteSpeaking, noteVisibility, notePresence, nightState, INTERACTION_KINDS,
   startRun as startNight_run, push as pushNight, extendNight, nightLog, runSummary, settings as nightSettings,
@@ -45,7 +46,7 @@ import {
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
   XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL, NOWPLAYING_URL, DUCK_PERCENT,
-  LOGICAL_DAY_START_HOUR, LIGHTSD_URL,
+  LOGICAL_DAY_START_HOUR, LIGHTSD_URL, PREVIEW, SELFUPDATE,
 } from './config.js';
 
 // ---------------------------------------------------------------------------
@@ -173,8 +174,17 @@ function explainError(code, text = '') {
 // ---------------------------------------------------------------------------
 
 class KaceySession {
-  constructor(ws, persona) {
+  /**
+   * `embed`: a page shown inside the comparison (selfupdate.js) — its Claude
+   * session starts only if someone actually writes to it, so two framed copies
+   * of the app do not spawn two idle sessions. `resume`: a conversation from
+   * the history, picked up where it ended.
+   */
+  constructor(ws, persona, { embed = false, resume = null } = {}) {
     this.ws = ws;
+    this.embed = embed;
+    this.resume = resume;
+    this.started = false;
     // Rendered per connection so {{TODAY}}/{{NOW}} are current. A session that
     // stays open across the 04:00 rollover keeps its original date — reload the
     // page to get a fresh one.
@@ -264,11 +274,13 @@ class KaceySession {
   }
 
   start() {
+    this.started = true;
     this.query = query({
       prompt: this.userMessageStream(),
       options: {
         model: MODEL,
         effort: EFFORT,
+        ...(this.resume ? { resume: this.resume } : {}),
 
         // The persona replaces the Claude Code system prompt entirely — we do not
         // want coding-agent instructions in a voice assistant.
@@ -281,7 +293,7 @@ class KaceySession {
         /* klaus-memory (a subprocess) plus Kacey's own app tools, which run in
            THIS process — see app-tools.js. One server object per session so a
            restart cannot leave a stale instance behind. */
-        mcpServers: { ...MCP_SERVERS, [APP_SERVER_NAME]: makeAppServer() },
+        mcpServers: { ...MCP_SERVERS, [APP_SERVER_NAME]: makeAppServer({ sessionId: () => this.sessionId }) },
 
         // Use ONLY the server above. Without this, the SDK also auto-fetches the
         // account's claude.ai cloud connectors — Gmail, Google Calendar, Slack,
@@ -336,7 +348,9 @@ class KaceySession {
       case 'system':
         if (msg.subtype === 'init') {
           this.sessionId = msg.session_id;
-          this.send({ type: 'session', sessionId: msg.session_id });
+          this.send({ type: 'session', sessionId: msg.session_id, resumed: !!this.resume });
+          if (this.firstText && !this.embed && !PREVIEW) chats.touch(msg.session_id, this.firstText);
+          this.firstText = null;
 
           const servers = msg.mcp_servers || [];
           log(
@@ -458,6 +472,9 @@ class KaceySession {
   }
 
   onUserMessage(text, images) {
+    if (!this.started) this.start();
+    if (this.sessionId && !this.embed && !PREVIEW) chats.touch(this.sessionId, text);
+    else this.firstText = this.firstText || text;
     this.turnActive = true;
     this.errorShown = false;
     this.interrupted = false;
@@ -503,8 +520,102 @@ class KaceySession {
 const persona = loadPersona();
 const app = express();
 
+/* ---------------------------------------------------------------------------
+ * The conversation history (the chat's "Historie konverzací").
+ *
+ * The SDK keeps every session's transcript on disk; this keeps the list of the
+ * ones that were chats with the owner (not night runs, not previews, not
+ * framed copies), with a title from the first message. Resuming one is a new
+ * socket with ?resume=<id>; its messages come from getSessionMessages().
+ * ------------------------------------------------------------------------- */
+
+const chats = {
+  list() { return kvGet('chat.sessions', []); },
+  touch(id, text) {
+    if (!id || !text) return;
+    const all = chats.list();
+    const now = new Date().toISOString();
+    let row = all.find((c) => c.id === id);
+    if (!row) { row = { id, started_at: now, title: '', count: 0 }; all.push(row); }
+    if (!row.title) row.title = String(text).replace(/\s+/g, ' ').trim().slice(0, 80);
+    row.count += 2;              // the question and its answer
+    row.updated_at = now;
+    all.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+    kvSet('chat.sessions', all.slice(0, 200));
+  },
+  has(id) { return chats.list().some((c) => c.id === id); },
+};
+
+const NUDGE_START = '\n\n[systémová poznámka';
+
+/** A stored session as the transcript shows it: user and Kacey text only. */
+function transcriptOf(messages) {
+  const out = [];
+  for (const m of messages) {
+    if (m.parent_tool_use_id) continue;
+    const content = m.message?.content;
+    if (m.type === 'user') {
+      if (typeof content === 'string') out.push({ role: 'user', text: content.split(NUDGE_START)[0] });
+      else if (Array.isArray(content) && !content.some((b) => b.type === 'tool_result')) {
+        const text = content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').split(NUDGE_START)[0];
+        const imgs = content.filter((b) => b.type === 'image').length;
+        out.push({ role: 'user', text: text + (imgs ? ` [${imgs === 1 ? '1 obrázek' : `${imgs} obrázky`}]` : '') });
+      }
+    } else if (m.type === 'assistant' && Array.isArray(content)) {
+      const text = content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+      if (text) out.push({ role: 'assistant', text });
+    }
+  }
+  return out;
+}
+
+app.get('/api/chat/sessions', (_req, res) => {
+  const marked = new Set(selfupdate.sessionsWithUpgrade());
+  res.json({ sessions: chats.list().slice(0, 60).map((c) => ({ ...c, upgrade: marked.has(c.id) })) });
+});
+
+app.get('/api/chat/sessions/:id', async (req, res) => {
+  if (!chats.has(req.params.id)) return res.status(404).json({ error: 'Taková konverzace není.' });
+  try {
+    const messages = await getSessionMessages(req.params.id, { dir: process.cwd() });
+    res.json({ id: req.params.id, messages: transcriptOf(messages) });
+  } catch (err) {
+    log(`session ${req.params.id} not read: ${err.message}`);
+    res.status(500).json({ error: 'Konverzaci se nepodařilo načíst.' });
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * Improving the app from the chat (selfupdate.js). The page drives the job
+ * through these; every change comes back to all pages as an `upgrade` frame.
+ * ------------------------------------------------------------------------- */
+
+function upgradeRoute(fn) {
+  return async (req, res) => {
+    if (!SELFUPDATE) return res.status(404).json({ error: 'Vylepšování aplikace je vypnuté.' });
+    try {
+      const out = await fn(req.body || {});
+      res.json({ ok: true, ...(out || {}), ...selfupdate.snapshot() });
+    } catch (err) {
+      if (!err.status) log(`upgrade: ${err.message}`);
+      res.status(err.status || 500).json({ error: err.message });
+    }
+  };
+}
+
+app.get('/api/upgrade', (_req, res) => res.json(selfupdate.snapshot()));
+const upJson = express.json({ limit: '32kb' });
+app.post('/api/upgrade/start', upJson, upgradeRoute((b) => selfupdate.start({ answers: b.answers, note: b.note })));
+app.post('/api/upgrade/cancel', upJson, upgradeRoute(() => selfupdate.cancel()));
+app.post('/api/upgrade/refine', upJson, upgradeRoute((b) => selfupdate.refine({ text: b.text })));
+app.post('/api/upgrade/restore', upJson, upgradeRoute(() => selfupdate.restorePrev()));
+app.post('/api/upgrade/rev', upJson, upgradeRoute((b) => selfupdate.viewRev(Number(b.n))));
+app.post('/api/upgrade/approve', upJson, upgradeRoute(() => selfupdate.approve()));
+app.post('/api/upgrade/discard', upJson, upgradeRoute((b) => selfupdate.discard({ keep: b.keep === true })));
+app.post('/api/upgrade/switch', upJson, upgradeRoute(() => selfupdate.switchNow()));
+
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, version: VERSION, model: MODEL, effort: EFFORT, mcpServers: Object.keys(MCP_SERVERS) });
+  res.json({ ok: true, version: VERSION, model: MODEL, effort: EFFORT, mcpServers: Object.keys(MCP_SERVERS), preview: PREVIEW });
 });
 
 /* The night routine's state — sleep, screen, lightsd, the last and next run
@@ -1508,9 +1619,14 @@ setWriteListener((section, undo) => {
   log(`app tool wrote ${section}`);
 });
 
-wss.on('connection', (ws) => {
-  log('client connected');
-  const session = new KaceySession(ws, persona);
+wss.on('connection', (ws, req) => {
+  let params = new URLSearchParams();
+  try { params = new URL(req.url, 'http://localhost').searchParams; } catch { /* malformed */ }
+  const embed = params.get('embed') === '1';
+  const wanted = params.get('resume');
+  const resume = wanted && !embed && chats.has(wanted) ? wanted : null;
+  log(`client connected${embed ? ' (embedded)' : ''}${resume ? ` (resuming ${resume})` : ''}`);
+  const session = new KaceySession(ws, persona, { embed, resume });
 
   // Sent immediately, before the SDK has finished booting, so the UI can render.
   /* `features` tells the page which of its optional frames this server
@@ -1518,12 +1634,15 @@ wss.on('connection', (ws) => {
      so a newer page must not send `interaction` to an older server. */
   session.send({
     type: 'ready', version: VERSION, model: MODEL, mcpServers: Object.keys(MCP_SERVERS),
-    features: ['night', 'voicecast', 'notifications'],
+    features: ['night', 'voicecast', 'notifications', 'history', ...(SELFUPDATE ? ['upgrade'] : [])],
+    preview: PREVIEW,
   });
   session.send({ type: 'night_state', ...nightState() });
+  if (SELFUPDATE) session.send({ type: 'upgrade', ...selfupdate.snapshot() });
 
   try {
-    session.start();
+    // A framed copy starts its Claude session on its first message (onUserMessage).
+    if (!embed) session.start();
   } catch (err) {
     log('failed to start session:', err?.message || err);
     session.send({ type: 'error', message: explainError(null, err?.message) });
@@ -1558,6 +1677,9 @@ wss.on('connection', (ws) => {
       session.onUserMessage(text || 'Podívej se na tohle.', images);
     } else if (frame?.type === 'interrupt') {
       await session.onInterrupt();
+    } else if ((PREVIEW || embed) && frame?.type !== 'user_message') {
+      /* A preview, or a page framed in the comparison, is not someone at the
+         bedside: no presence, no voice, no ducking the music. */
     } else if (frame?.type === 'interaction') {
       // A tap, a key, the wake word — the page throttles these. Anything else
       // in `kind` is dropped silently: it is a signal, not a request.
@@ -1616,6 +1738,14 @@ server.listen(PORT, HOST, () => {
         'an event from Google or TimeTree will fail. Set KLAUS_CALENDARS.');
   }
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
+  if (PREVIEW) {
+    log('PREVIEW of a kaceyFeature branch — no night routine, no screen, no music');
+    return;
+  }
+  if (SELFUPDATE) {
+    setUpgradeHandler((spec, sessionId) => selfupdate.request(spec, sessionId));
+    selfupdate.initSelfUpdate({ broadcast, shutdown });
+  }
   try { nightstore.seedStarterRules(); } catch (err) { log(`starter rules not seeded: ${err.message}`); }
   /* The brief is in Kacey's voice, rendered for the morning it is read in,
      so {{TODAY}} is the day being planned. */
@@ -1641,15 +1771,22 @@ server.listen(PORT, HOST, () => {
   });
 });
 
+/* Stopping cleanly. `code` 1 is the switch to a new version (selfupdate.js):
+   systemd's Restart=on-failure / always starts the new code. */
+function shutdown(code = 0) {
+  stopNight();
+  selfupdate.stopSelfUpdate();     // the preview process and any agent run
+  monitor.stop('shutdown');       // never leave a Moonlight over the kiosk with nobody owning it
+  appstate.flushNow();            // close the database cleanly
+  for (const ws of wss.clients) ws.close();
+  loopback?.close();
+  server.close(() => process.exit(code));
+  setTimeout(() => process.exit(code), 2000);
+}
+
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log(`${sig} — shutting down`);
-    stopNight();
-    monitor.stop('shutdown');       // never leave a Moonlight over the kiosk with nobody owning it
-    appstate.flushNow();            // close the database cleanly
-    for (const ws of wss.clients) ws.close();
-    loopback?.close();
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000);
+    shutdown(0);
   });
 }

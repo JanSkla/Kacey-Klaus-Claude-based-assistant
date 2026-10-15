@@ -9,6 +9,8 @@ screens and changelog sections in the same commit.
 
 > **Claude Design sync:** synced through `2026-10-07` (every pending entry from 2026-10-01 to 2026-10-07: routine on dates, Druhý monitor, launcher Čtení oznámení, mini player seek — drawn into Kacey Desktop, Kacey Android, MiniVinyl and Kacey Music; handoff `handoff/design-sync-2026-10-07.md` in the design project). The phone layouts of the routine pieces follow in the next sync. The design files, start page **Kacey Index**: **Kacey Desktop** (was "Kacey Redesign"), **Kacey Phone** + **Kacey Phone App** (was "Kacey Mobile"), **Kacey Night and Morning** (was "Kacey DREAM"), **Kacey Android**, MiniVinyl, MusicCorner, Kacey Music, Kacey Lights, and the shared lane component **DayTimeline**.
 >
+> **Kacey Self-Update (2026-10-15):** built from the design project's `Kacey Self-Update.dc.html` (canvas 1a–1h, 1g phone) and `Kacey Self-Update Prototype.dc.html` (the interactive flow, plus the chat's conversation history). The two `… - ukoly-skupiny` files there are the *example output* of the loop (task groups), not a change to build by hand.
+>
 > **Waiting to be designed:** the `notifications` page and the Instagram `dms` window. The backend, the API and the Android relay are built; the screens are not. The brief is [docs/design-brief-notifications.md](docs/design-brief-notifications.md), and the two rows marked *planned* in §6.
 >
 > **Waiting for the next Claude Design sync:** the phone (≤760px) layout of the routine on dates. Kacey Phone App still draws the 2026-09 calendar (no block editor, + Blok, sick sheet; a dashed "Upraveno jen pro tento den" card instead of `.routinebar`), so the phone keeps the desktop's controls as a bottom sheet for now — see §7 (Routine on dates).
@@ -103,7 +105,9 @@ Rows marked *(literal)* are values used repeatedly but **not** tokenised yet.
 | `--acc-press` | `hsl(var(--h) 88% 76%)` | Pressed accent fill (`.btn--accent:active`); Android `acc_press` in `btn_accent.xml` |
 | `--on-acc` | `#161616` | Text on an accent fill |
 | `--ok` | `#42be65` | Connected, done checkbox, allowed tool, voiceprint hit |
-| `--warn` | `#f1c21b` | Mock badge, telemetry warnings, "planned" rows |
+| `--ok-dim` | `rgb(66 190 101 / .14)` | Wash behind the "Nová verze připravena" chip |
+| `--warn` | `#f1c21b` | Mock badge, telemetry warnings, "planned" rows, "Ke schválení" chip |
+| `--warn-dim` | `rgb(241 194 27 / .12)` | Wash behind the "Ke schválení" chip |
 | `--err` | `#fa4d56` | Errors, destructive controls, overdue, system bubbles. Fixed — never derived from `--h` |
 | `#2e2e2e` *(literal)* | | Row divider inside lists (`.rowbtn`, `.task`, `.tick`, `.cyclestep`, `.readout__row`, `.srow`) |
 | `#0b2a14`, `#1d2a20` *(literal)* | | Text on `--ok` fill; done runner item bg |
@@ -167,7 +171,8 @@ status dots (`.conn__dot`, `.btn .dot`).
 | `0 2px 6px rgb(0 0 0 / .4)` | `.toast` |
 | `0 2px 6px rgb(0 0 0 / .5)` | `.sheet__box` |
 | `0 8px 24px rgb(0 0 0 / .5)` | `.mini__drop` (the header mini player's panel; the same shadow as nowplayingd's corner widget) |
-| `rgb(0 0 0 / .6)` | Sheet backdrop |
+| `0 0 12px rgb(0 0 0 / .5)` | `.updlg` (the self-update popup), as drawn in Kacey Self-Update |
+| `rgb(0 0 0 / .6)` | Sheet backdrop, `.upmodal`, the phone `.uprefine` scrim |
 
 ### Breakpoints *(literals, in styles.css)*
 
@@ -189,11 +194,14 @@ status dots (`.conn__dot`, `.btn .dot`).
 | Sticky column heads (multi-day lane) | 7 | `.colheads` |
 | Routine block note editor | 8 | `.noteedit` |
 | Routine block editor / + Blok card over the lane | 9 | `.eventedit--routine`, `.eventedit--add` |
-| Header mini player's panel | 20 | `.mini__drop` |
+| History button / its panel (inside the chat card) | 3 / 4 | `.histbtn`, `.histpanel` |
+| Header mini player's panel; the self-update chip's dropdown | 20 | `.mini__drop`, `.updrop` |
 | Music visual over the kiosk page | 50 | `.visualover` |
 | Sheets (modals); phone scrim | 30 | `.sheet`, `.scrim` |
 | Phone bottom sheet | 31 | `.is-psheet-open` |
-| Toast | 40 | `.toast` |
+| Self-update popup | 35 | `.upmodal` |
+| Toast; self-update toast | 40 | `.toast`, `.uptoast` |
+| Switching to the new version (covers everything) | 60 | `.upswitch` |
 
 ### Motion
 
@@ -203,7 +211,7 @@ status dots (`.conn__dot`, `.btn .dot`).
 | `150ms cubic-bezier(.2, 0, .38, .9)` *(literal)* | `.bar__fill` width |
 | `60ms linear` *(literal)* | `.meter__bar` height |
 | `900ms linear` *(inline in timers.js)* | Timer countdown bar |
-| `@keyframes pulseDot` | Connection dot 2.4s (1.1s when active), talk-button dot 1.2s |
+| `@keyframes pulseDot` | Connection dot 2.4s (1.1s when active), talk-button dot 1.2s; self-update chip / card dot and current step box 1.4s, `.upswitch__dot` .8s |
 | `@keyframes caret` | Streaming caret, `1s steps(2)` |
 
 Reduced motion also forces every animation to 1ms / 1 iteration, and the orb's
@@ -243,13 +251,15 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.sidenav` | index.html, [router.js](public/js/ui/router.js), [sidenav.js](public/js/ui/sidenav.js) | Desktop sidebar, 172px, left of every view (not the full-bleed ones; the phone has the tab bar): `__group` of four `__item--big` (42px, 20px stroke icon: Chat · Kalendář · Úkoly · Deník) and a `__group--more` under `__head` DALŠÍ (36px: Knihovna deníku · Časovače · Ranní brief · Ráno ↗ · Pravidla). `__badge`: today's date on Kalendář, open tasks for today on Úkoly | `__item[aria-current="page"]` (`--acc-dim`, `--acc` border, 600, icon `--acc`), `:hover` `--l2` | `<button class="sidenav__item" data-go="timer">Časovače</button>` |
 | `.btn--fn` in `.fnlist` | index.html | A rail's **Akce** card: what the screen can do, not where to go (the sidebar navigates) | first item sometimes `--accent` | `<button class="btn btn--fn" id="clearDone">Smazat hotové</button>` |
 | `.mini` | index.html, [miniplayer.js](public/js/views/miniplayer.js) | Header mini player (Claude Design "MiniVinyl"): what nowplayingd (:8081) is playing, before Controller. `__bar` 250×34 on `--l2` (click opens the panel, double-click opens the vinyl full screen — `.visualover` on the kiosk, its own tab elsewhere): `__win` (48×32 window onto the live turntable at ~0.21×, `__deck`), `__text` (title + `__artist`, ellipsis), `__play` 52px accent. `__drop` 340px panel below the header, right-aligned: `__head` (`__state` "HRAJE · kaceybody" + Zavřít), `__stage` 190px (turntable at 1×, pixelated), `__meta` (title, artist, `__seek` — the progress `.bar` as a seek slider: 24px hit area, bar 4→6px, a 12px square `--ink` `__thumb` ringed 2px in `--bg` at the playhead and a 44px `__tip` time label (`--ink` fill, `--on-acc` text, 12px 600) above the pointer on hover/focus/drag; the fill goes `--ink3` when paused (`.is-paused`), the left time `--ink` 600 while dragging; click or drag to jump, arrows ±5 s, Shift ±30 s, Home/End, `role="slider"` — `__times`, `__error`), `__transport` (3 × 44px), `__vol` (`.btn--step` −/+, `.bar--grow`, `__volnum`), `__keep` ("OBRAZOVKA" + `.btn--sm[aria-pressed]` "Nechat hrát vinyl", with the accent `.dot` while pressed: keeps the bedside screen lit; on the kiosk it also opens `.visualover`), `__link` (normal weight, one line, `__hint` "dvojklepnutí" in `--ink3` on the right). Uses Kacey's accent, not the cover's. Desktop header only (the phone hides `.top__end`) | `hidden` when nothing plays or nowplayingd is down; paused keeps it, frame held; `__drop[hidden]`, `__open[aria-expanded]` | — |
-| `.link` | styles.css | Inline text action | `:hover` | `<button class="link" data-go="calendar">` |
+| `.link` | styles.css | Inline text action; `--muted` (`--ink3`: "Zastavit", "Zastavit a zahodit") | `:hover` | `<button class="link" data-go="calendar">` |
+| `.upchip` + `.updrop` | index.html, [views/upgrade.js](public/js/views/upgrade.js) | The self-update job in the header (Kacey Self-Update): 34px (32 phone), 8px square `__dot`, label, `__prog` 2px underline. "Navrhuji · 3/5", "Upravuji · revize 2", "Dokončuji · 2/4", "Ke schválení · revize N", "Nová verze připravena" (phone "Připraveno"). Busy: click opens `.updrop` (340px, `__head` name + "Návrh · kaceyFeature/…", `.upsteps`, `__foot` "Ukázat v chatu" · `--muted` "Zastavit a zahodit"); Ke schválení opens the comparison; připraveno switches | `data-st` = busy (`--acc`, pulsing) · review (`--warn`, `--warn-dim`) · ready (`--ok`, `--ok-dim`) · failed (`--err` border, "Nepovedlo se"); wrap `hidden` with no job | — |
+| `.histbtn` + `.histpanel` | index.html, [ui/history.js](public/js/ui/history.js) | The chat's conversation history (Self-Update prototype): 36px icon button top right of the chat card (44px phone), a 340px panel: `__head` "Historie konverzací" + "Nová konverzace", `__day` captions (DNES · VČERA · TENTO TÝDEN · MINULÝ TÝDEN · DŘÍV), `__row` (title, `__tag` "vylepšení" when it asked for an improvement, `__meta` "07:12 · 6 zpráv") | `.histbtn.is-open` (`--acc-dim`, `--acc` border); `__row.is-current` (`--acc-dim` + inset 3px `--acc` edge, 600) | — |
 
 ### Inputs
 
 | Component | Purpose | Variants | States | Example |
 |---|---|---|---|---|
-| `.btn` | The button | `--sm`, `--lg`, `--block`, `--accent` (primary), `--ghostaccent`, `--outlineaccent`, `--danger`, `--dangerghost`, `--dangerfill`, `--dangertext` (a plain button with `--err` text: the routine editor's Odebrat), `--fn`, `--back`, `--step` (36px ±), `--talk` (56px mic) | `:hover` → `--l3`; `:disabled` opacity .45; `aria-pressed="true"` accent border+wash; `.dot` pulses when pressed | `<button class="btn btn--accent btn--sm">Dokončit</button>` |
+| `.btn` | The button | `--okfill` (`--ok` fill, `#0b2a14` text, 600: "Přepnout teď"), `--sm`, `--lg`, `--block`, `--accent` (primary), `--ghostaccent`, `--outlineaccent`, `--danger`, `--dangerghost`, `--dangerfill`, `--dangertext` (a plain button with `--err` text: the routine editor's Odebrat), `--fn`, `--back`, `--step` (36px ±), `--talk` (56px mic) | `:hover` → `--l3`; `:disabled` opacity .45; `aria-pressed="true"` accent border+wash; `.dot` pulses when pressed | `<button class="btn btn--accent btn--sm">Dokončit</button>` |
 | `.input` / `.select` | Text field / select | `.prompt` (textarea, 104px), `.prose__area` (journal editor), `--when` (date/time/length: natural width, dark native picker) | `:focus-visible` ring | `<input class="input" type="text">` |
 | `.composer` | Chat input bar, 56px (48 phone) | `__input`, `__clip` (attach) | `.is-dropping`; `:focus-within` 2px `--acc` ring (offset 1px); input `.is-interim` (italic, ink3) | — |
 | `.chip` / `.chips` | Toggle pill | `--tool` (red/green left bar), `--filter` | `aria-pressed="true"` accent fill | `el('button.chip.chip--filter', { type: 'button', onclick: fn }, m.month)` ([calendar.js](public/js/ui/calendar.js), months-with-events jump) |
@@ -280,6 +290,12 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.whensheet` | Phone: a task's date as a bottom sheet "Termín · {label}" — "Teď: …", DATUM / ČAS grid, DÉLKA · JEN S ČASEM, Uložit (accent), Bez termínu, the calendar note; × closes | — | `openWhen(id)` [views/tasks.js](public/js/views/tasks.js) |
 | `.empty` | Empty-list text | — | `el('p.empty', 'Načítám kalendář…')` |
 | `.top__badge` | "mock" badge (warn) | `hidden` | — |
+| `.updlg` in `.upmodal` | The self-update popup ([views/upgrade.js](public/js/views/upgrade.js)), 580px: `__head` (`__kicker` 12px .06em `--acc` — `--err` `.is-err` for the confirmations; `__title` 20px 600; `__sub`; `__count` "2 / 3"; `__x` 40px), `__body` (`__block` "Co navrhnu" + `__list`, `__facts` key/value grid incl. Větev `__branch`, `__note` on `--l2`; questions: `__done` answered rows "hotovo", `__q` with `__qtitle` 15px 600, `__opt` choices, `__input` "Něco dalšího k zadání…"; discard: `__text`, `__check` + `__box` "Ponechat větev v archivu"), `__foot--3`/`--2` of 52px full-bleed `__btn` (`--l2`, `--mid` `--l3`, `--go` accent, `--danger` `--err`). 1a "VYLEPŠENÍ APLIKACE" Zrušit · Upravit zadání · Spustit návrh; 1b "· UPŘESNĚNÍ" Zrušit · Rozhodni za mě · Další otázka/Shrnout; ZRUŠIT VYLEPŠENÍ; ZAMÍTNOUT NÁVRH. Phone: a bottom sheet, buttons stacked, the primary first | `__opt[aria-pressed]` (`--acc-dim`, `--acc` border), `__btn:disabled` .45, `__check[aria-pressed]` (acc box ✓) | — |
+| `.upcard` | The job's progress in the chat log (1c): `__head` (pulsing dot, name, "Návrh · kaceyFeature/…"), `__bar` of 3px `__seg`s, `.upsteps`, `__foot` "Aplikace běží dál beze změny." + Zastavit | `__seg.is-done` `--ok`, `.is-current` `--acc` | — |
+| `.upsteps` | The job's steps (card and chip dropdown): 14px box + label | `li[data-st]` = done (`--ok` box), cur (2px `--acc` box, pulsing, `--ink`), todo (dimmed) | — |
+| `.msg--notice` / `.msg--rule` | A line from Kacey written by the page, not the model (the job's milestones), `__bubble--act` with one `.btn--outlineaccent` `.msg__act` ("Otevřít porovnání", "Přepnout teď", "Otevřít Úkoly"); a centred 12px `--ink3` line between two rules ("Vylepšení zrušeno · nic se nezměnilo", "Přepnuto na KC 1.1.0 · …") | — | — |
+| `.uptoast` | The self-update toast (1f), 420px bottom right (phone: full width under the header): `__title` 15px 600, `__sub`, `__acts` — "Návrh je připravený k porovnání." Porovnat (accent, `--acc` edge) / "Nová verze aplikace je připravená." Přepnout teď (`.btn--okfill`, `--ok` edge) + Později | `data-kind` = review · ready; `hidden` | — |
+| `.upswitch` | Full-window "Přepínám na KC 1.1.0…" with a pulsing `--ok` square; `__note` says to restart by hand when the server cannot restart itself. The page reloads into the new version when the socket comes back with it, keeping the composer's text | `hidden` | — |
 
 ### Data display
 
@@ -335,6 +351,10 @@ States use `is-*` classes, `aria-pressed`/`aria-current`, or `data-*`.
 | `.attach` / `.attachstrip` | [attachments.js](public/js/ui/attachments.js) | Image attachment chip with thumb and ×. A screenshot shared from the phone lands here too ([share.js](public/js/ui/share.js)), with the chat view opened and the composer focused | `:hover` on × |
 | `.vw__*` | [wake-panel.js](public/js/voice/wake-panel.js) | Voiceprint sheet: list items, play/delete, score bar, sensitivity; `__level` fills from `--lvl` | `data-playing`, `data-match`, `data-outlier`, `data-hit` |
 | `.wakemon` | [wake-monitor.js](public/js/voice/wake-monitor.js) | Controller's wake word test monitor, under "Nahrát vzorky": `__head` (label + `__engine`: who holds the mic, or why nobody), `.bar` live level, `__note`, `__log` (newest first, 14 rows: time + segment length, score / threshold). While the Controller shows, a match chimes and logs instead of opening dictation | `data-hit` flashes `--ok`; rows `data-kind` = hit (`--ok`), miss, quiet (`--ink3`), heard |
+| `.upbar` / `.uprevs` | [views/upgrade.js](public/js/views/upgrade.js) | The comparison's bar (1d/1h): `__title` 16px 600, `__sub` (branch · "změněno: …" · "náhled nemusí být plně funkční"), `__err` (`--warn`), `.uprevs` revision tabs (Revize 1 · Revize 2; "R1" on a phone), Zamítnout · Upravit promptem · Schválit a dokončit (40px; "Přepnout teď" `.btn--okfill` when ready) | `.uprevs__opt[aria-pressed]` `--l3`; `#upRefineBtn.is-open` (`--l3`, `--acc` border) |
+| `.upsplit` / `.uppane` / `.upbusy` | views/upgrade.js | Both versions live: `.uppane--old` (PŮVODNÍ, `--ok` dot, "KC 1.0.0 · běžící verze") and `.uppane--new` (NOVÁ, `--acc` border, head on `--acc-dim`, "KC 1.1.0 · revize N"), each an iframe drawn at 1440px and scaled to its pane; `__handle` 12px drag divider (dvojklik = 50 / 50, ←/→), `__label` "50 / 50"; `.upbusy` covers the new pane while a revision is made or the preview starts ("Upravuji · revize 2" + step). Phone: one pane at a time by `data-show`, picked with `.upwhich` (Původní · Nová) | `.is-dragging` |
+| `.uprefine` / `.uprestore` | views/upgrade.js | "Upravit návrh" (1h): 360px column (phone: bottom sheet with "Historie zadání" folded), `__item`s of the brief's history (Jan · zadání / připomínka, Kacey · revize N on `--l2`), `__text` "Co mám na návrhu změnit?", `.uprestore` "Obnovit předchozí revizi · Revize N · poslední úprava se zahodí", accent "Vytvořit revizi N" (Ctrl+Enter) | `hidden`; restore only with 2+ revisions |
+| `.upwhich` / `.upacts` | views/upgrade.js | Phone comparison (1g): the Původní · Nová toggle (44px; Nová pressed on `--acc-dim` with an `--acc` outline) and the docked Zamítnout · Upravit · Schválit (48px) | `aria-pressed` |
 | Text helpers | styles.css | `.big` (20 acc), `.strong`, `.muted`, `.muted-3`, `.label`, `.rule`, `.clock` (`--sm`), `.num`, `.is-acc` | — |
 
 ---
@@ -405,7 +425,10 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 
 | Route (`#hash`) | Template | Markup | Logic | Components |
 |---|---|---|---|---|
-| `main` | home | [index.html](public/index.html) `data-view="main"` | [views/main.js](public/js/views/main.js), [ui/log.js](public/js/ui/log.js), [ui/attachments.js](public/js/ui/attachments.js), [ui/share.js](public/js/ui/share.js) (a shared screenshot lands here: attached, composer focused) | nextcard (desktop strip), card + daytl (Dnes, desktop) / rowbtn agenda (phone), task, msg, composer, attach, btn--talk, status strips |
+| `upgrade` | full (flex column) | [index.html](public/index.html) `data-view="upgrade"` | [views/upgrade.js](public/js/views/upgrade.js); data: `upgrade` frames, `/api/upgrade/*`; the new pane is the branch's preview on `KACEY_PREVIEW_PORT` ([selfupdate.js](selfupdate.js)) | upbar, uprevs, upsplit/uppane (two scaled live iframes, `?embed=1`), upbusy, uprefine/uprestore; phone: upwhich toggle, upacts. Reached from the chip, the toast or the chat notice; only while a draft exists |
+| Popup: improving the app | global | [index.html](public/index.html) `#upModal` | [views/upgrade.js](public/js/views/upgrade.js) | updlg: confirm (1a), questions (1b), cancel, discard |
+| Header: self-update chip | global | [index.html](public/index.html) `#upChipWrap` in `.top__end` | [views/upgrade.js](public/js/views/upgrade.js) | upchip, updrop, upsteps; with `.upcard` + `.msg--notice` in the chat, `.uptoast`, `.upswitch` |
+| `main` | home | [index.html](public/index.html) `data-view="main"` | [views/main.js](public/js/views/main.js), [ui/history.js](public/js/ui/history.js) (Historie konverzací), [ui/log.js](public/js/ui/log.js), [ui/attachments.js](public/js/ui/attachments.js), [ui/share.js](public/js/ui/share.js) (a shared screenshot lands here: attached, composer focused) | nextcard (desktop strip), card + daytl (Dnes, desktop) / rowbtn agenda (phone), task, msg, composer, attach, btn--talk, status strips |
 | `tasks` | wide | [index.html](public/index.html) `data-view="tasks"` | [views/tasks.js](public/js/views/tasks.js), [core/due.js](public/js/core/due.js) | card, groups (Po termínu · Dnes · Tento týden, then Později · Bez termínu · Hotové dřív when not empty), subhead, task, taskwhen, check, bar, input--when (add form: label, date, time), Akce fnlist |
 | `journal` | triple | [index.html:176](public/index.html:176) | [views/journal.js](public/js/views/journal.js) | clock, bubbles/msg, tagstrip/tag, prose__area, btn .dot, fnlist |
 | `library` | wide | [index.html:228](public/index.html:228) | [views/library.js](public/js/views/library.js) | card__sub input, chips/chip--filter, cards/entry |
@@ -503,6 +526,14 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 - Morning rewrite note: the design writes "zubař se posunul z 09:00 na 10:30"; the app says "Zubař z 09:00 na 10:30" / "nově …" / "odpadá …" — the title can be any gender, so no "se posunul/a/o". Several changes: "od noci N změny" + "Co se změnilo".
 - Many phone details (lights chip in the header, today panel inside the next card, planner footer, voiceprint copy).
 
+**Kacey Self-Update (built 2026-10-15)**
+- The design canvas's refine panel also has "+ Označit v náhledu" (a dashed "Místo 1" mark on the preview), Rozsah úpravy (Jen označené místo · Celá funkce · I telefon), Rychlé úpravy (Zjednodušit · Víc kompaktní) and "Hlasem: „KC, uprav to…“". The interactive prototype dropped them; not built.
+- 1c/1e's "Zobrazit log" / "Log" links are not built (the agent's actions go to the server log, `[upgrade]`).
+- The prototype draws chat bubbles without the accent edge and drops "turns" from the header stats; the app keeps both as they were.
+- `.updlg__btn` is a sixth button style (full-bleed 52px dialog footer); `.upwhich` a third segmented control beside `.seg` and `.vw__mode`; `.histpanel__tag` and `.upchip` another pill.
+- `.msg--notice` lines live only in the open page: they are not in Kacey's conversation and are gone after a reload (the chip, the toast and the comparison come back from the server's job).
+- The comparison's new pane is `http://<host>:KACEY_PREVIEW_PORT`; behind an https front it is blocked as mixed content.
+
 **Phone**
 - The phone design's brief player has an icon-only ↺ restart and puts the clock under the bar; the app keeps "Od začátku" and wraps the row.
 - The phone routine planner keeps the desktop's bar order (brushes, revert, clear) rather than the design's footer row of Vymazat vše · Vrátit · Hotovo.
@@ -526,6 +557,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 One line per feature that changes the UI. Newest first. Format: `YYYY-MM-DD — what changed (tokens / components / screens touched) [design: pending|synced]`.
 `pending` means Claude Design hasn't picked the change up yet; see [§0](#0-design-implementation-loop).
 
+- 2026-10-15 — **Improving the app from the chat** (Claude Design "Kacey Self-Update" 1a–1h, 1g phone, and its prototype): Kacey's `app_upgrade_request` opens `.updlg` (confirm, or up to three questions, plus the cancel/discard confirmations); the header `.upchip` carries the job (busy / Ke schválení / připraveno) with an `.updrop` of `.upsteps`; the chat gets an `.upcard` and `.msg--notice` / `.msg--rule` lines; new view **upgrade** (`.upbar`, `.uprevs`, `.upsplit`/`.uppane` with two scaled live iframes and a drag divider, `.upbusy`, `.uprefine`/`.uprestore`; phone `.upwhich` + `.upacts`); `.uptoast` (review / ready) and `.upswitch`; new tokens `--ok-dim`, `--warn-dim`, new `.btn--okfill`, `.link--muted`, shadow `0 0 12px`, z 35/60. Also from the prototype: the chat's **Historie konverzací** (`.histbtn`, `.histpanel`, resumable sessions). Backend: [selfupdate.js](selfupdate.js) (git worktree on `kaceyFeature/<slug>`, a confined Claude Code agent, a preview Kacey on `KACEY_PREVIEW_PORT`, merge + restart). [design: synced]
 - 2026-10-08 — **Small residuals** (Kacey Desktop §1.1/§8, Night and Morning 3.1/3.4/3.5/4.1/5a): Hudba off also closes the nowplayingd feed (the switch back on reconnects); the Brief's weather row says "neosobní · Praha" (`KACEY_WEATHER_PLACE`); a failed night run with no brief read shows "Brief · bez nového briefu — noční běh selhal" (warn) instead of pending; the sidebar's Ráno says "checklist" (its state like Víc's); the phone rule editor's keywords open from a dashed "+ slovo" button, chips 40px; the new-set form on `--acc`; a long press (500 ms) on a phone task row from a rule or Kacey shows why it is there. [design: synced]
 - 2026-10-08 — **Phone today panel, task dock, Termín sheet** (Kacey Phone 2a, 3c–3e): the today panel opens as one `--l1` panel under "next up" with DNES / DNEŠNÍ ÚKOLY captions, one-line agenda rows and a `.todayfoot`; "next up" ends "· N úkoly na dnes"; the tasks view docks a `.taskdock` (the text goes to Kacey; the inline add form is desktop only); a task's due opens the `.whensheet` bottom sheet; when Kacey adds exactly one task the toast says "Úkol přidán · {label}" and opens its Termín. Desktop's main grid now places the second today card by `.card + .card`. [design: synced]
 - 2026-10-08 — **Phone pass and desktop residuals** (Kacey Phone, Kacey Desktop, Night and Morning): the phone header shows the lights chip at the right ("96 %" / "vyp.", 44px, `--acc-dim` when on; gear, mini player and view label hidden); tab labels 12px `--ink3`; chat bubbles 88 %, the listening strip inset, attach chips up to 260px with 32px ×, "Připiš vzkaz, nebo rovnou odešli" while a picture waits; toasts 100px up (220 on main, 244 on tasks) and the open line `flex:1`; task rows 15/12px with a 44px check hit area and a dotted due (ink / ink3 / err); runner foot `1fr 2fr` (was a broken `1fr 1fr 2fr`), stacked head, no lede, 16px add input (no iOS zoom); focus spacing; journal "Diktovat"/"Pauza" (accent when idle) and `.is-current` unfinished rows (no inline styles); library entries on `--l1`, "Tento měsíc · …" inline; brief lines 15px, Pauza on `--l2`, injected rows 48px, prompt 16px on `--bg`; timer cards 44px digits, fixed +1 min and ×; Controller switches 52×28 with a 56×48 hit area, 12px states, 26px meter, tool chips 40px, short denied copy; sheet heads 12px 16px with .04em titles; routine planner brushes 44px on `--l3`, 40px steppers, short dirty/confirm copy, confirm as an inset grid, "Beze změn" not dimmed; voiceprint copy capitalised, the ASR note under the modes, a short note on the phone; the event sheet gets an "Událost" head, "Opravdu smazat?" on an err fill, no Zavřít. Desktop: open toasts on task add, cancel-one-day, move and sick range (they show the day); MCP readout in `--ok`; "1 událost"; "ve 12:30" in the task why; the timer preset time 14px `--ink2`; small sizing on calendar nav, runner Pauza, focus, the morning Na hlavní, the proposal time input, the rule tag strip and the rule time. [design: synced]
