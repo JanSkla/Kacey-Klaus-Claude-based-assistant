@@ -28,7 +28,7 @@ import { normalizeChecklist } from './public/js/core/checklist.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 import { KIND_KEYS } from './public/js/core/routine-cats.js';
-import { DEFAULT_TAGS } from './public/js/core/tasktags.js';
+import { DEFAULT_TAGS, normalizeTags } from './public/js/core/tasktags.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
 export const LEGACY_STATE_PATH =
@@ -49,6 +49,20 @@ const DEFAULT_SETTINGS = {
   // The owner's task tags, theirs to rename, add and delete (public/js/core/tasktags.js).
   taskTags: DEFAULT_TAGS,
 };
+
+/* Settings as stored. The tag list is cleaned (tasktags.js normalizeTags); a
+   settings save without one — a page from before the tags — keeps the stored
+   list rather than putting the starting five back. */
+function normalizeSettings(value) {
+  const next = { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : {}) };
+  if (Array.isArray(next.taskTags)) next.taskTags = normalizeTags(next.taskTags);
+  else {
+    delete next.taskTags;
+    const stored = kvGet('settings', {});
+    if (stored && Array.isArray(stored.taskTags)) next.taskTags = stored.taskTags;
+  }
+  return next;
+}
 
 const DEFAULT_PRESETS = [
   { label: 'Pomodoro', secs: 1500 },
@@ -341,7 +355,7 @@ export function setSection(name, value, opts = {}) {
     case 'routine': writeRoutine(value); break;
     case 'timers': kvSet('timers.presets', (value && value.presets) || []); break;
     case 'checklists': kvSet('checklists', value || {}); break;
-    case 'settings': kvSet('settings', value || {}); break;
+    case 'settings': kvSet('settings', normalizeSettings(value)); break;
     case 'morning': kvSet('morning.checklist', normalizeChecklist(value, morningChecklist())); break;
     default: break;
   }

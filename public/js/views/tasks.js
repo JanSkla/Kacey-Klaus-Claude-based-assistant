@@ -21,7 +21,7 @@ import { $ } from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import * as store from '../core/store.js';
 import { bucketOf, dueLabel, logicalToday, parseDue, vTime } from '../core/due.js';
-import { guessTag, newTagId, tagById, tagsFrom } from '../core/tasktags.js';
+import { guessTag, newTagId, tagById, tagNameProblem, tagsFrom, TAG_NAME_MAX } from '../core/tasktags.js';
 import { go, onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { editRule } from './rules.js';
@@ -527,9 +527,16 @@ function byTagOrder(a, b) {
    in it; then the cell that adds a tag. */
 function tagGroups(visible) {
   var tags = tagList();
-  var out = tags.map(function (g) {
-    return tagGroup(g, visible.filter(function (t) { return t.tag === g.id; }));
-  });
+  var none = !visible.length;
+  var out = [];
+  /* Nothing to sort: say so once, instead of every group asking for a drag. */
+  if (none) out.push(el('p.empty.tasks__none', tasks().length
+    ? 'Všechno je hotové a hotové jsou skryté.'
+    : 'Žádné úkoly. Přidej úkol, nebo řekni „KC, přidej …“ — Kacey mu štítek vybere sama.'));
+  if (!tags.length) out.push(el('p.empty.tasks__none', 'Zatím žádné štítky. Přidej první níž — Kacey pak do nich bude úkoly řadit sama.'));
+  out = out.concat(tags.map(function (g) {
+    return tagGroup(g, visible.filter(function (t) { return t.tag === g.id; }), none);
+  }));
   var loose = visible.filter(function (t) { return !tagById(tags, t.tag); });
   if (loose.length) out.push(tagGroup(null, loose));
   out.push(addingTag ? newTagForm() : el('button.tag__more.tagnew', {
@@ -538,7 +545,7 @@ function tagGroups(visible) {
   return out;
 }
 
-function tagGroup(g, items) {
+function tagGroup(g, items, none) {
   var open = items.filter(function (t) { return !t.done; }).length;
   var head = g && editingTag === g.id ? tagEditForm(g) : el('h3.subhead.subhead--row', [
     el('span.subhead__name', g ? g.name : 'Bez štítku'),
@@ -552,7 +559,7 @@ function tagGroup(g, items) {
     head,
     g ? null : el('p.muted-3.tasks__hint', 'Kacey nevěděla, kam patří. Přetáhni je za ⋮⋮ pod štítek.'),
     items.length ? items.sort(byTagOrder).map(function (t) { return taskRow(t, true, true); })
-                 : el('p.muted.tasks__drop', 'Prázdné. Přetáhni sem úkol za ⋮⋮.')
+                 : el('p.muted.tasks__drop', none ? 'Prázdné.' : 'Prázdné. Přetáhni sem úkol za ⋮⋮.')
   ]);
 }
 
@@ -564,16 +571,12 @@ function focusTagField() {
 function saveTags(next) { store.patchSettings({ taskTags: next }); }
 
 /** A name nobody else has, or why not: '' when it is fine. */
-function nameProblem(name, exceptId) {
-  if (!name) return 'Štítek potřebuje název.';
-  var taken = tagList().some(function (g) { return g.id !== exceptId && g.name.toLowerCase() === name.toLowerCase(); });
-  return taken ? 'Takový štítek už je.' : '';
-}
+function nameProblem(name, exceptId) { return tagNameProblem(name, tagList(), exceptId); }
 
 /* The group head while its tag is being edited: the name, Uložit, Smazat
    (twice — the tasks stay, under "Bez štítku"), Zrušit. Escape cancels. */
 function tagEditForm(g) {
-  var input = el('input.input', { type: 'text', value: g.name, maxlength: '40', 'aria-label': 'Název štítku' });
+  var input = el('input.input', { type: 'text', value: g.name, maxlength: String(TAG_NAME_MAX), 'aria-label': 'Název štítku' });
   var note = el('p.muted-3.tagedit__note', 'Smazáním se úkoly nesmažou — přejdou do Bez štítku.');
   var n = tasks().filter(function (t) { return t.tag === g.id; }).length;
   function close() { editingTag = null; armedTag = null; renderTasks(); }
@@ -635,7 +638,7 @@ function deleteTag(g) {
 
 /* The last cell: a name and Přidat. The new tag goes to the end. */
 function newTagForm() {
-  var input = el('input.input', { type: 'text', maxlength: '40', placeholder: 'Název — např. Zdraví', 'aria-label': 'Název nového štítku' });
+  var input = el('input.input', { type: 'text', maxlength: String(TAG_NAME_MAX), placeholder: 'Název — např. Zdraví', 'aria-label': 'Název nového štítku' });
   var note = el('p.muted-3.tagedit__note', 'Kacey do něj bude řadit podle názvu. Úkoly sem přetáhneš za ⋮⋮.');
   function close() { addingTag = false; renderTasks(); }
   var form = el('form.tagedit.tagedit--new', {

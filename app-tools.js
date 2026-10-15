@@ -26,7 +26,7 @@ import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
 import { CATEGORY_KEYS, KINDS } from './public/js/core/routine-cats.js';
 import { MAX_ITEMS, newKey } from './public/js/core/checklist.js';
-import { guessTag, tagById, tagByName, tagsFrom } from './public/js/core/tasktags.js';
+import { guessTag, newTagId, tagById, tagByName, tagNameProblem, tagsFrom } from './public/js/core/tasktags.js';
 import { logicalDateOf } from './rules.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
@@ -55,7 +55,7 @@ function describeTask(t, tags = tagsFrom(appstate.get().settings)) {
 
 const TAG_HELP =
   'Štítek = k čemu úkol patří: jméno jednoho z vlastníkových štítků (vypíše je app_read, řádek ŠTÍTKY). ' +
-  'Vyber ho sama podle obsahu úkolu; nový štítek nezakládej.';
+  'Vyber ho sama podle obsahu úkolu. Nový štítek zakládej jen, když o něj pán řekne (app_task_tags).';
 
 const DUE_HELP =
   'Termín, místní čas: "YYYY-MM-DD" = někdy ten den, "YYYY-MM-DDTHH:MM" = v ten čas ' +
@@ -156,7 +156,7 @@ const appRead = tool(
     }
     if (section === 'all' || section === 'tasks') {
       const tags = tagsFrom(doc.settings);
-      parts.push('ŠTÍTKY: ' + tags.map((g) => g.name).join(' · '));
+      parts.push('ŠTÍTKY: ' + (tags.map((g) => g.name).join(' · ') || '(žádné — úkoly budou bez štítku)'));
       parts.push('TASKS:\n' + (doc.tasks.length
         ? doc.tasks.map((t) => describeTask(t, tags)).join('\n')
         : '(žádné)'));
@@ -436,7 +436,7 @@ const taskUpdate = tool(
     label: z.string().optional().describe('Nový text úkolu.'),
     due: z.string().nullable().optional().describe(DUE_HELP + ' null = termín zrušit.'),
     duration: z.number().int().min(5).max(1440).optional().describe('Nová délka v minutách (jen úkol s časem).'),
-    tag: z.string().optional().describe('Přesuň úkol pod jiný štítek. ' + TAG_HELP),
+    tag: z.string().optional().describe('Přesuň úkol pod jiný štítek. ' + TAG_HELP + ' "bez štítku" = štítek zrušit.'),
     remove: z.boolean().optional().describe('true = úkol smaž.'),
   },
   async ({ id, done, label, due, duration, tag, remove }) => {
@@ -445,9 +445,10 @@ const taskUpdate = tool(
     if (!task) return fail(`Úkol "${id}" neexistuje. Vypiš si je přes app_read.`);
 
     const tags = tagsFrom(doc.settings);
-    const moved = tag === undefined ? null : tagByName(tags, tag);
-    if (tag !== undefined && !moved) {
-      return fail(`Štítek "${tag}" neexistuje. Štítky: ${tags.map((g) => g.name).join(', ')}. Nic se nezměnilo.`);
+    const untag = tag !== undefined && tagByName([{ id: '', name: 'bez štítku' }], tag) !== null;
+    const moved = tag === undefined || untag ? null : tagByName(tags, tag);
+    if (tag !== undefined && !untag && !moved) {
+      return fail(`Štítek "${tag}" neexistuje. Štítky: ${tags.map((g) => g.name).join(', ') || '(žádné)'}. Nic se nezměnilo.`);
     }
 
     const before = doc.tasks.slice();
@@ -469,12 +470,67 @@ const taskUpdate = tool(
       ...(label ? { label } : {}),
       due_at: dueAt,
       ...(duration ? { duration } : {}),
-      ...(moved ? { tag: moved.id } : {}),
+      ...(moved ? { tag: moved.id } : untag ? { tag: null } : {}),
     } : t));
     appstate.setSection('tasks', next);
     onWrite('tasks', before);
 
     return ok(`Upraveno: ${describeTask(appstate.get().tasks.find((t) => t.id === id)).slice(2)}`);
+  },
+);
+
+/* The owner's tags themselves (settings.taskTags). A task holds a tag's id,
+   so a rename moves nothing; a deleted tag's tasks stay, "bez štítku". */
+const taskTags = tool(
+  'app_task_tags',
+  'Uprav vlastníkovy štítky úkolů — přidej nový, přejmenuj, smaž, nebo změň pořadí. ' +
+    'Jen když o to pán řekne. Úkoly smazaného štítku zůstanou, bez štítku; přesun úkolu je app_task_update.',
+  {
+    action: z.enum(['add', 'rename', 'remove', 'move']).describe('add = nový, rename = přejmenovat, remove = smazat, move = posunout v pořadí.'),
+    name: z.string().describe('add: název nového štítku. Jinak: který štítek (jak ho vypíše app_read).'),
+    new_name: z.string().optional().describe('rename: nový název.'),
+    position: z.number().int().min(1).optional().describe('move: na kolikáté místo (1 = první).'),
+  },
+  async ({ action, name, new_name, position }) => {
+    const doc = appstate.get();
+    const tags = tagsFrom(doc.settings);
+    const listed = () => tags.map((g) => g.name).join(', ') || '(žádné)';
+    let next;
+
+    if (action === 'add') {
+      const clean = String(name || '').trim();
+      const problem = tagNameProblem(clean, tags);
+      if (problem) return fail(problem + ' Štítky: ' + listed() + '.');
+      next = tags.concat([{ id: newTagId(clean, tags), name: clean }]);
+    } else {
+      const tag = tagByName(tags, name);
+      if (!tag) return fail(`Štítek "${name}" neexistuje. Štítky: ${listed()}.`);
+      if (action === 'rename') {
+        const clean = String(new_name || '').trim();
+        const problem = tagNameProblem(clean, tags, tag.id);
+        if (problem) return fail(problem + ' Nic se nezměnilo.');
+        next = tags.map((g) => (g.id === tag.id ? { id: g.id, name: clean } : g));
+      } else if (action === 'remove') {
+        const before = doc.tasks.slice();
+        const n = doc.tasks.filter((t) => t.tag === tag.id).length;
+        appstate.setSection('settings', { ...doc.settings, taskTags: tags.filter((g) => g.id !== tag.id) });
+        if (n) {
+          appstate.setSection('tasks', doc.tasks.map((t) => (t.tag === tag.id ? { ...t, tag: null } : t)));
+          onWrite('tasks', before);
+        } else onWrite('settings', doc.settings);
+        const left = tagsFrom(appstate.get().settings).map((g) => g.name).join(' · ') || '(žádné)';
+        return ok(`Štítek ${tag.name} smazán${n ? ` — úkolů teď bez štítku: ${n}` : ''}. Štítky: ${left}.`);
+      } else {
+        if (!position) return fail('Řekni, na kolikáté místo (position).');
+        const rest = tags.filter((g) => g.id !== tag.id);
+        const at = Math.min(position, tags.length) - 1;
+        next = rest.slice(0, at).concat([tag], rest.slice(at));
+      }
+    }
+
+    appstate.setSection('settings', { ...doc.settings, taskTags: next });
+    onWrite('settings', doc.settings);
+    return ok('Štítky: ' + tagsFrom(appstate.get().settings).map((g) => g.name).join(' · ') + '.');
   },
 );
 
@@ -845,7 +901,7 @@ function makeUpgradeRequest(ctx) {
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
-  appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, journalAdd,
+  appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskTags, journalAdd,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative,
   notificationsRead, morningAdd,
 ];
@@ -853,7 +909,7 @@ export const APP_TOOLS = [
 /** Fully-qualified names, for the allow-list in server.js. */
 export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours', 'app_routine_alter',
-  'app_task_add', 'app_task_update', 'app_journal_add',
+  'app_task_add', 'app_task_update', 'app_task_tags', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
@@ -864,7 +920,8 @@ export function makeAppServer(ctx = {}) {
     name: APP_SERVER_NAME,
     version: '1.0.0',
     instructions:
-      'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly, deník, ' +
+      'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly (každý se štítkem, ' +
+      'štítky samotné upravuje app_task_tags), deník, ' +
       'a pravidla nočního plánování (rules_*, rule_*), podle kterých se v noci samy zakládají úkoly. ' +
       'Nejisté události kalendáře označuje app_calendar_tentative. ' +
       'Oznámení z telefonu a zprávy z Instagramu čte app_notifications. ' +

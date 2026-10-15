@@ -39,9 +39,9 @@ var WORDS = {
   volno: ['precist', 'cteni', 'knih', 'film', 'serial', 'hrat', 'zahrat', 'kytar', 'hudb', 'vylet',
     'konick', 'hobby', 'podivat', 'zkusit', 'nekdy', 'jednou', 'koncert', 'galeri', 'muze', 'malov',
     'procházk', 'prochazk', 'kino', 'divadl', 'podcast', 'vaření', 'uvarit', 'upect'],
-  rodina: ['mama', 'mame', 'mamu', 'mamk', 'mamin', 'tata', 'tatu', 'tatk', 'tatov', 'rodic', 'babick', 'babi',
+  rodina: ['mama', 'mame', 'mamu', 'mamk', 'mamc', 'mamin', 'tata', 'tatu', 'tatk', 'tatov', 'rodic', 'babick', 'babi',
     'deda', 'dedeck', 'sestr', 'bratr', 'brach', 'teta', 'tetu', 'stryc',
-    'rodin', 'narozenin', 'darek', 'navstev', 'vanoc', 'syn', 'dcer', 'deti', 'manzel', 'svagr', 'neter',
+    'rodin', 'narozenin', 'darek', 'navstev', 'vanoc', 'syna', 'synov', 'synem', 'synka', 'dcer', 'deti', 'manzel', 'svagr', 'neter',
     'synovec', 'vnouc', 'zavolat dom']
 };
 
@@ -51,10 +51,41 @@ function norm(s) {
     .replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
 }
 
-/** The tag list from settings, or the starting five while there is none. */
+/** The longest name a tag may have. */
+export var TAG_NAME_MAX = 40;
+
+/** The tag list from settings, or the starting five while there is none.
+    An empty list is the owner's choice (they deleted them all) and stays empty. */
 export function tagsFrom(settings) {
   var list = settings && settings.taskTags;
-  return Array.isArray(list) && list.length ? list : DEFAULT_TAGS;
+  return Array.isArray(list) ? list : DEFAULT_TAGS;
+}
+
+/** A stored tag list made safe: { id, name } strings, names trimmed and cut
+    to TAG_NAME_MAX, no empty names, no id or name twice (the first one wins). */
+export function normalizeTags(list) {
+  if (!Array.isArray(list)) return DEFAULT_TAGS.slice();
+  var out = [], ids = {}, names = {};
+  list.forEach(function (g) {
+    if (!g || typeof g !== 'object') return;
+    var name = String(g.name == null ? '' : g.name).replace(/\s+/g, ' ').trim().slice(0, TAG_NAME_MAX);
+    if (!name) return;
+    var id = String(g.id == null ? '' : g.id).trim() || newTagId(name, out);
+    var key = norm(name);
+    if (ids[id] || names[key]) return;
+    ids[id] = true; names[key] = true;
+    out.push({ id: id, name: name });
+  });
+  return out;
+}
+
+/** Why a name cannot be a tag in `tags` (besides the one with `exceptId`), or ''. */
+export function tagNameProblem(name, tags, exceptId) {
+  var n = String(name || '').trim();
+  if (!n) return 'Štítek potřebuje název.';
+  if (n.length > TAG_NAME_MAX) return 'Název je moc dlouhý — nejvýš ' + TAG_NAME_MAX + ' znaků.';
+  var taken = tags.some(function (g) { return g.id !== exceptId && norm(g.name) === norm(n); });
+  return taken ? 'Takový štítek už je.' : '';
 }
 
 /** The tag with this id in `tags`, or null. */
@@ -66,6 +97,7 @@ export function tagById(tags, id) {
 /** The tag a word means — its id or its name, any case, with or without diacritics. */
 export function tagByName(tags, word) {
   var w = norm(word);
+  if (w === '  ') return null;
   for (var i = 0; i < tags.length; i++) {
     if (norm(tags[i].id) === w || norm(tags[i].name) === w) return tags[i];
   }

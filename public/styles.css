@@ -642,6 +642,7 @@ button.task__due.is-empty { color: var(--ink3); }
 body.is-tagdrag, body.is-tagdrag * { cursor: grabbing !important; user-select: none; }
 .groups > .is-droptarget { background: var(--acc-dim); box-shadow: 0 0 0 6px var(--acc-dim); outline: 1px solid var(--acc); outline-offset: 6px; }
 .tasks__hint { margin: 2px 0 4px; font-size: 12px; }
+.groups > .tasks__none { grid-column: 1 / -1; margin: 0; }
 .tasks__drop { margin: 6px 0 0; padding: 14px; text-align: center; color: var(--ink3); border: 1px dashed var(--line); }
 /* A task's tag chips, under its row: from the tag in its second line or its grip. */
 .tasktag { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 0 2px 32px; }

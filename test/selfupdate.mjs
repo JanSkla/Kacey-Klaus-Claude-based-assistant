@@ -24,6 +24,9 @@ sh(['add', '-A']);
 sh(['commit', '-qm', 'start']);
 
 const su = await import('../selfupdate.js');
+// The job bumps the running app's version (package.json here), not the scratch repo's.
+const { VERSION } = await import('../config.js');
+const NEXT = VERSION.replace(/\d+$/, (n) => String(Number(n) + 1));
 const frames = [];
 su.initSelfUpdate({ broadcast: (f) => frames.push(f), shutdown: () => { throw new Error('must not exit in a test'); } });
 
@@ -127,10 +130,10 @@ await test('approve → finalizing → ready, the last number bumped, tests ran'
   su.approve();
   assert.equal(su.current().stage, 'finalizing');
   const j = await until('ready');
-  assert.equal(j.versionTo, '1.0.2');
+  assert.equal(j.versionTo, NEXT);
   assert.equal(j.restart, 'manual');
   const pkg = JSON.parse(readFileSync(path.join(process.env.KACEY_UPGRADE_DIR, 'ukoly-skupiny', 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '1.0.2');
+  assert.equal(pkg.version, NEXT);
 });
 
 await test('switch merges into the running checkout and clears the job', async () => {
@@ -138,10 +141,10 @@ await test('switch merges into the running checkout and clears the job', async (
   assert.equal(out.restart, 'manual');
   assert.equal(su.current(), null);
   assert.ok(existsSync(path.join(repo, 'step1.txt')));
-  assert.equal(JSON.parse(readFileSync(path.join(repo, 'package.json'), 'utf8')).version, '1.0.2');
+  assert.equal(JSON.parse(readFileSync(path.join(repo, 'package.json'), 'utf8')).version, NEXT);
   assert.equal(existsSync(path.join(process.env.KACEY_UPGRADE_DIR, 'ukoly-skupiny')), false);
-  assert.equal(su.snapshot().last.version, '1.0.2');
-  assert.equal(frames.at(-1).switching.version, '1.0.2');
+  assert.equal(su.snapshot().last.version, NEXT);
+  assert.equal(frames.at(-1).switching.version, NEXT);
 });
 
 await test('discarding deletes the branch, or keeps it archived', async () => {

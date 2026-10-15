@@ -123,7 +123,8 @@ test('the night run\'s rules see the cancelled block as gone', () => {
     timing: { anchor: 'morning_of', at: '07:00' }, task: { label: 'Vzít boty' },
   };
   const items = previewRules({
-    rules: [rule], routine: appstate.get().routine,
+    // get() reads overrides from a week before the real today; this week is fixed.
+    rules: [rule], routine: { ...appstate.get().routine, overrides: appstate.readOverrides('2026-10-05') },
     from: new Date(2026, 9, 7, 4), to: new Date(2026, 9, 10, 4), now: new Date(2026, 9, 7, 4),
   });
   // Wed is cancelled (above), Fri is not.

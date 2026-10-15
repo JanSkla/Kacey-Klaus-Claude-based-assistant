@@ -19,6 +19,28 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.2 — 2026-10-15
+
+**Task tags**
+- Every new task gets a tag — what it belongs to. Kacey picks it herself in
+  `app_task_add`; anything added without her (the add form, the today panel, the
+  night run, a page offline) gets a word-match guess
+  ([public/js/core/tasktags.js](public/js/core/tasktags.js)). Existing tasks are
+  tagged once by their text when the database opens (`kacey_task.tag`, [db.js](db.js)).
+- The tags are the owner's: they start as Práce · Škola · Byt · Až bude volný čas ·
+  Rodina and can be renamed, added, reordered (by voice) and deleted at any time
+  (`settings.taskTags`, cleaned on save in [appstate.js](appstate.js); a deleted
+  tag's tasks stay, "Bez štítku").
+- Úkoly switch between **Podle termínu** and **Podle štítků**; by tag, a task is
+  dragged by its ⋮⋮ to another group (or tapped for the tag chips), on the phone too.
+- Kacey: `app_read` lists ŠTÍTKY, `app_task_update` moves a task (`tag`, "bez
+  štítku" clears it), new `app_task_tags` (add · rename · move · remove); persona
+  section "Štítky úkolů".
+- A save that fails offline stays on screen, says so, and goes out again when the
+  connection is back ([public/js/core/store.js](public/js/core/store.js)).
+- Tests: [test/tasktags.mjs](test/tasktags.mjs); `test/routine-days.mjs` no longer
+  depends on today's date.
+
 ## KC 1.0.1 — 2026-10-15
 
 **Improving the app from the chat**

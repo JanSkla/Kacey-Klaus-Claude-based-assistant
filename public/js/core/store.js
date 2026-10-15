@@ -19,6 +19,7 @@ import { tagById, tagsFrom } from './tasktags.js';
 var listeners = [];
 var pending = {};          // section -> timer
 var ops = {};              // section -> the patches since the last successful save
+var unsaved = {};          // section -> its last save failed for want of a connection
 var ready = false;
 
 /* The same shape the server defaults to, so a view rendered before the fetch
@@ -75,10 +76,29 @@ function send(section, attempt) {
   }).then(function (res) {
     if (res.status === 409 && section === 'tasks') return rebase(section, sent, attempt);
     return res.json().then(function (out) {
+      if (!res.ok) throw Object.assign(new Error((out && out.error) || 'HTTP ' + res.status), { refused: true });
       if (section === 'tasks' && out && typeof out.tasksRev === 'number') data.tasksRev = out.tasksRev;
+      if (unsaved[section]) {
+        delete unsaved[section];
+        if (!Object.keys(unsaved).length) say('Připojeno — změny jsou uložené.');
+      }
     });
   }).catch(function (err) {
     console.warn('[kacey] could not save ' + section + ': ' + err.message);
+    if (err.refused) { say('Tohle se nepovedlo uložit: ' + err.message); return; }
+    /* Offline, or the server is restarting: the change stays on screen and
+       goes out again once the browser is back online, or in a while. */
+    ops[section] = sent.concat(ops[section] || []);
+    if (!Object.keys(unsaved).length) say('Jsi offline — změny zatím nejsou uložené. Uložím je, až se připojím.');
+    unsaved[section] = true;
+    clearTimeout(pending[section]);
+    pending[section] = setTimeout(function () { send(section, attempt); }, 15000);
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', function () {
+    Object.keys(unsaved).forEach(function (section) { clearTimeout(pending[section]); send(section, 0); });
   });
 }
 
