@@ -214,7 +214,7 @@ copy of the database, no night routine, no screen, no music, no Google writes), 
 the page shows both versions side by side (`#upgrade`; a toggle on a phone). Every
 prompt from "Upravit promptem" is a new revision on the same branch. "Schválit a
 dokončit" sends the agent back to finish it for production; the host bumps the
-minor version and runs `npm test`. "Přepnout teď" merges the branch into this
+last number of the version (KC 1.0.1 → 1.0.2) and runs `npm test`. "Přepnout teď" merges the branch into this
 checkout and restarts. Nothing in the running checkout changes before that.
 
 For the one-tap switch on kaceybody, give the unit a restart policy once:

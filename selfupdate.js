@@ -123,7 +123,7 @@ export function request(spec, sessionId) {
     view: VIEWS.includes(spec.view) ? spec.view : 'main',
     questions, answers: null, note: '',
     steps: [], cur: 0, revs: [], viewRev: 0, hist: [], summary: '',
-    versionFrom: VERSION, versionTo: bumpMinor(VERSION),
+    versionFrom: VERSION, versionTo: bumpPatch(VERSION),
     createdAt: new Date().toISOString(), approvedAt: null, error: null, restart: null,
     sessionId: sessionId || null,
   };
@@ -661,9 +661,11 @@ async function commit(dir, message) {
   return git(['rev-parse', 'HEAD'], dir);
 }
 
-function bumpMinor(v) {
-  const [a, b] = String(v).split('.').map((n) => Number(n) || 0);
-  return `${a}.${b + 1}.0`;
+/* Every change to the app is one step of the last number: KC 1.0.1 → 1.0.2
+   (CHANGELOG.md). Major and minor move only by hand. */
+function bumpPatch(v) {
+  const [a, b, c] = String(v).split('.').map((n) => Number(n) || 0);
+  return `${a}.${b}.${c + 1}`;
 }
 
 function bumpVersion(dir, to) {

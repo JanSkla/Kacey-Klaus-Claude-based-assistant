@@ -5,10 +5,12 @@ lives in `package.json` and nowhere else; the server reads it from there
 (`config.js` `VERSION`), reports it in `/api/health` and the `ready` frame, and
 the header shows it.
 
-- **Major:** a change that breaks existing data or setup (a migration that cannot
-  go back, a renamed setting in `/etc/kacey.env`).
-- **Minor:** a new feature or screen.
-- **Patch:** fixes only.
+- **Every change** — a feature, a screen, a fix — bumps the last number:
+  KC 1.0.1 → 1.0.2. Improving the app from the chat does this by itself when
+  it finishes a change ([selfupdate.js](selfupdate.js)).
+- **Major / minor** move only by hand: major for a change that breaks existing
+  data or setup (a migration that cannot go back, a renamed setting in
+  `/etc/kacey.env`), minor when you decide a set of changes is a milestone.
 
 To release: bump `version` in `package.json`, add a section here, commit, then
 `git tag -a vX.Y.Z -m "KC X.Y.Z"` and `git push origin master --tags`.
@@ -17,14 +19,14 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
-## Unreleased
+## KC 1.0.1 — 2026-10-15
 
 **Improving the app from the chat**
 - Ask Kacey for a new feature and a popup confirms the brief (or asks up to three
   questions); a coding agent drafts it on a `kaceyFeature/` branch, a live preview
   runs beside the current app for comparison (side by side; a toggle on a phone),
-  prompts make new revisions, approval finishes it for production with tests and a
-  version bump, and "Přepnout teď" merges and restarts ([selfupdate.js](selfupdate.js),
+  prompts make new revisions, approval finishes it for production with tests and the
+  next KC 1.0.x, and "Přepnout teď" merges and restarts ([selfupdate.js](selfupdate.js),
   [public/js/views/upgrade.js](public/js/views/upgrade.js), Claude Design "Kacey Self-Update").
 - **Conversation history**: earlier chats are listed by day and can be resumed
   ([public/js/ui/history.js](public/js/ui/history.js), `/api/chat/sessions`).

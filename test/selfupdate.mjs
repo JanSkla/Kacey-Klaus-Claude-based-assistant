@@ -18,7 +18,7 @@ delete process.env.KACEY_RESTART_CMD;
 
 const sh = (args, cwd = repo) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd }).toString().trim();
 execFileSync('git', ['init', '-q', '-b', 'master', repo]);
-writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts: { test: 'node -e "process.exit(0)"' } }, null, 2));
+writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.1', scripts: { test: 'node -e "process.exit(0)"' } }, null, 2));
 writeFileSync(path.join(repo, 'app.js'), 'export const tasks = [];\n');
 sh(['add', '-A']);
 sh(['commit', '-qm', 'start']);
@@ -123,14 +123,14 @@ await test('a prompt makes revision 2; restoring goes back to 1', async () => {
   assert.equal(existsSync(path.join(process.env.KACEY_UPGRADE_DIR, 'ukoly-skupiny', 'step2.txt')), false);
 });
 
-await test('approve → finalizing → ready, version bumped, tests ran', async () => {
+await test('approve → finalizing → ready, the last number bumped, tests ran', async () => {
   su.approve();
   assert.equal(su.current().stage, 'finalizing');
   const j = await until('ready');
-  assert.equal(j.versionTo, '1.1.0');
+  assert.equal(j.versionTo, '1.0.2');
   assert.equal(j.restart, 'manual');
   const pkg = JSON.parse(readFileSync(path.join(process.env.KACEY_UPGRADE_DIR, 'ukoly-skupiny', 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '1.1.0');
+  assert.equal(pkg.version, '1.0.2');
 });
 
 await test('switch merges into the running checkout and clears the job', async () => {
@@ -138,10 +138,10 @@ await test('switch merges into the running checkout and clears the job', async (
   assert.equal(out.restart, 'manual');
   assert.equal(su.current(), null);
   assert.ok(existsSync(path.join(repo, 'step1.txt')));
-  assert.equal(JSON.parse(readFileSync(path.join(repo, 'package.json'), 'utf8')).version, '1.1.0');
+  assert.equal(JSON.parse(readFileSync(path.join(repo, 'package.json'), 'utf8')).version, '1.0.2');
   assert.equal(existsSync(path.join(process.env.KACEY_UPGRADE_DIR, 'ukoly-skupiny')), false);
-  assert.equal(su.snapshot().last.version, '1.1.0');
-  assert.equal(frames.at(-1).switching.version, '1.1.0');
+  assert.equal(su.snapshot().last.version, '1.0.2');
+  assert.equal(frames.at(-1).switching.version, '1.0.2');
 });
 
 await test('discarding deletes the branch, or keeps it archived', async () => {
