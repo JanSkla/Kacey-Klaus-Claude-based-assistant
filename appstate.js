@@ -28,6 +28,7 @@ import { normalizeChecklist } from './public/js/core/checklist.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 import { KIND_KEYS } from './public/js/core/routine-cats.js';
+import { DEFAULT_TAGS } from './public/js/core/tasktags.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
 export const LEGACY_STATE_PATH =
@@ -45,6 +46,8 @@ const DEFAULT_SETTINGS = {
   memory: { people: true, work: true, health: true, journal: true, dreams: false },
   calOn: {},
   tools: {},
+  // The owner's task tags, theirs to rename, add and delete (public/js/core/tasktags.js).
+  taskTags: DEFAULT_TAGS,
 };
 
 const DEFAULT_PRESETS = [
@@ -73,6 +76,7 @@ function readTasks() {
        works it out from due_at and the clock (public/js/core/due.js). */
     due_at: r.due_at || null,
     ...(r.duration_min ? { duration: r.duration_min } : {}),
+    tag: r.tag || null,
     sensitivity: r.sensitivity,
     created: r.created_at,
     /* Read-only: who made it and why (docs/DREAM.md §9). A client may send
@@ -204,8 +208,8 @@ function writeTasks(list, { baseRev } = {}) {
     const insert = h.prepare(
       `INSERT INTO kacey_task
          (task_id, label, meta, done, due_at, duration_min, sensitivity, sort_order, created_at, updated_at,
-          origin, rule_id, source_key, reason, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          origin, rule_id, source_key, reason, note, tag)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const kept = new Set();
     incoming.forEach((t, i) => {
@@ -232,6 +236,8 @@ function writeTasks(list, { baseRev } = {}) {
         gen.source_key || null,
         gen.reason || null,
         gen.note || null,
+        // Unlike the generation columns, the tag is the owner's to change.
+        t.tag ? String(t.tag) : null,
       );
     });
 

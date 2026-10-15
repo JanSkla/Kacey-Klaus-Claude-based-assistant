@@ -17,6 +17,7 @@ import { KLAUS_DB } from './config.js';
 import { open, transact, kvGet, kvSet, now } from './db.js';
 import * as appstate from './appstate.js';
 import { RuleSchema, explainIssues, previewRules, normalizeText } from './rules.js';
+import { guessTag, tagsFrom } from './public/js/core/tasktags.js';
 
 const newId = (prefix) => prefix + randomBytes(6).toString('hex');
 
@@ -351,12 +352,14 @@ export function insertGeneratedTask(h, t) {
   const stamp = now();
   h.prepare(`INSERT INTO kacey_task
       (task_id, label, meta, done, due_at, duration_min, sensitivity, sort_order, created_at, updated_at,
-       origin, rule_id, source_key, reason, note)
-     VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+       origin, rule_id, source_key, reason, note, tag)
+     VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     t.task_id, t.label, t.meta || '', t.due_at || null,
     t.due_at && t.due_at.length > 10 && t.duration_min ? t.duration_min : null,
     t.sensitivity === 'local_only' ? 'local_only' : 'cloud_safe', nextSortOrder(h), stamp, stamp,
     t.origin, t.rule_id || null, t.source_key || null, t.reason || null, t.note || null,
+    // A generated task is tagged like any other: by its text.
+    guessTag(t.label + ' ' + (t.reason || ''), tagsFrom(kvGet('settings', {}))),
   );
   if (t.checklist && t.checklist.length) {
     const all = kvGet('checklists', {}) || {};

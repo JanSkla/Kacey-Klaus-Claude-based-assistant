@@ -14,6 +14,7 @@
    ========================================================================= */
 
 import { say } from '../ui/toast.js';
+import { tagById, tagsFrom } from './tasktags.js';
 
 var listeners = [];
 var pending = {};          // section -> timer
@@ -167,7 +168,8 @@ export async function applyRemoteChange(section, undo, quiet) {
     var added = (data.tasks || []).filter(function (t) { return before.indexOf(t.id) === -1; });
     if (added.length === 1) {
       var t = added[0];
-      say('Úkol přidán · ' + t.label, act, taskOpener ? function () { taskOpener(t.id); } : null);
+      var tag = tagById(tagsFrom(data.settings), t.tag);
+      say('Úkol přidán · ' + t.label + ' · ' + (tag ? tag.name : 'bez štítku'), act, taskOpener ? function () { taskOpener(t.id); } : null);
       return;
     }
   }

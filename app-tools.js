@@ -26,6 +26,7 @@ import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
 import { CATEGORY_KEYS, KINDS } from './public/js/core/routine-cats.js';
 import { MAX_ITEMS, newKey } from './public/js/core/checklist.js';
+import { guessTag, tagById, tagByName, tagsFrom } from './public/js/core/tasktags.js';
 import { logicalDateOf } from './rules.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
@@ -44,12 +45,17 @@ const BUCKET_WORDS = {
 };
 
 /** One line of the task list as Kacey reads it. */
-function describeTask(t) {
+function describeTask(t, tags = tagsFrom(appstate.get().settings)) {
   const when = t.due_at
     ? `${t.due_at} (${dueLabel(t.due_at)}${t.duration ? `, ${t.duration} min` : ''}) — ${BUCKET_WORDS[bucketOf(t)]}`
     : BUCKET_WORDS.none;
-  return `- [${t.done ? 'x' : ' '}] (${t.id}) ${t.label} — ${when}${t.meta ? ` · ${t.meta}` : ''}`;
+  const tag = tagById(tags, t.tag);
+  return `- [${t.done ? 'x' : ' '}] (${t.id}) [${tag ? tag.name : 'bez štítku'}] ${t.label} — ${when}${t.meta ? ` · ${t.meta}` : ''}`;
 }
+
+const TAG_HELP =
+  'Štítek = k čemu úkol patří: jméno jednoho z vlastníkových štítků (vypíše je app_read, řádek ŠTÍTKY). ' +
+  'Vyber ho sama podle obsahu úkolu; nový štítek nezakládej.';
 
 const DUE_HELP =
   'Termín, místní čas: "YYYY-MM-DD" = někdy ten den, "YYYY-MM-DDTHH:MM" = v ten čas ' +
@@ -149,8 +155,10 @@ const appRead = tool(
       parts.push('ROUTINE DAYS (konkrétní dny; posledních 7 jen upravené, dalších 14 všechny):\n' + days);
     }
     if (section === 'all' || section === 'tasks') {
+      const tags = tagsFrom(doc.settings);
+      parts.push('ŠTÍTKY: ' + tags.map((g) => g.name).join(' · '));
       parts.push('TASKS:\n' + (doc.tasks.length
-        ? doc.tasks.map(describeTask).join('\n')
+        ? doc.tasks.map((t) => describeTask(t, tags)).join('\n')
         : '(žádné)'));
     }
     if (section === 'all' || section === 'journal') {
@@ -388,9 +396,10 @@ const taskAdd = tool(
     due: z.string().optional().describe(DUE_HELP + ' Vynech = bez termínu.'),
     duration: z.number().int().min(5).max(1440).optional()
       .describe('Jen pro úkol s časem: kolik minut zabere (výchozí 30). Tak dlouhý blok bude v kalendáři.'),
-    meta: z.string().optional().describe('Doplněk: kontext, štítek. Termín sem nepiš.'),
+    tag: z.string().describe(TAG_HELP),
+    meta: z.string().optional().describe('Doplněk: kontext. Termín ani štítek sem nepiš.'),
   },
-  async ({ label, due, duration, meta }) => {
+  async ({ label, due, duration, tag, meta }) => {
     const text = String(label || '').trim();
     if (!text) return fail('Prázdný úkol.');
 
@@ -398,6 +407,9 @@ const taskAdd = tool(
     try { dueAt = normalizeDue(due); } catch (err) { return fail(err.message + ' Nic se nepřidalo.'); }
 
     const doc = appstate.get();
+    const tags = tagsFrom(doc.settings);
+    // A tag that is not one of the owner's: the text decides, as for a typed task.
+    const picked = (tag && tagByName(tags, tag)) || tagById(tags, guessTag(text, tags));
     const before = doc.tasks.slice();
     const task = {
       id: 't' + Date.now(),
@@ -405,6 +417,7 @@ const taskAdd = tool(
       meta: meta || 'přidala Kacey',
       done: false,
       due_at: dueAt,
+      tag: picked ? picked.id : null,
       ...(duration && parseDue(dueAt)?.time ? { duration } : {}),
     };
     appstate.setSection('tasks', doc.tasks.concat([task]));
@@ -415,7 +428,7 @@ const taskAdd = tool(
 
 const taskUpdate = tool(
   'app_task_update',
-  'Změň úkol — odškrtni ho, přejmenuj, změň nebo zruš termín, nebo smaž. ' +
+  'Změň úkol — odškrtni ho, přejmenuj, změň nebo zruš termín, přesuň pod jiný štítek, nebo smaž. ' +
     'Id zjistíš z app_read.',
   {
     id: z.string().describe('Id úkolu z app_read.'),
@@ -423,12 +436,19 @@ const taskUpdate = tool(
     label: z.string().optional().describe('Nový text úkolu.'),
     due: z.string().nullable().optional().describe(DUE_HELP + ' null = termín zrušit.'),
     duration: z.number().int().min(5).max(1440).optional().describe('Nová délka v minutách (jen úkol s časem).'),
+    tag: z.string().optional().describe('Přesuň úkol pod jiný štítek. ' + TAG_HELP),
     remove: z.boolean().optional().describe('true = úkol smaž.'),
   },
-  async ({ id, done, label, due, duration, remove }) => {
+  async ({ id, done, label, due, duration, tag, remove }) => {
     const doc = appstate.get();
     const task = doc.tasks.find((t) => t.id === id);
     if (!task) return fail(`Úkol "${id}" neexistuje. Vypiš si je přes app_read.`);
+
+    const tags = tagsFrom(doc.settings);
+    const moved = tag === undefined ? null : tagByName(tags, tag);
+    if (tag !== undefined && !moved) {
+      return fail(`Štítek "${tag}" neexistuje. Štítky: ${tags.map((g) => g.name).join(', ')}. Nic se nezměnilo.`);
+    }
 
     const before = doc.tasks.slice();
 
@@ -449,6 +469,7 @@ const taskUpdate = tool(
       ...(label ? { label } : {}),
       due_at: dueAt,
       ...(duration ? { duration } : {}),
+      ...(moved ? { tag: moved.id } : {}),
     } : t));
     appstate.setSection('tasks', next);
     onWrite('tasks', before);
