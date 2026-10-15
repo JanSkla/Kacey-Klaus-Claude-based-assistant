@@ -196,7 +196,7 @@ All environment variables, all with working defaults — see `.env.example`.
 | `KACEY_RUNTIME_DIR`       | `/run/user/<Kacey's uid>`              | Where that socket lives                   |
 | `KACEY_SELFUPDATE`        | *(on)*                                 | `off` removes improving the app from the chat ([selfupdate.js](selfupdate.js)) |
 | `KACEY_UPGRADE_DIR`       | `../kacey-upgrades`                    | Where `kaceyFeature/*` branches are checked out (git worktrees) while worked on |
-| `KACEY_PREVIEW_PORT`      | `PORT + 10` (8092)                     | The branch's live preview in the comparison |
+| `KACEY_PREVIEW_PORT`      | `PORT + 10` (8092)                     | The branch's live preview; the page reaches it through Kacey at `/preview/` |
 | `KACEY_UPGRADE_MODEL`     | = `KACEY_MODEL`                        | The coding agent that writes the feature  |
 | `KACEY_UPGRADE_EFFORT`    | `high`                                 | Its effort                                |
 | `KACEY_RESTART_CMD`       | *(empty)*                              | How "Přepnout teď" restarts Kacey. Empty: exit and let systemd start the new code when the unit has `Restart=always`/`on-failure`, else say to restart by hand |
@@ -219,9 +219,9 @@ checkout and restarts. Nothing in the running checkout changes before that.
 
 For the one-tap switch on kaceybody, give the unit a restart policy once:
 `sudo systemctl edit kacey` → `[Service]` / `Restart=on-failure`. The comparison's
-right pane loads `http://<host>:8092`, so behind an https front (tailscale serve) the
-browser blocks it as mixed content — open Kacey over plain http on the tailnet, or
-serve the preview port too.
+right pane loads the preview through Kacey herself at `/preview/` (selfupdate.js
+`previewHttp`, plus `/preview/ws`), so it works behind an https front (tailscale serve)
+and on a phone; the preview's port is only ever reached on loopback.
 
 `klaus_memory` is pure standard library (sqlite3/json/urllib) — there is nothing to
 `pip install`.
@@ -352,6 +352,7 @@ HTTP:
 - `POST /api/notifications/read { ids? | package, conversation? | all: true }` · `POST /api/notifications/summary { scope: all|dm, force? }` → a model-written summary of what is unread, cached until that changes; sensitive rows never reach the model
 - `GET /api/upgrade` → the same as the `upgrade` frame · `POST /api/upgrade/start { answers, note }` · `/cancel` · `/refine { text }` ·
   `/restore` · `/rev { n }` · `/approve` · `/discard { keep }` · `/switch` → improving the app ([selfupdate.js](selfupdate.js)); a step that does not fit the stage answers **409**
+- `GET /preview/…` (and the socket `/preview/ws`) → the branch's preview, passed through to `KACEY_PREVIEW_PORT`; its HTML gets a `<base href="/preview/">` and a shim that keeps its `/api` and `/ws` calls under `/preview/`
 - `GET /api/chat/sessions` → earlier conversations (title, count, `upgrade`) · `GET /api/chat/sessions/:id` → its transcript, user and Kacey text only
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)

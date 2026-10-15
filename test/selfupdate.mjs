@@ -13,6 +13,7 @@ process.env.KLAUS_DB = path.join(dir, 'test.db');
 process.env.KACEY_STATE_PATH = path.join(dir, 'no-such-file.json');
 process.env.KACEY_UPGRADE_REPO = repo;
 process.env.KACEY_UPGRADE_DIR = path.join(dir, 'upgrades');
+process.env.KACEY_PREVIEW_PORT = '18093';  // a stand-in preview listens here
 delete process.env.INVOCATION_ID;           // never "exit so systemd restarts" here
 delete process.env.KACEY_RESTART_CMD;
 
@@ -29,7 +30,10 @@ su.initSelfUpdate({ broadcast: (f) => frames.push(f), shutdown: () => { throw ne
 
 let passed = 0;
 async function test(name, fn) {
-  try { await fn(); passed++; } catch (err) { process.exitCode = 1; console.error(`FAIL ${name}\n  ${err.stack || err.message}`); }
+  try { await fn(); passed++; } catch (err) {
+    process.exitCode = 1;
+    console.error(`FAIL ${name}\n  ${err.stack || err.message}${err.cause ? `\n  cause: ${err.cause.message || err.cause}` : ''}`);
+  }
 }
 
 async function until(stage, ms = 20000) {
@@ -169,6 +173,39 @@ await test('an agent that changes nothing fails the draft, and the job says why'
   assert.equal(su.current().stage, 'failed');
   assert.match(su.current().error, /nic nezměnil/);
   await su.discard({});
+});
+
+await test('the preview is served under /preview/ with the shim, and its API passes through', async () => {
+  const http = await import('node:http');
+  const express = (await import('express')).default;
+  const stand = http.createServer((req, res) => {
+    if (req.url.split('?')[0] === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', etag: 'x' }); res.end('<!doctype html><html><head><title>K</title></head><body>new</body></html>'); }
+    else { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ path: req.url })); }
+  });
+  await new Promise((r) => stand.listen(18093, '127.0.0.1', r));
+  const app = express();
+  app.use('/preview', su.previewHttp);
+  const main = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  const base = `http://127.0.0.1:${main.address().port}`;
+  try {
+    const page = await fetch(`${base}/preview/?embed=1`);
+    const html = await page.text();
+    assert.match(html, /<head><base href="\/preview\/"><script>/);
+    assert.match(html, /<body>new<\/body>/);
+    assert.equal(page.headers.get('etag'), null);
+    const api = await fetch(`${base}/preview/api/health?x=1`).then((r) => r.json());
+    assert.equal(api.path, '/api/health?x=1');
+  } finally {
+    stand.close();
+    main.close();
+  }
+  // Nothing listening: a page that says so, not a hang.
+  const app2 = express();
+  app2.use('/preview', su.previewHttp);
+  const main2 = await new Promise((r) => { const s = app2.listen(0, '127.0.0.1', () => r(s)); });
+  const down = await fetch(`http://127.0.0.1:${main2.address().port}/preview/`);
+  assert.equal(down.status, 503);
+  main2.close();
 });
 
 su.stopSelfUpdate();

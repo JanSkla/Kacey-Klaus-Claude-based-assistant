@@ -607,7 +607,9 @@ Three boundaries keep the running app safe until the owner switches: the coding
 agent's file tools are confined to the worktree by `canUseTool` and its shell to
 checks and tests; the preview is a separate process with `KACEY_PREVIEW=1` (a
 database copy, no night routine, no screen, lights, music or Google writes); and
-the only write to this checkout is the merge in `switchNow()`. A restart mid-step
+the only write to this checkout is the merge in `switchNow()`. The page reaches the
+preview through Kacey at `/preview/` (`previewHttp` / `previewUpgrade`), never on its
+port, so it works over https and from a phone. A restart mid-step
 loses the step, never the branch (`initSelfUpdate` falls back to `review`).
 
 ## Invariants

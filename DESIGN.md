@@ -425,7 +425,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 
 | Route (`#hash`) | Template | Markup | Logic | Components |
 |---|---|---|---|---|
-| `upgrade` | full (flex column) | [index.html](public/index.html) `data-view="upgrade"` | [views/upgrade.js](public/js/views/upgrade.js); data: `upgrade` frames, `/api/upgrade/*`; the new pane is the branch's preview on `KACEY_PREVIEW_PORT` ([selfupdate.js](selfupdate.js)) | upbar, uprevs, upsplit/uppane (two scaled live iframes, `?embed=1`), upbusy, uprefine/uprestore; phone: upwhich toggle, upacts. Reached from the chip, the toast or the chat notice; only while a draft exists |
+| `upgrade` | full (flex column) | [index.html](public/index.html) `data-view="upgrade"` | [views/upgrade.js](public/js/views/upgrade.js); data: `upgrade` frames, `/api/upgrade/*`; the new pane is the branch's preview, proxied at `/preview/` from `KACEY_PREVIEW_PORT` ([selfupdate.js](selfupdate.js) `previewHttp`) | upbar, uprevs, upsplit/uppane (two scaled live iframes, `?embed=1`), upbusy, uprefine/uprestore; phone: upwhich toggle, upacts. Reached from the chip, the toast or the chat notice; only while a draft exists |
 | Popup: improving the app | global | [index.html](public/index.html) `#upModal` | [views/upgrade.js](public/js/views/upgrade.js) | updlg: confirm (1a), questions (1b), cancel, discard |
 | Header: self-update chip | global | [index.html](public/index.html) `#upChipWrap` in `.top__end` | [views/upgrade.js](public/js/views/upgrade.js) | upchip, updrop, upsteps; with `.upcard` + `.msg--notice` in the chat, `.uptoast`, `.upswitch` |
 | `main` | home | [index.html](public/index.html) `data-view="main"` | [views/main.js](public/js/views/main.js), [ui/history.js](public/js/ui/history.js) (Historie konverzací), [ui/log.js](public/js/ui/log.js), [ui/attachments.js](public/js/ui/attachments.js), [ui/share.js](public/js/ui/share.js) (a shared screenshot lands here: attached, composer focused) | nextcard (desktop strip), card + daytl (Dnes, desktop) / rowbtn agenda (phone), task, msg, composer, attach, btn--talk, status strips |
@@ -532,7 +532,7 @@ At ≤1100px `--triple` drops the left stack. At ≤760px every view becomes one
 - The prototype draws chat bubbles without the accent edge and drops "turns" from the header stats; the app keeps both as they were.
 - `.updlg__btn` is a sixth button style (full-bleed 52px dialog footer); `.upwhich` a third segmented control beside `.seg` and `.vw__mode`; `.histpanel__tag` and `.upchip` another pill.
 - `.msg--notice` lines live only in the open page: they are not in Kacey's conversation and are gone after a reload (the chip, the toast and the comparison come back from the server's job).
-- The comparison's new pane is `http://<host>:KACEY_PREVIEW_PORT`; behind an https front it is blocked as mixed content.
+- The comparison's new pane is the preview proxied at `/preview/` on Kacey's own origin, so it shares her localStorage (hue, preferences) with the page around it; a branch that changes those keys changes them for the running app too.
 
 **Phone**
 - The phone design's brief player has an icon-only ↺ restart and puts the clock under the bar; the app keeps "Od začátku" and wraps the row.

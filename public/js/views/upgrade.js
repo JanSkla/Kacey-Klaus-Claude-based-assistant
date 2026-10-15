@@ -525,8 +525,10 @@ function openCompare(ev) {
   go('upgrade');
 }
 
+/* Through Kacey's own origin (selfupdate.js previewHttp), so it works behind
+   https and on a phone that cannot reach the preview's port. */
 function previewURL() {
-  return location.protocol + '//' + location.hostname + ':' + job.preview.port + '/?embed=1#' + job.view;
+  return '/preview/?embed=1#' + job.view;
 }
 
 var frameKey = { old: '', neu: '' };

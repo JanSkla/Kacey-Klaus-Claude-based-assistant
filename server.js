@@ -1539,6 +1539,9 @@ app.post('/api/tts', express.json({ limit: '64kb' }), async (req, res) => {
    the share opens Kacey instead of a 404 — the image itself is lost then. */
 app.post('/share-target', (_req, res) => res.redirect(303, '/#main'));
 
+/* The branch's preview, framed in the comparison on this origin (selfupdate.js). */
+if (SELFUPDATE) app.use('/preview', selfupdate.previewHttp);
+
 app.use(express.static(PUBLIC_DIR));
 app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
@@ -1597,6 +1600,7 @@ const wss = new WebSocketServer({ noServer: true });
 function onUpgrade(req, socket, head) {
   let pathname = '';
   try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { /* malformed */ }
+  if (SELFUPDATE && pathname.startsWith('/preview/')) { selfupdate.previewUpgrade(req, socket, head); return; }
   if (pathname !== '/ws') { socket.destroy(); return; }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 }
