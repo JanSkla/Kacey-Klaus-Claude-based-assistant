@@ -47,6 +47,7 @@ import { effectiveDay, isActive, activeBlocks } from '../core/routine-day.js';
 import { openSheet, closeSheet, sheetOpen, isPhone } from './psheet.js';
 import { tasks, toggleTask, whenText } from '../views/tasks.js';
 import { bucketOf, parseDue } from '../core/due.js';
+import * as bus from '../core/bus.js';
 
 var DOW_SHORT = ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'];
 var DOW_LONG = ['pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota', 'neděle'];
@@ -70,6 +71,8 @@ var fetching = {};         // months on their way
 var loading = false;
 var pendingDelete = null;  // event_id awaiting its second tap
 var dragAnchor = null;     // the day a drag across the month grid started on
+var fetchedAt = 0;         // when the server last answered, for a page coming back
+var STALE_MS = 10 * 60000; // back after longer than this: fetch again, Kacey may have written
 
 /* A range can run past the end of the month on screen — a week from the 29th
    is mostly next month — so the lane reads days from whichever fetched month
@@ -413,6 +416,7 @@ async function fetchMonth(m) {
   var body = await res.json();
   if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
   payloads[body.month] = body;
+  fetchedAt = Date.now();
   return body;
 }
 
@@ -1678,4 +1682,23 @@ export function initCalendar(opts) {
   refreshCalendar();
   // The "now" line and the "x min left" labels go stale on their own.
   setInterval(function () { if (payload) { renderLane(); renderTodayAgenda(); } }, 60000);
+
+  /* `today` arrives with the month, so a page open across 04:00 would keep
+     the old one (core/clock.js). Move it at once — offline too — then fetch:
+     the new day may be in the next month, and the night run wrote to it. A
+     range that sat on today follows it; one moved elsewhere by hand stays. */
+  bus.on('day', function (d) {
+    Object.keys(payloads).forEach(function (m) { payloads[m].today = d.to; });
+    if (selected === d.from) {
+      selected = d.to;
+      if (month === d.from.slice(0, 7)) month = d.to.slice(0, 7);
+    }
+    refreshCalendar();
+  });
+  // Back from the background on the same day: the now line, and the data if it is old.
+  bus.on('clock', function (c) {
+    if (c.day || !payload) return;
+    if (Date.now() - fetchedAt > STALE_MS) refreshCalendar();
+    else { renderLane(); renderTodayAgenda(); }
+  });
 }

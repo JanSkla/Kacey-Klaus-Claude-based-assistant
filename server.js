@@ -61,6 +61,15 @@ function logicalNow(now = new Date()) {
   return { today, time };
 }
 
+const WEEKDAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
+
+/** "Teď je čtvrtek 2026-10-15, 09:12." — the logical day, for every user turn. */
+function turnClock(now = new Date()) {
+  const { today, time } = logicalNow(now);
+  const [y, m, d] = today.split('-').map(Number);
+  return `Teď je ${WEEKDAYS[new Date(y, m - 1, d, 12).getDay()]} ${today}, ${time} (platí místo data v úvodu).`;
+}
+
 function renderPersona(template, now = new Date()) {
   const { today, time } = logicalNow(now);
   const filled = template
@@ -185,9 +194,9 @@ class KaceySession {
     this.embed = embed;
     this.resume = resume;
     this.started = false;
-    // Rendered per connection so {{TODAY}}/{{NOW}} are current. A session that
-    // stays open across the 04:00 rollover keeps its original date — reload the
-    // page to get a fresh one.
+    // Rendered per connection, so {{TODAY}}/{{NOW}} are when it opened. A
+    // session open across 04:00 keeps that date here; every turn carries the
+    // current one (turnClock below), which is the one she goes by.
     this.persona = renderPersona(persona);
     this.sessionId = null;
 
@@ -232,8 +241,10 @@ class KaceySession {
     // refers to itself in masculine. Restating them on the turn itself puts
     // them in the most recent context, where they actually hold.
     // Kept short so it cannot crowd out what the user actually said.
+    // The date rides along too: the persona's {{TODAY}} is from when the
+    // session opened, and a phone keeps one open for days.
     const nudge =
-      '\n\n[systémová poznámka: veškerý text česky — včetně úvodní věty před ' +
+      '\n\n[systémová poznámka: ' + turnClock() + ' Veškerý text česky — včetně úvodní věty před ' +
       'použitím nástroje. O sobě mluv v ženském rodě (ráda, podívala jsem se). ' +
       'Anglicky jen tehdy, když uživatel píše anglicky.]';
 

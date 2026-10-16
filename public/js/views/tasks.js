@@ -931,13 +931,17 @@ export function initTasks() {
 
   /* Groups move with the clock: at 15:01 the 15:00 task is late, and at 04:00
      today's list becomes yesterday's. Redraw only when a task actually changed
-     group, so an open date editor is not wiped every minute. */
-  setInterval(function () {
+     group, so an open date editor is not wiped every minute. A page coming
+     back from the background checks at once (core/clock.js): its timers
+     were asleep. */
+  function regroup() {
     var now = tasks().map(function (t) { return bucketOf(t) + dueLabel(t.due_at); }).join('|');
     if (now === lastBuckets) return;
     lastBuckets = now;
     renderToday(); renderTasks();
-  }, 60000);
+  }
+  setInterval(regroup, 60000);
+  bus.on('clock', regroup);
 }
 
 /** Mark done regardless of current value — used when a flow completes. */

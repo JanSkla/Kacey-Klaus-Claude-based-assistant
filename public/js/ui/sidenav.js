@@ -16,6 +16,7 @@ import { $ } from '../core/dom.js';
 import * as store from '../core/store.js';
 import { bucketOf } from '../core/due.js';
 import { onEnter } from './router.js';
+import * as bus from '../core/bus.js';
 
 var LIGHTS_POLL_MS = 30000;
 
@@ -63,6 +64,7 @@ export function initSidenav() {
   // A task ticked off changes the count; the lights source switched off hides the chip.
   store.onChange(function () { paintBadges(); if (!lightsEnabled()) paintLights(null); });
   setInterval(paintBadges, 60000);
+  bus.on('clock', paintBadges);      // back from the background: the timer above slept
 
   loadLights();
   setInterval(function () { if (!document.hidden) loadLights(); }, LIGHTS_POLL_MS);

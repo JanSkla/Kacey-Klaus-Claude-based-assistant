@@ -179,7 +179,7 @@
   <div class="col col--stack">
     <section class="card">
       <div class="card__head">
-        <h2 class="card__title card__title--meta">Dnes <span class="card__meta desk-only" id="todayMeta"></span></h2>
+        <h2 class="card__title card__title--meta">Dnes<span id="todayDate"></span> <span class="card__meta desk-only" id="todayMeta"></span></h2>
         <button type="button" class="link" data-go="calendar">Kalendář</button>
       </div>
       <div class="card__body card__body--scroll phone-only" id="todayAgenda"></div>
@@ -256,7 +256,7 @@
       <p class="muted" id="stateSub">—</p>
       <button type="button" class="nextcard__toggle" id="todayToggle" aria-expanded="false">
         <span class="nextcard__text">
-          <span class="rule muted-3">Další na řadě</span>
+          <span class="rule muted-3">Další na řadě<span class="phone-only" id="nextDate"></span></span>
           <span class="strong" id="nextTitle">—</span>
           <span class="muted" id="nextMeta">—</span>
         </span>

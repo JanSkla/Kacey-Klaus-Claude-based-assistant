@@ -215,3 +215,11 @@ export async function load() {
   ready = true;
   emit();
 }
+
+/** load() again, unless this page has edits still on their way out — those
+    would be overwritten. For a new day: the night run has written since boot. */
+export function reloadIfIdle() {
+  var busy = Object.keys(unsaved).length ||
+    Object.keys(ops).some(function (section) { return ops[section].length; });
+  return busy ? Promise.resolve() : load();
+}

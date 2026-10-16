@@ -23,6 +23,7 @@ import * as store from '../core/store.js';
 import { say } from '../ui/toast.js';
 import { isPhone } from '../ui/psheet.js';
 import { CATS, KINDS, KIND_KEYS } from '../core/routine-cats.js';
+import * as bus from '../core/bus.js';
 
 /* The categories live in core/ so the server (Kacey's tools, the rules)
    reads the same list; re-exported here for the calendar, which has always
@@ -612,4 +613,10 @@ export function initRoutine() {
   });
 
   store.onChange(render);
+  // A phone left on today's column follows today into the next one (core/clock.js).
+  bus.on('day', function (d) {
+    if (phoneDay !== dayIndexOfDate(d.from)) return;
+    phoneDay = dayIndexOfDate(d.to);
+    render();
+  });
 }

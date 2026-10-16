@@ -110,6 +110,7 @@ import { initRules } from './js/views/rules.js';
 import { initSidenav } from './js/ui/sidenav.js';
 import { initUpgrade } from './js/views/upgrade.js';
 import { initHistory } from './js/ui/history.js';
+import { initClock } from './js/core/clock.js';
 
 /* =======================================================================
    1. THE ORB'S FOLLOWERS
@@ -186,6 +187,7 @@ initMiniPlayer();
 initSheets();
 initUpgrade();
 initHistory();
+initClock();          // after every view: they listen for 'day' and 'clock' on the bus
 initRouter();
 initShare();          // after the router: a share lands in the chat view
 

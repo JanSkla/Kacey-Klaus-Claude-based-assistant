@@ -100,6 +100,14 @@ abstract class WebHostActivity : Activity() {
         super.onDestroy()
     }
 
+    /* Back in front (the app reopened, the bubble expanded, the phone woke):
+       a WebView does not always tell its page it was hidden, so say so — the
+       page checks the date then (public/js/core/clock.js). */
+    override fun onResume() {
+        super.onResume()
+        web.evaluateJavascript("window.dispatchEvent(new Event('kacey-resume'))", null)
+    }
+
     /** Tell an open page a share is waiting; a page still loading takes it on start. */
     protected fun offerShare() {
         web.evaluateJavascript("window.dispatchEvent(new Event('kacey-share'))", null)

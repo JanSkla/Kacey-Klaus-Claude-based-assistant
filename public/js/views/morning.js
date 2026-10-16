@@ -28,6 +28,7 @@ import { isPhone } from '../ui/psheet.js';
 import { renderRows, addRow } from '../ui/checkedit.js';
 import { newKey, MAX_ITEMS } from '../core/checklist.js';
 import { feedTTS, flushTTS, primeTTS } from '../voice/tts.js';
+import * as bus from '../core/bus.js';
 
 var player = makeLinePlayer(function (what) {
   render();
@@ -402,4 +403,6 @@ export function initMorning() {
     render();
   });
   store.onChange(function () { render(); });
+  // Back from the background (core/clock.js): the 15 s clock above slept too.
+  bus.on('clock', function () { if (currentView() === 'morning') { renderClock(); renderToday(); } });
 }
