@@ -196,7 +196,10 @@ export async function applyRemoteChange(section, undo, quiet) {
   say(label + ' — změnila Kacey.', act);
 }
 
+/** Fetch the document. Resolves true when the server answered, false when
+    the page went on with what it had (offline, server down). */
 export async function load() {
+  var fresh = false;
   try {
     var res = await fetch('/api/app');
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -209,17 +212,20 @@ export async function load() {
         ? Object.assign({}, data[key], doc[key])
         : doc[key];
     }
+    fresh = true;
   } catch (err) {
     console.warn('[kacey] app state unavailable, running on defaults: ' + err.message);
   }
   ready = true;
   emit();
+  return fresh;
 }
 
 /** load() again, unless this page has edits still on their way out — those
-    would be overwritten. For a new day: the night run has written since boot. */
+    would be overwritten. For a new day: the night run has written since boot.
+    Resolves like load(), or null when it did not try for those edits. */
 export function reloadIfIdle() {
   var busy = Object.keys(unsaved).length ||
     Object.keys(ops).some(function (section) { return ops[section].length; });
-  return busy ? Promise.resolve() : load();
+  return busy ? Promise.resolve(null) : load();
 }

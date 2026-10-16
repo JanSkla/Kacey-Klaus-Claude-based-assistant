@@ -24,6 +24,8 @@ import { say } from '../ui/toast.js';
 import { isPhone } from '../ui/psheet.js';
 import { CATS, KINDS, KIND_KEYS } from '../core/routine-cats.js';
 import * as bus from '../core/bus.js';
+import { today } from '../core/clock.js';
+import { dowOf } from '../core/due.js';
 
 /* The categories live in core/ so the server (Kacey's tools, the rules)
    reads the same list; re-exported here for the calendar, which has always
@@ -43,7 +45,7 @@ var sheet = null;
    is painted, so "undo" cannot mean "don't save" — it means "put back what
    was there when I opened this", for as long as the planner stays open. */
 var snapshot = null;
-var phoneDay = (new Date().getDay() + 6) % 7;   // the one day a phone paints at a time
+var phoneDay = dowOf(today());   // the one day a phone paints at a time
 
 /** Monday-first weekday index of a 'YYYY-MM-DD'. Exported for the calendar. */
 export function dayIndexOfDate(date) {
@@ -227,7 +229,7 @@ function renderGrid() {
   var gStart = Math.max(0, Math.floor((wake - 60) / 60) * 60);
   var gEnd = Math.min(1440, Math.ceil((sleep + 60) / 60) * 60);
   var slots = (gEnd - gStart) / 15;
-  var todayIdx = dayIndexOfDate(new Date().toISOString().slice(0, 10));
+  var todayIdx = dowOf(today());   // the logical day: at 01:30 it is still yesterday's row
 
   var heads = el('div.grid__heads', { style: 'grid-template-columns:repeat(' + slots + ',1fr)' },
     Array.from({ length: Math.ceil(slots / 4) }, function (_, i) {
@@ -613,10 +615,10 @@ export function initRoutine() {
   });
 
   store.onChange(render);
-  // A phone left on today's column follows today into the next one (core/clock.js).
+  /* A new day (core/clock.js) moves the grid's "today" mark; a phone left on
+     today's column follows it into the next one, one moved by hand stays. */
   bus.on('day', function (d) {
-    if (phoneDay !== dayIndexOfDate(d.from)) return;
-    phoneDay = dayIndexOfDate(d.to);
+    if (phoneDay === dowOf(d.from)) phoneDay = dowOf(d.to);
     render();
   });
 }

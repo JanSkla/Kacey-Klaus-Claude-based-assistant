@@ -138,7 +138,8 @@ Grouped by **what a module talks to**, not by what it is called.
 | `state.js`  | The shared state bag, the `kacey.*` storage keys, `?mock=1`  |
 | `i18n.js`   | Every user-visible string, in both languages                 |
 | `dom.js`    | The elements of the main chrome, resolved once               |
-| `bus.js`    | Four lines of pub/sub, for the orb's followers and nothing else |
+| `bus.js`    | Four lines of pub/sub, for the orb's followers — and the clock's `day` / `clock` |
+| `clock.js`  | Which logical day it is, kept current: a 30 s tick, plus a check whenever the page comes back (visible, focus, online, woke from sleep, the Android app's `kacey-resume`) |
 
 `state.js` does **not** read localStorage. Restoring preferences is boot's job,
 because it has to happen once, in a known order.

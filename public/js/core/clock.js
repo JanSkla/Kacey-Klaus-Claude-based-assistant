@@ -32,9 +32,9 @@ var lastTick = 0;
 /** The logical date the page currently shows. */
 export function today() { return current || logicalToday(); }
 
-/** Look at the clock now. Returns true when the day had moved. */
-export function checkDay(reason) {
-  var now = logicalToday();
+/** Look at the clock now (`at`: a Date, for the tests). Returns true when the day had moved. */
+export function checkDay(reason, at) {
+  var now = logicalToday(at);
   if (now === current) return false;
   var from = current;
   current = now;

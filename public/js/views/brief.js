@@ -26,7 +26,7 @@ import { say } from '../ui/toast.js';
 import { taskSummary } from './tasks.js';
 import { todaySummary } from '../ui/calendar.js';
 import { makeLinePlayer, clockText } from './lineplayer.js';
-import { logicalToday, vTime } from '../core/due.js';
+import { dayWords, logicalToday, vTime } from '../core/due.js';
 import {
   night, onNight, loadCycle, loadMorning, runNightNow, startMorningNow, shiftSunrise
 } from '../net/nightapi.js';
@@ -328,8 +328,7 @@ function render() {
   $('briefProgress').style.width = Math.round(done / total * 100) + '%';
   $('briefClock').textContent = clockText(done) + ' / ' + clockText(total);
   $('briefClockHead').textContent = clockText(total);
-  $('briefTitle').textContent = 'Denní brief · ' + new Date().toLocaleDateString('cs-CZ',
-    { weekday: 'long', day: 'numeric', month: 'long' });
+  $('briefTitle').textContent = 'Denní brief · ' + dayWords(logicalToday());
 }
 
 /* ---- wiring --------------------------------------------------------------------- */

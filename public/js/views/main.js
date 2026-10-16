@@ -19,25 +19,32 @@ import { go } from '../ui/router.js';
 import { taskSummary } from './tasks.js';
 import * as store from '../core/store.js';
 import { today } from '../core/clock.js';
+import { dayWords } from '../core/due.js';
 import { say } from '../ui/toast.js';
-
-var DOW = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
-var DOW_LONG = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
-var MONTHS = ['ledna', 'února', 'března', 'dubna', 'května', 'června',
-              'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
-
-function dateOf(iso) {
-  var p = iso.split('-').map(Number);
-  return new Date(p[0], p[1] - 1, p[2], 12);
-}
 
 /* Which day the page believes it is, said out loud on the Dnes card
    ("Dnes · čt 15. října") and, on a phone, over "next up" — so a stale day
    shows as one, instead of as an oddly empty agenda. */
 function paintDate() {
-  var d = dateOf(today());
-  $('todayDate').textContent = ' · ' + DOW[d.getDay()] + ' ' + d.getDate() + '. ' + MONTHS[d.getMonth()];
-  if ($('nextDate')) $('nextDate').textContent = ' · ' + DOW[d.getDay()] + ' ' + d.getDate() + '. ' + (d.getMonth() + 1) + '.';
+  $('todayDate').textContent = ' · ' + dayWords(today(), 'medium');
+  if ($('nextDate')) $('nextDate').textContent = ' · ' + dayWords(today(), 'short');
+}
+
+/* A new day reloads the app document: the night run wrote tasks and the
+   morning since boot. When it cannot — offline, or edits of this page still
+   on their way out — it stays owed and is tried again whenever the page comes
+   back, and every minute. */
+var owed = false;
+var reloading = false;
+
+function reloadForDay() {
+  if (reloading) return Promise.resolve(null);
+  reloading = true;
+  return store.reloadIfIdle().then(function (fresh) {
+    reloading = false;
+    owed = fresh !== true;
+    return fresh;
+  });
 }
 
 /* The phone header has room for three words, not a sentence. */
@@ -121,13 +128,20 @@ export function initMain() {
   paintDate();
 
   /* The clock (core/clock.js): back from the background, "next up" may have
-     passed; a new day also reloads the app document — the night run wrote
-     tasks and the morning since — and says so, once, in a toast. */
-  bus.on('clock', function () { paintDate(); paintRail(); });
+     passed; a new day also reloads the app document (reloadForDay) and says
+     so, once, in a toast. */
+  bus.on('clock', function () {
+    paintDate(); paintRail();
+    if (owed) reloadForDay();
+  });
+  setInterval(function () { if (owed) reloadForDay(); }, 60000);
   bus.on('day', function (d) {
     paintDate();
-    store.reloadIfIdle();
-    var day = dateOf(d.to);
-    say('Nový den — ' + DOW_LONG[day.getDay()] + ' ' + day.getDate() + '. ' + MONTHS[day.getMonth()] + '. Přehled jsem obnovila.');
+    var day = 'Nový den — ' + dayWords(d.to) + '.';
+    reloadForDay().then(function (fresh) {
+      if (fresh === true) say(day + ' Přehled jsem obnovila.');
+      else if (fresh === false) say(day + ' Jsem offline — přehled obnovím, až se připojím.');
+      else say(day);   // edits still saving: the reload follows once they are out
+    });
   });
 }

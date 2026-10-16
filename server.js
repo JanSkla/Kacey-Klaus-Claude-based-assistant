@@ -38,7 +38,7 @@ import { BRIEF_AUDIO_DIR, makeSdkRunner } from './dream.js';
 import * as notifications from './notifications.js';
 import * as monitor from './monitor.js';
 import * as routineDays from './routine-days.js';
-import { addDays } from './public/js/core/due.js';
+import { addDays, turnClock } from './public/js/core/due.js';
 
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
@@ -59,15 +59,6 @@ function logicalNow(now = new Date()) {
   const today = `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}-${String(shifted.getDate()).padStart(2, '0')}`;
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   return { today, time };
-}
-
-const WEEKDAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
-
-/** "Teď je čtvrtek 2026-10-15, 09:12." — the logical day, for every user turn. */
-function turnClock(now = new Date()) {
-  const { today, time } = logicalNow(now);
-  const [y, m, d] = today.split('-').map(Number);
-  return `Teď je ${WEEKDAYS[new Date(y, m - 1, d, 12).getDay()]} ${today}, ${time} (platí místo data v úvodu).`;
 }
 
 function renderPersona(template, now = new Date()) {
@@ -196,7 +187,7 @@ class KaceySession {
     this.started = false;
     // Rendered per connection, so {{TODAY}}/{{NOW}} are when it opened. A
     // session open across 04:00 keeps that date here; every turn carries the
-    // current one (turnClock below), which is the one she goes by.
+    // current one (due.js turnClock, below), which is the one she goes by.
     this.persona = renderPersona(persona);
     this.sessionId = null;
 
@@ -244,7 +235,7 @@ class KaceySession {
     // The date rides along too: the persona's {{TODAY}} is from when the
     // session opened, and a phone keeps one open for days.
     const nudge =
-      '\n\n[systémová poznámka: ' + turnClock() + ' Veškerý text česky — včetně úvodní věty před ' +
+      '\n\n[systémová poznámka: ' + turnClock(new Date(), LOGICAL_DAY_START_HOUR) + ' Veškerý text česky — včetně úvodní věty před ' +
       'použitím nástroje. O sobě mluv v ženském rodě (ráda, podívala jsem se). ' +
       'Anglicky jen tehdy, když uživatel píše anglicky.]';
 

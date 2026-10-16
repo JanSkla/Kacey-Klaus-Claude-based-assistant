@@ -19,6 +19,28 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.3 — 2026-10-16
+
+**The day kept current**
+- Fixed: a page left open for long — on the phone especially — kept showing the
+  day it was opened (Wednesday all of Thursday). New
+  [public/js/core/clock.js](public/js/core/clock.js) checks the logical day (it
+  turns at 04:00) every 30 s and at once when the page comes back: shown again,
+  focused, back online, after the device slept, and when the Android app resumes
+  (`WebHostActivity.onResume` sends `kacey-resume`; the WebView does not always
+  report itself hidden). Views follow on the bus (`day`, `clock`): the calendar's
+  today, the routine's today row, tasks' groups, the sidenav badge, the morning
+  clock, the brief's title.
+- Main says which day it is: "Dnes · čt 15. října", on the phone "Další na řadě ·
+  čt 15. 10.". A new day reloads the app document (the night run wrote since) and
+  says so in a toast; offline it says it will catch up, and does when the
+  connection is back ([public/js/core/store.js](public/js/core/store.js) `load()`
+  now resolves whether the server answered).
+- Kacey: every turn carries the current day and time ("Teď je čtvrtek 15. října
+  (2026-10-15), 09:12.", due.js `turnClock`), since a conversation can stay open
+  for days; the persona says that line wins over the date it opened with.
+- Tests: [test/clock.mjs](test/clock.mjs).
+
 ## KC 1.0.2 — 2026-10-15
 
 **Task tags**

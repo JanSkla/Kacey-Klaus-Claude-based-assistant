@@ -118,6 +118,35 @@ export function dueLabel(due, now) {
   return p.time ? word + ' ' + p.time : word;
 }
 
+var DOW_LONG = ['pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota', 'neděle'];
+var MONTHS_OF = ['ledna', 'února', 'března', 'dubna', 'května', 'června',
+                 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
+
+/**
+ * A date in words, for saying which day it is:
+ *   'long'   "čtvrtek 15. října"
+ *   'medium' "čt 15. října"   (main's Dnes card)
+ *   'short'  "čt 15. 10."     (the phone's "next up")
+ */
+export function dayWords(date, form) {
+  var d = date.split('-').map(Number);
+  var dow = dowOf(date);
+  if (form === 'short') return DOW[dow] + ' ' + d[2] + '. ' + d[1] + '.';
+  return (form === 'medium' ? DOW[dow] : DOW_LONG[dow]) + ' ' + d[2] + '. ' + MONTHS_OF[d[1] - 1];
+}
+
+/**
+ * The line every one of Kacey's turns carries, so a conversation open for days
+ * still knows the day: "Teď je čtvrtek 15. října (2026-10-15), 09:12." The
+ * date is the logical one — at 01:30 it is still yesterday.
+ */
+export function turnClock(now, startHour) {
+  now = now || new Date();
+  var today = logicalToday(now, startHour);
+  return 'Teď je ' + dayWords(today) + ' (' + today + '), ' +
+    pad(now.getHours()) + ':' + pad(now.getMinutes()) + '.';
+}
+
 /**
  * What a task stored under the old fixed groups meant, as a date: 'today'
  * was today, 'overdue' was some day already gone, 'week' was by Sunday.

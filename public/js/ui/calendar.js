@@ -1693,6 +1693,9 @@ export function initCalendar(opts) {
       selected = d.to;
       if (month === d.from.slice(0, 7)) month = d.to.slice(0, 7);
     }
+    // Repaint with what is here first: offline the fetch fails, and the old
+    // day must not stay marked as today. A new month waits for its fetch.
+    if (payload && payload.month === month) render();
     refreshCalendar();
   });
   // Back from the background on the same day: the now line, and the data if it is old.

@@ -17,12 +17,13 @@ import * as store from '../core/store.js';
 import { bucketOf } from '../core/due.js';
 import { onEnter } from './router.js';
 import * as bus from '../core/bus.js';
+import { today } from '../core/clock.js';
 
 var LIGHTS_POLL_MS = 30000;
 
 function paintBadges() {
   var cal = $('navBadgeCal');
-  if (cal) cal.textContent = String(new Date().getDate());
+  if (cal) cal.textContent = String(Number(today().slice(8)));   // the logical day, like the calendar
   var open = (store.data.tasks || []).filter(function (t) {
     var b = bucketOf(t);
     return !t.done && (b === 'today' || b === 'overdue');
