@@ -370,6 +370,16 @@ export const DREAM_PLANNER_PATH = path.join(HERE, 'persona', 'dream-planner.md')
    line (only the last few mornings are kept). */
 export const BRIEF_AUDIO_DIR = process.env.KACEY_BRIEF_AUDIO_DIR || path.join(HERE, 'data', 'brief-audio');
 
+/* The photo gallery (gallery.js): the image files live here, their
+   descriptions and vectors in the database. A preview keeps its own under its
+   worktree's data/. */
+export const GALLERY_DIR = process.env.KACEY_GALLERY_DIR || path.join(HERE, 'data', 'gallery');
+/* Embeddings for the gallery's search (vectors.js). Unset: a built-in hashed
+   vector that needs nothing installed. Set to an Ollama-compatible
+   /api/embed URL (e.g. http://127.0.0.1:11434) to use a real embedding model. */
+export const EMBED_URL = process.env.KACEY_EMBED_URL || '';
+export const EMBED_MODEL = process.env.KACEY_EMBED_MODEL || 'nomic-embed-text';
+
 /* The morning checklist (docs/DREAM.md §12): FIXED, the same every day — its
    value is that it is a habit, not a plan. Keys are stable (they are what the
    daily history stores); labels are what the screen says. "Projít návrhy" is

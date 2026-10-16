@@ -32,6 +32,7 @@ import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
 import * as notifications from './notifications.js';
 import * as routineDays from './routine-days.js';
+import * as gallery from './gallery.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -863,7 +864,7 @@ const morningAdd = tool(
 let onUpgrade = null;
 export function setUpgradeHandler(fn) { onUpgrade = typeof fn === 'function' ? fn : null; }
 
-const VIEW_NAMES = ['main', 'tasks', 'calendar', 'journal', 'library', 'brief', 'timer', 'controller', 'rules', 'morning', 'lights'];
+const VIEW_NAMES = ['main', 'tasks', 'calendar', 'journal', 'library', 'gallery', 'brief', 'timer', 'controller', 'rules', 'morning', 'lights'];
 
 function makeUpgradeRequest(ctx) {
   return tool(
@@ -898,6 +899,63 @@ function makeUpgradeRequest(ctx) {
   );
 }
 
+/* ---- the photo gallery ---------------------------------------------------- */
+
+/* Both need the session: the save takes the picture the owner sent in the
+   chat (`ctx.images()`), and both show the photos in that chat (`ctx.send`)
+   as a `gallery` frame the page draws under Kacey's words. */
+
+function makeGallerySave(ctx) {
+  return tool(
+    'app_gallery_save',
+    'Uloží fotku, kterou pán poslal do chatu, do jeho Galerie na serveru — „ulož mi tuto fotku“, „dej to do galerie“. ' +
+      'Fotku vidíš, takže popis napíšeš ty: title (2–6 slov), caption (1–2 věty, co je na ní; neodhaduj, kdo jsou lidé), ' +
+      'tags (3–8 štítků malými písmeny) a keywords (10–25 slov pro hledání: nadřazené pojmy, synonyma, barvy, místo, text na fotce). ' +
+      'Pán popisky neupravuje, tak ať sedí. Poslal-li víc obrázků a neřekl který, ulož všechny (volej nástroj pro každý).',
+    {
+      image: z.number().int().min(1).max(4).optional().describe('Kolikátý obrázek z poslední zprávy s obrázky (od 1). Výchozí 1.'),
+      title: z.string().min(2).max(80),
+      caption: z.string().min(3).max(400),
+      tags: z.array(z.string().min(1).max(30)).min(1).max(8),
+      keywords: z.array(z.string().min(1).max(40)).max(25).optional(),
+    },
+    async ({ image = 1, title, caption, tags, keywords }) => {
+      const list = ctx?.images?.() || [];
+      const img = list[image - 1];
+      if (!img) return fail('V téhle konverzaci žádnou fotku nemám — popros pána, ať ji pošle (sponka nebo vložit).');
+      try {
+        const photo = await gallery.save({ image: img, source: 'chat', meta: { title, caption, tags, keywords } });
+        ctx?.send?.({ type: 'gallery', event: 'saved_chat', photo });
+        return ok(`Uloženo do Galerie: ${gallery.describeForModel(photo)}`);
+      } catch (err) {
+        return fail(`Neuloženo: ${err.message}`);
+      }
+    },
+  );
+}
+
+function makeGallerySearch(ctx) {
+  return tool(
+    'app_gallery_search',
+    'Hledá v pánově Galerii fotek podle významu („fotka psa z chalupy“, „účtenka z Alzy“, „ty západy slunce z léta“) ' +
+      'nebo podle štítku. Vrátí nejpodobnější fotky s datem, popisem a štítky; pánovi se zároveň ukážou náhledy v chatu, ' +
+      'takže je nevypisuj všechny — řekni, co jsi našla, a zmiň nejlepší shodu.',
+    {
+      query: z.string().max(300).describe('Co hledá, jeho slovy. Prázdné = nejnovější fotky.'),
+      tag: z.string().max(60).optional().describe('Jen fotky s tímto štítkem.'),
+      limit: z.number().int().min(1).max(12).optional(),
+    },
+    async ({ query: q, tag, limit = 6 }) => {
+      const r = await gallery.list({ q, tag: tag || '', limit });
+      const ready = r.photos.filter((p) => p.status === 'ready');
+      ctx?.send?.({ type: 'gallery', event: 'hits', query: q, tag: tag || '', photos: ready });
+      if (!r.total) return ok('Galerie je zatím prázdná.');
+      if (!ready.length) return ok(`Nic podobného jsem nenašla (v galerii je ${r.total} fotek).`);
+      return ok(`${ready.length} fotek (z ${r.total}), nejpodobnější první:\n` + ready.map(gallery.describeForModel).join('\n'));
+    },
+  );
+}
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
@@ -912,6 +970,7 @@ export const APP_TOOL_NAMES = [
   'app_task_add', 'app_task_update', 'app_task_tags', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
+  'app_gallery_save', 'app_gallery_search',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 /** `ctx.sessionId()` names the chat that asks for an improvement (the history marks it). */
@@ -930,7 +989,9 @@ export function makeAppServer(ctx = {}) {
       'je app_routine_alter, ne app_routine_paint — výchozí týden zůstane. Před úpravou si přečti stav přes app_read. ' +
       'Když uživatel pošle obrázek rozvrhu, přečti ho a natři přes app_routine_paint ' +
       's replace: true; u každé hodiny vyplň note (předmět), room (místnost) a who (vyučující). ' +
-      'Novou funkci nebo změnu aplikace samotné předáš přes app_upgrade_request.',
-    tools: [...APP_TOOLS, makeUpgradeRequest(ctx)],
+      'Novou funkci nebo změnu aplikace samotné předáš přes app_upgrade_request. ' +
+      'Fotku z chatu uložíš do pánovy Galerie přes app_gallery_save (popis a štítky píšeš ty); ' +
+      'na staré fotky se ptá app_gallery_search.',
+    tools: [...APP_TOOLS, makeUpgradeRequest(ctx), makeGallerySave(ctx), makeGallerySearch(ctx)],
   });
 }

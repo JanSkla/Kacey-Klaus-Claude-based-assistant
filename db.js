@@ -279,6 +279,34 @@ CREATE TABLE IF NOT EXISTS kacey_notification (
 CREATE INDEX IF NOT EXISTS kacey_notification_posted_idx ON kacey_notification (posted_at);
 CREATE INDEX IF NOT EXISTS kacey_notification_thread_idx ON kacey_notification (package, kind, conversation, posted_at);
 CREATE INDEX IF NOT EXISTS kacey_notification_key_idx ON kacey_notification (android_key) WHERE android_key IS NOT NULL;
+
+/* The photo gallery (gallery.js). The file sits in GALLERY_DIR; this row is
+   what Kacey wrote about it and its vector for the search (vectors.js).
+   Title, caption and tags are only ever written by the model — the owner
+   does not edit them. */
+CREATE TABLE IF NOT EXISTS kacey_photo (
+  photo_id     TEXT PRIMARY KEY,
+  file         TEXT NOT NULL,                     -- in GALLERY_DIR
+  thumb        TEXT,                              -- a smaller copy for the grid, when the page made one
+  media_type   TEXT NOT NULL,
+  bytes        INTEGER NOT NULL DEFAULT 0,
+  width        INTEGER,
+  height       INTEGER,
+  name         TEXT NOT NULL DEFAULT '',          -- the file's own name, as uploaded
+  source       TEXT NOT NULL DEFAULT 'gallery' CHECK (source IN ('gallery','chat')),
+  status       TEXT NOT NULL DEFAULT 'describing' CHECK (status IN ('describing','ready','failed')),
+  error        TEXT,
+  title        TEXT NOT NULL DEFAULT '',
+  caption      TEXT NOT NULL DEFAULT '',
+  tags         TEXT NOT NULL DEFAULT '[]',        -- JSON array, shown
+  keywords     TEXT NOT NULL DEFAULT '',          -- broader search words, not shown
+  embedding    BLOB,                              -- Float32 little-endian
+  embed_model  TEXT,
+  taken_at     TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS kacey_photo_created_idx ON kacey_photo (created_at);
 `;
 
 export function now() { return new Date().toISOString(); }

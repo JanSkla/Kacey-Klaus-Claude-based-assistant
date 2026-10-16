@@ -165,6 +165,7 @@
   </div>
   <div class="sidenav__group sidenav__group--more">
     <p class="sidenav__head">DALŠÍ</p>
+    <button type="button" class="sidenav__item" data-go="gallery">Galerie<span class="sidenav__badge" id="navBadgeGallery"></span></button>
     <button type="button" class="sidenav__item" data-go="library">Knihovna deníku</button>
     <button type="button" class="sidenav__item" data-go="timer">Časovače</button>
     <button type="button" class="sidenav__item" data-go="brief">Ranní brief</button>
@@ -486,6 +487,56 @@
         <p class="muted-3">Tento měsíc</p>
         <p class="muted" id="libMonthNote">—</p>
       </div>
+    </section>
+  </div>
+</section>
+
+<!-- ================= GALLERY =================
+     Photos stored on kaceybody, described and tagged by Kacey, searched by
+     meaning. views/gallery.js renders the grid and the detail sheet. -->
+<section class="view view--wide" data-view="gallery" hidden>
+  <section class="card galcard" id="galCard">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg">Galerie</h2>
+      <span class="muted-3 num" id="galCount">—</span>
+    </div>
+    <div class="card__sub galsearch">
+      <form class="galsearch__row" id="galSearchForm" role="search">
+        <input class="input" id="galQuery" type="search" autocomplete="off" enterkeyhint="search"
+               placeholder="Hledej po svém — „pes na chalupě“, „účtenka z Alzy“…" aria-label="Hledat ve fotkách" />
+        <button type="button" class="btn btn--sm" id="galClear" hidden>Zrušit</button>
+      </form>
+      <div class="chips galsearch__tags" id="galTags" aria-label="Štítky"></div>
+    </div>
+    <p class="galhint" id="galHint" aria-live="polite">Nejnovější první</p>
+    <div class="card__body card__body--scroll gallery" id="galGrid"></div>
+    <div class="galdrop" id="galDrop" hidden><p>Pusť fotky sem — uložím je a popíšu.</p></div>
+  </section>
+
+  <div class="col col--rail">
+    <section class="card galacts">
+      <h2 class="card__title card__title--bar">Akce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" id="galShoot">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          Vyfotit
+        </button>
+        <button type="button" class="btn btn--fn" id="galUpload">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v5h16v-5"/></svg>
+          Nahrát fotky
+        </button>
+        <p class="galacts__hint desk-only">nebo je přetáhni do galerie</p>
+      </div>
+      <input type="file" id="galFileCamera" accept="image/*" capture="environment" hidden />
+      <input type="file" id="galFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
+    </section>
+    <section class="card card--pad galstats">
+      <p class="label">V GALERII</p>
+      <p class="big num" id="galStatCount">—</p>
+      <p class="muted" id="galStatMeta">—</p>
+      <p class="rule" id="galStatIndex">Hledám podle významu, ne jen podle slov.</p>
+      <p class="label">Z CHATU</p>
+      <p class="muted-3 galstats__say">„ulož mi tuto fotku“<br />„najdi fotku z hor“</p>
     </section>
   </div>
 </section>
@@ -1172,6 +1223,7 @@
     </div>
     <!-- Rows, not buttons: the current view's row is lit (router.js paints aria-current). -->
     <div class="morelist">
+      <button type="button" class="morelist__row" data-go="gallery" data-tab="gallery">Galerie <span class="morelist__meta" id="moreGalleryMeta"></span></button>
       <button type="button" class="morelist__row" data-go="brief" data-tab="brief">Ranní brief</button>
       <button type="button" class="morelist__row" data-go="morning" data-tab="morning">Ráno <span class="morelist__meta" id="moreMorningMeta">checklist</span></button>
       <button type="button" class="morelist__row" data-go="rules" data-tab="rules">Pravidla <span class="morelist__meta" id="moreRulesMeta"></span></button>
@@ -1179,6 +1231,63 @@
       <button type="button" class="morelist__row" data-go="timer" data-tab="timer">Časovače</button>
       <button type="button" class="morelist__row" data-go="lights" data-tab="lights">Světla <span class="morelist__meta" id="moreLightsMeta"></span></button>
       <button type="button" class="morelist__row" data-go="controller" data-tab="controller">Controller</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     GALLERY — one photo, and the camera (views/gallery.js).
+     ============================================================ -->
+<div class="sheet" id="galSheet" hidden>
+  <div class="sheet__box sheet__box--xwide gview" role="dialog" aria-modal="true" aria-labelledby="galViewTitle">
+    <div class="sheet__head">
+      <h2 class="sheet__title">FOTKA <span class="card__meta num" id="galViewPos"></span></h2>
+      <span class="row push">
+        <button type="button" class="btn btn--step" id="galPrev" aria-label="Předchozí fotka">‹</button>
+        <button type="button" class="btn btn--step" id="galNext" aria-label="Další fotka">›</button>
+      </span>
+      <button type="button" class="sheet__close" id="galViewClose" aria-label="Zavřít">×</button>
+    </div>
+    <div class="gview__body">
+      <div class="gview__stage"><img class="gview__img" id="galViewImg" alt="" /></div>
+      <div class="gview__info">
+        <p class="label" id="galViewWhen">—</p>
+        <h3 class="gview__title" id="galViewTitle">—</h3>
+        <p class="gview__caption" id="galViewCaption"></p>
+        <div class="gview__state" id="galViewState" hidden></div>
+        <p class="label">ŠTÍTKY</p>
+        <div class="chips gview__tags" id="galViewTags"></div>
+        <p class="label">SOUBOR</p>
+        <p class="muted-3 num" id="galViewFile">—</p>
+        <p class="gview__note">Popis a štítky píše Kacey sama, když fotku uloží.</p>
+      </div>
+    </div>
+    <div class="sheet__foot gview__foot">
+      <button type="button" class="btn" id="galAsk">Zeptat se Kacey</button>
+      <a class="btn" id="galDownload" download>Stáhnout</a>
+      <button type="button" class="btn btn--dangerghost push" id="galDelete">Smazat</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="galCamera" hidden>
+  <div class="sheet__box sheet__box--wide gcam" role="dialog" aria-modal="true" aria-labelledby="galCamTitle">
+    <div class="sheet__head">
+      <h2 class="sheet__title" id="galCamTitle">VYFOTIT</h2>
+      <span class="muted push" id="galCamState">kamera se zapíná…</span>
+      <button type="button" class="sheet__close" id="galCamClose" aria-label="Zavřít">×</button>
+    </div>
+    <div class="gcam__stage">
+      <video class="gcam__video" id="galCamVideo" autoplay playsinline muted></video>
+      <canvas class="gcam__shot" id="galCamShot" hidden></canvas>
+    </div>
+    <div class="sheet__foot">
+      <button type="button" class="btn" id="galCamFile">Ze souboru…</button>
+      <span class="row push">
+        <button type="button" class="btn" id="galCamAgain" hidden>Znovu</button>
+        <button type="button" class="btn btn--accent" id="galCamTake">Vyfotit</button>
+        <button type="button" class="btn btn--accent" id="galCamSave" hidden>Uložit do galerie</button>
+      </span>
     </div>
   </div>
 </div>

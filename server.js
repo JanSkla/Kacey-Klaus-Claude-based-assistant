@@ -38,6 +38,7 @@ import { BRIEF_AUDIO_DIR, makeSdkRunner } from './dream.js';
 import * as notifications from './notifications.js';
 import * as monitor from './monitor.js';
 import * as routineDays from './routine-days.js';
+import * as gallery from './gallery.js';
 import { addDays, turnClock } from './public/js/core/due.js';
 
 import {
@@ -46,7 +47,7 @@ import {
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
   XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL, NOWPLAYING_URL, DUCK_PERCENT,
-  LOGICAL_DAY_START_HOUR, LIGHTSD_URL, PREVIEW, SELFUPDATE,
+  LOGICAL_DAY_START_HOUR, LIGHTSD_URL, PREVIEW, SELFUPDATE, GALLERY_DIR,
 } from './config.js';
 
 // ---------------------------------------------------------------------------
@@ -211,6 +212,10 @@ class KaceySession {
     // Set when the user cancels a turn ("ticho", or the stop button), so the
     // `result` that follows is not reported to them as a failure.
     this.interrupted = false;
+
+    // The pictures of the last turn that had any — what "ulož mi tuto fotku"
+    // points at, even a turn or two after the photo came (app_gallery_save).
+    this.lastImages = [];
   }
 
   send(frame) {
@@ -295,7 +300,14 @@ class KaceySession {
         /* klaus-memory (a subprocess) plus Kacey's own app tools, which run in
            THIS process — see app-tools.js. One server object per session so a
            restart cannot leave a stale instance behind. */
-        mcpServers: { ...MCP_SERVERS, [APP_SERVER_NAME]: makeAppServer({ sessionId: () => this.sessionId }) },
+        mcpServers: {
+          ...MCP_SERVERS,
+          [APP_SERVER_NAME]: makeAppServer({
+            sessionId: () => this.sessionId,
+            images: () => this.lastImages,
+            send: (frame) => this.send(frame),
+          }),
+        },
 
         // Use ONLY the server above. Without this, the SDK also auto-fetches the
         // account's claude.ai cloud connectors — Gmail, Google Calendar, Slack,
@@ -481,6 +493,7 @@ class KaceySession {
     this.errorShown = false;
     this.interrupted = false;
     this.send({ type: 'thinking' });
+    if (Array.isArray(images) && images.length) this.lastImages = images;
     this.pushUserMessage(text, images);
   }
 
@@ -1306,6 +1319,50 @@ app.post('/api/notifications/summary', express.json({ limit: '1kb' }), async (re
   }
 });
 
+/* ---------------------------------------------------------------------------
+ * The photo gallery (gallery.js). The Galerie screen uploads here; the chat's
+ * app_gallery_save writes through the same module. Every change goes out as a
+ * `gallery` frame, so an open grid fills in as descriptions land.
+ * ------------------------------------------------------------------------- */
+
+gallery.onEvent((ev) => broadcast({ type: 'gallery', ...ev }));
+
+const galleryImage = (v) => (v && typeof v === 'object' && typeof v.data === 'string'
+  && /^[A-Za-z0-9+/]+={0,2}$/.test(v.data) ? { media_type: String(v.media_type || ''), data: v.data } : null);
+
+app.get('/api/gallery', async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await gallery.list({ q: String(req.query.q || '').slice(0, 300), tag: String(req.query.tag || '').slice(0, 60) })) });
+  } catch (err) {
+    log(`gallery list failed: ${err?.message || err}`);
+    res.status(500).json({ ok: false, error: 'Galerii se nepodařilo načíst.' });
+  }
+});
+
+app.post('/api/gallery', express.json({ limit: '40mb' }), async (req, res) => {
+  const b = req.body || {};
+  try {
+    const photo = await gallery.save({
+      image: galleryImage(b.image), thumb: galleryImage(b.thumb), small: galleryImage(b.small),
+      name: typeof b.name === 'string' ? b.name : '', width: b.width, height: b.height,
+      taken_at: typeof b.taken_at === 'string' ? b.taken_at : undefined, source: 'gallery',
+    });
+    res.json({ ok: true, photo });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Fotku se nepodařilo uložit.' });
+  }
+});
+
+app.post('/api/gallery/:id/retry', (req, res) => {
+  try { res.json({ ok: true, photo: gallery.retry(req.params.id) }); } catch (err) { res.status(404).json({ ok: false, error: err.message }); }
+});
+
+app.delete('/api/gallery/:id', (req, res) => {
+  res.json({ ok: true, deleted: gallery.remove(req.params.id) });
+});
+
+app.use('/gallery-files', express.static(GALLERY_DIR, { maxAge: '30d', immutable: true, fallthrough: false }));
+
 /**
  * Normalise text for XTTS.
  *
@@ -1746,6 +1803,11 @@ server.listen(PORT, HOST, () => {
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
   if (PREVIEW) {
     log('PREVIEW of a kaceyFeature branch — no night routine, no screen, no music');
+    // An empty gallery shows nothing to compare: paint a few sample photos.
+    import('./gallery-samples.js')
+      .then((m) => m.seedSamples())
+      .then((n) => { if (n) log(`gallery: ${n} sample photos for the preview`); })
+      .catch((err) => log(`gallery samples not made: ${err.message}`));
     return;
   }
   if (SELFUPDATE) {

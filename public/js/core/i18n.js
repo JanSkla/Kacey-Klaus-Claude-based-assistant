@@ -22,7 +22,11 @@ var STR = {
     muteOn: 'Vypnout mluvení nahlas', muteOff: 'Zapnout mluvení nahlas',
     listening: 'Poslouchám…', listenHold: 'Mluv, po chvilce ticha to odešlu.',
     micHint: 'Klepni a mluv', thinking: 'Kacey přemýšlí…', speaking: 'Kacey mluví…',
-    tool: function (n) { return n === 'klaus-memory' ? 'Prohledávám paměť…' : 'Používám ' + n + '…'; },
+    tool: function (n) {
+      if (n === 'app_gallery_save') return 'Ukládám fotku do galerie…';
+      if (n === 'app_gallery_search') return 'Hledám v galerii…';
+      return n === 'klaus-memory' ? 'Prohledávám paměť…' : 'Používám ' + n + '…';
+    },
     readyInfo: function (model, mcp) {
       return 'Připojeno · ' + model + (mcp && mcp.length ? ' · ' + mcp.join(', ') : '');
     },

@@ -13,11 +13,11 @@ import { $ } from '../core/dom.js';
 import { clear as clearToast } from './toast.js';
 import { closeSheet } from './psheet.js';
 
-var VIEWS = ['main', 'tasks', 'journal', 'library', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus',
+var VIEWS = ['main', 'tasks', 'journal', 'library', 'gallery', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus',
   'morning', 'proposals', 'rules', 'upgrade'];
 
 var LABELS = {
-  main: 'main', tasks: 'úkoly', journal: 'deník', library: 'knihovna deníku',
+  main: 'main', tasks: 'úkoly', journal: 'deník', library: 'knihovna deníku', gallery: 'galerie',
   calendar: 'kalendář', brief: 'ranní brief', timer: 'časovače', lights: 'světla',
   controller: 'controller', task: 'úkol probíhá', focus: 'focus',
   morning: 'ráno', proposals: 'návrhy', rules: 'pravidla', upgrade: 'porovnání verzí'
@@ -26,7 +26,7 @@ var LABELS = {
 /* What the phone header says. The desktop header keeps the small label on the
    right; a phone has room for one word, so it is the view's name. */
 var TITLES = {
-  main: 'Kacey', tasks: 'Úkoly', journal: 'Deník', library: 'Knihovna deníku',
+  main: 'Kacey', tasks: 'Úkoly', journal: 'Deník', library: 'Knihovna deníku', gallery: 'Galerie',
   calendar: 'Kalendář', brief: 'Ranní brief', timer: 'Časovače', lights: 'Světla',
   controller: 'Controller', task: 'Úkol', focus: 'Focus',
   morning: 'Ráno', proposals: 'Návrhy', rules: 'Pravidla', upgrade: 'Porovnání'

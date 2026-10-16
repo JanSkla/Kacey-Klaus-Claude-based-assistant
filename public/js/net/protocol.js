@@ -15,6 +15,7 @@
 import { state, MOCK, EMBED } from '../core/state.js';
 import { t } from '../core/i18n.js';
 import * as dom from '../core/dom.js';
+import * as bus from '../core/bus.js';
 import { syncOrb } from '../ui/orb.js';
 import {
   addMessage, beginAssistant, appendDelta, endAssistant, sealPreamble,
@@ -200,6 +201,12 @@ export function onServer(msg) {
       endAssistant(true);
       showAlert(typeof msg.message === 'string' && msg.message ? msg.message : t().errRec, true);
       state.resumeVoiceLoop = false;
+      break;
+
+    case 'gallery':
+      /* A photo saved, described or deleted, or the photos Kacey found for
+         this chat (gallery.js on the server, views/gallery.js here). */
+      bus.emit('gallery', msg);
       break;
 
     case 'app_changed':
