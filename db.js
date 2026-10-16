@@ -26,6 +26,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { KLAUS_DB, LOGICAL_DAY_START_HOUR } from './config.js';
 import { dueFromGroup, normalizeDue } from './public/js/core/due.js';
+import { DEFAULT_TAGS, guessTag } from './public/js/core/tasktags.js';
 
 let db = null;
 
@@ -60,6 +61,9 @@ CREATE TABLE IF NOT EXISTS ${name} (
   sensitivity  TEXT NOT NULL DEFAULT 'cloud_safe'
                CHECK (sensitivity IN ('cloud_safe','local_only')),
   sort_order   INTEGER NOT NULL DEFAULT 0,
+  -- What it belongs to: the id of one of the owner's tags (settings.taskTags,
+  -- public/js/core/tasktags.js). NULL, or a deleted tag's id, is "Bez štítku".
+  tag          TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
 ${TASK_GEN_COLUMNS.map((c) => '  ' + c).join(',\n')}
@@ -311,6 +315,7 @@ function migrate(h) {
     taskCols = h.prepare('PRAGMA table_info(kacey_task)').all().map((c) => c.name);
   }
   if (!taskCols.includes('origin')) addTaskGenColumns(h);
+  if (!taskCols.includes('tag')) addTaskTags(h);
   /* After the columns exist — on an older table the CREATE in SCHEMA runs
      before this, when there is no source_key yet to index. */
   h.exec(`CREATE UNIQUE INDEX IF NOT EXISTS kacey_task_source_idx
@@ -328,6 +333,27 @@ function migrate(h) {
      tell "the evening before" from "an hour before". */
   const propCols = h.prepare('PRAGMA table_info(kacey_proposal)').all().map((c) => c.name);
   if (propCols.length && !propCols.includes('about_start')) h.exec('ALTER TABLE kacey_proposal ADD COLUMN about_start TEXT');
+}
+
+/* The tag column on an existing task table, and a first tag for the tasks
+   already there — guessed from their text against the starting tags, the same
+   guess a new task gets. What nothing fits stays NULL ("Bez štítku"). */
+function addTaskTags(h) {
+  h.exec('BEGIN IMMEDIATE');
+  try {
+    h.exec('ALTER TABLE kacey_task ADD COLUMN tag TEXT');
+    const set = h.prepare('UPDATE kacey_task SET tag = ? WHERE task_id = ?');
+    let n = 0;
+    for (const r of h.prepare('SELECT task_id, label FROM kacey_task').all()) {
+      const tag = guessTag(r.label, DEFAULT_TAGS);
+      if (tag) { set.run(tag, r.task_id); n++; }
+    }
+    h.exec('COMMIT');
+    console.log(`[db] tasks: added tag (${n} tasks tagged by their text)`);
+  } catch (err) {
+    try { h.exec('ROLLBACK'); } catch { /* the BEGIN never took */ }
+    throw err;
+  }
 }
 
 /* The night routine's columns on an existing task table. ADD COLUMN, not a

@@ -8,6 +8,9 @@ import path from 'node:path';
 const dir = mkdtempSync(path.join(os.tmpdir(), 'kacey-weather-'));
 process.env.KLAUS_DB = path.join(dir, 'test.db');
 process.env.KACEY_STATE_PATH = path.join(dir, 'no-such-file.json');
+// The self-update runner sets KACEY_WEATHER=off for the whole suite; here
+// every fetch is a fake, so weather stays on.
+delete process.env.KACEY_WEATHER;
 
 const { summarize, weatherFor, weatherKept, weatherLine } = await import('../weather.js');
 

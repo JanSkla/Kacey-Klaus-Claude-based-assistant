@@ -28,6 +28,7 @@ import { normalizeChecklist } from './public/js/core/checklist.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 import { KIND_KEYS } from './public/js/core/routine-cats.js';
+import { DEFAULT_TAGS, normalizeTags } from './public/js/core/tasktags.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
 export const LEGACY_STATE_PATH =
@@ -45,7 +46,23 @@ const DEFAULT_SETTINGS = {
   memory: { people: true, work: true, health: true, journal: true, dreams: false },
   calOn: {},
   tools: {},
+  // The owner's task tags, theirs to rename, add and delete (public/js/core/tasktags.js).
+  taskTags: DEFAULT_TAGS,
 };
+
+/* Settings as stored. The tag list is cleaned (tasktags.js normalizeTags); a
+   settings save without one — a page from before the tags — keeps the stored
+   list rather than putting the starting five back. */
+function normalizeSettings(value) {
+  const next = { ...(value && typeof value === 'object' && !Array.isArray(value) ? value : {}) };
+  if (Array.isArray(next.taskTags)) next.taskTags = normalizeTags(next.taskTags);
+  else {
+    delete next.taskTags;
+    const stored = kvGet('settings', {});
+    if (stored && Array.isArray(stored.taskTags)) next.taskTags = stored.taskTags;
+  }
+  return next;
+}
 
 const DEFAULT_PRESETS = [
   { label: 'Pomodoro', secs: 1500 },
@@ -73,6 +90,7 @@ function readTasks() {
        works it out from due_at and the clock (public/js/core/due.js). */
     due_at: r.due_at || null,
     ...(r.duration_min ? { duration: r.duration_min } : {}),
+    tag: r.tag || null,
     sensitivity: r.sensitivity,
     created: r.created_at,
     /* Read-only: who made it and why (docs/DREAM.md §9). A client may send
@@ -204,8 +222,8 @@ function writeTasks(list, { baseRev } = {}) {
     const insert = h.prepare(
       `INSERT INTO kacey_task
          (task_id, label, meta, done, due_at, duration_min, sensitivity, sort_order, created_at, updated_at,
-          origin, rule_id, source_key, reason, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          origin, rule_id, source_key, reason, note, tag)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const kept = new Set();
     incoming.forEach((t, i) => {
@@ -232,6 +250,8 @@ function writeTasks(list, { baseRev } = {}) {
         gen.source_key || null,
         gen.reason || null,
         gen.note || null,
+        // Unlike the generation columns, the tag is the owner's to change.
+        t.tag ? String(t.tag) : null,
       );
     });
 
@@ -335,7 +355,7 @@ export function setSection(name, value, opts = {}) {
     case 'routine': writeRoutine(value); break;
     case 'timers': kvSet('timers.presets', (value && value.presets) || []); break;
     case 'checklists': kvSet('checklists', value || {}); break;
-    case 'settings': kvSet('settings', value || {}); break;
+    case 'settings': kvSet('settings', normalizeSettings(value)); break;
     case 'morning': kvSet('morning.checklist', normalizeChecklist(value, morningChecklist())); break;
     default: break;
   }

@@ -9,12 +9,19 @@
    from that and the clock every time the list is drawn, never stored, so a
    task due today is overdue tomorrow without anybody moving it. A task with a
    time is also drawn in the calendar's lane (ui/calendar.js).
+
+   A task also carries a tag — what it belongs to (core/tasktags.js). The
+   full view shows the list either way: by when (the groups above) or by tag,
+   one group per tag, where a task moves to another tag by dragging its ⋮⋮
+   (or a tap on it, which opens the tag chips). The tags themselves are
+   renamed, added and deleted right there, in the group heads.
    ========================================================================= */
 
 import { $ } from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import * as store from '../core/store.js';
 import { bucketOf, dueLabel, logicalToday, parseDue, vTime } from '../core/due.js';
+import { guessTag, newTagId, tagById, tagNameProblem, tagsFrom, TAG_NAME_MAX } from '../core/tasktags.js';
 import { go, onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { editRule } from './rules.js';
@@ -50,7 +57,37 @@ var focusId = null, focusSecs = 0, focusTimer = 0;
 var runId = null;
 var whyOpen = {};          // task id -> the "?" under it is open
 
+/* By when ('time') or by tag ('tag'). This device's choice, like the hue. */
+var VIEW_KEY = 'kacey.tasks.view';
+var viewMode = (function () { try { return localStorage.getItem(VIEW_KEY) === 'tag' ? 'tag' : 'time'; } catch (e) { return 'time'; } })();
+var tagPickId = null;      // the task whose tag chips are open
+var editingTag = null;     // the tag whose name is being edited
+var addingTag = false;     // the "+ Nový štítek" field is open
+var armedTag = null;       // Smazat pressed once: the tag that a second press deletes
+var dropping = false;      // a drag ended a moment ago: swallow the click it makes
+
 export function tasks() { return store.data.tasks || []; }
+
+/** The owner's tags (settings.taskTags), the starting five until they change them. */
+export function tagList() { return tagsFrom(store.data.settings); }
+
+/** A task's tag, or null for "Bez štítku" (none, or one since deleted). */
+function tagOf(t) { return tagById(tagList(), t.tag); }
+
+function setTag(id, tag) {
+  store.patch('tasks', function (list) {
+    return list.map(function (t) { return t.id === id ? Object.assign({}, t, { tag: tag }) : t; });
+  });
+}
+
+/** Move a task under another tag, and say so with a way back. */
+function moveTask(t, tag) {
+  var from = t.tag || null;
+  if (from === tag) return;
+  setTag(t.id, tag);
+  var to = tagById(tagList(), tag);
+  say(t.label + ' → ' + (to ? to.name : 'Bez štítku'), { label: 'Vrátit', run: function () { setTag(t.id, from); } });
+}
 
 export function toggleTask(id) {
   store.patch('tasks', function (list) {
@@ -62,12 +99,15 @@ export function addTask(label, extra) {
   var text = String(label || '').trim();
   if (!text) return null;
   var task = Object.assign({
-    id: 't' + Date.now(), label: text, meta: 'přidáno teď · osobní',
+    id: 't' + Date.now(), label: text, meta: 'přidáno teď',
     done: false, due_at: null
   }, extra || {});
+  // Every new task gets a tag: the one picked, or the one its words point at.
+  if (!task.tag) task.tag = guessTag(text, tagList());
   store.patch('tasks', function (list) { return list.concat([task]); });
+  var tag = tagOf(task);
   // The line opens the new task's due date (Claude Design: toast "open").
-  say('Úkol přidán · ' + text + (task.due_at ? ' · ' + dueLabel(task.due_at) : ''), null,
+  say('Úkol přidán · ' + text + (task.due_at ? ' · ' + dueLabel(task.due_at) : '') + ' · ' + (tag ? tag.name : 'bez štítku'), null,
     function () { editingId = task.id; go('tasks'); renderTasks(); });
   return task;
 }
@@ -106,7 +146,7 @@ function byDue(a, b) {
 
 /* ---- one row ----------------------------------------------------------- */
 
-function taskRow(t, big) {
+function taskRow(t, big, byTag) {
   var bucket = bucketOf(t);
   var box = el('button.check' + (big ? '.check--lg' : ''), {
     type: 'button', 'aria-pressed': String(!!t.done), 'aria-label': 'Přepnout úkol',
@@ -123,6 +163,18 @@ function taskRow(t, big) {
       }, when || '+ termín')
     : (when ? el('span.task__due', when) : null);
 
+  /* Its tag follows the date: a button that opens the tag chips in the
+     full view by when, words in the today panel, and nothing in the view by
+     tag, where the group already says it. */
+  var tag = tagOf(t);
+  var tagNode = byTag ? null : big
+    ? el('button.task__due.task__tagbtn' + (tag ? '' : '.is-empty'), {
+        type: 'button', 'aria-expanded': String(tagPickId === t.id), title: 'Změnit štítek',
+        onclick: function () { pickTag(t.id); }
+      }, tag ? tag.name : '+ štítek')
+    : (tag ? el('span.task__due', tag.name) : null);
+  var metaParts = [dueNode, tagNode, t.meta || null].filter(Boolean);
+
   /* Made by the night routine (docs/DREAM.md §9): PRAVIDLO for a rule's task,
      KACEY for an accepted proposal, and "?" to say why it is here. On the
      label's row, at its right (Claude Design 5a); the label wraps rather than
@@ -138,8 +190,22 @@ function taskRow(t, big) {
 
   var kids = [box, el('span.task__text', [
     el('span.task__label', t.label),
-    (dueNode || t.meta) ? el('span.task__meta', [dueNode, dueNode && t.meta ? ' · ' : '', t.meta || '']) : null
+    metaParts.length ? el('span.task__meta', metaParts.reduce(function (out, part, i) {
+      return out.concat(i ? [' · ', part] : [part]);
+    }, [])) : null
   ]), origin];
+
+  /* By tag, the row is picked up by its ⋮⋮: drag it to another group, or
+     tap it (Enter from the keyboard) for the tag chips. */
+  var grip = null;
+  if (byTag) {
+    grip = el('button.task__grip', {
+      type: 'button', 'aria-label': 'Přesunout pod jiný štítek', 'aria-expanded': String(tagPickId === t.id),
+      title: 'Přetáhni do jiné skupiny, nebo klepni a vyber štítek',
+      onclick: function () { if (!dropping) pickTag(t.id); }
+    }, '⋮⋮');
+    kids.unshift(grip);
+  }
 
   if (big && !t.done) {
     /* Two ways to start something: run its checklist, or sit with it on a
@@ -156,10 +222,116 @@ function taskRow(t, big) {
 
   if (generated && whyOpen[t.id]) kids.push(whyPanel(t));
   if (big && editingId === t.id && !isPhone()) kids.push(dueEditor(t));
+  if (big && tagPickId === t.id) kids.push(tagChips(t));
 
   var row = el('div.task' + (t.done ? '.is-done' : '') + (bucket === 'overdue' ? '.task--overdue' : ''), kids);
   if (generated) longPress(row, function () { whyOpen[t.id] = !whyOpen[t.id]; renderToday(); renderTasks(); });
+  if (grip) dragToTag(grip, row, t);
   return row;
+}
+
+function pickTag(id) {
+  tagPickId = tagPickId === id ? null : id;
+  renderTasks();
+}
+
+/* Under the row: every tag as a chip, the task's own one pressed. A press
+   moves the task there and closes the chips; Escape closes them. */
+function tagChips(t) {
+  var box = el('div.tasktag', { role: 'group', 'aria-label': 'Štítek' }, [
+    el('span.tasktag__cap', 'ŠTÍTEK')
+  ].concat(tagList().map(function (g) {
+    return el('button.chip.chip--filter', {
+      type: 'button', 'aria-pressed': String(t.tag === g.id),
+      onclick: function () { tagPickId = null; moveTask(t, g.id); renderTasks(); }
+    }, g.name);
+  })));
+  box.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { ev.stopPropagation(); tagPickId = null; renderTasks(); }
+  });
+  return box;
+}
+
+/* ---- dragging a task to another tag ------------------------------------
+   Pointer events on the ⋮⋮, so a mouse and a finger do the same thing (the
+   handle is touch-action: none, so a drag on it does not scroll the page).
+   The row follows the pointer; the group under it lights up; the move is
+   made once, on release. Near the top or bottom edge the list scrolls. */
+
+function scrollerOf(node) {
+  for (var n = node; n && n !== document.body; n = n.parentElement) {
+    var oy = getComputedStyle(n).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) return n;
+  }
+  return null;
+}
+
+function dragToTag(grip, row, t) {
+  grip.addEventListener('pointerdown', function (ev) {
+    if (ev.button !== 0) return;
+    var host = $('taskGroups');
+    var scroller = scrollerOf(host);
+    var x0 = ev.clientX, y0 = ev.clientY, top0 = scroller ? scroller.scrollTop : 0;
+    var x = x0, y = y0, on = false, target = null, raf = 0;
+    grip.setPointerCapture(ev.pointerId);
+
+    function groupAt() {
+      var groups = host.querySelectorAll('[data-tag-group]');
+      for (var i = 0; i < groups.length; i++) {
+        var b = groups[i].getBoundingClientRect();
+        if (x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) return groups[i];
+      }
+      return null;
+    }
+    function paint() {
+      var dy = y - y0 + (scroller ? scroller.scrollTop - top0 : 0);
+      row.style.transform = 'translate(' + (x - x0) + 'px,' + dy + 'px)';
+      var g = groupAt();
+      var next = g && g.getAttribute('data-tag-group') !== (t.tag || '') ? g : null;
+      if (next !== target) {
+        if (target) target.classList.remove('is-droptarget');
+        target = next;
+        if (target) target.classList.add('is-droptarget');
+      }
+    }
+    function tick() {
+      if (scroller) {
+        var b = scroller.getBoundingClientRect();
+        var step = y < b.top + 60 ? -12 : y > b.bottom - 60 ? 12 : 0;
+        if (step) { scroller.scrollTop += step; paint(); }
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    function move(e) {
+      x = e.clientX; y = e.clientY;
+      if (!on && Math.abs(x - x0) + Math.abs(y - y0) < 6) return;
+      if (!on) {
+        on = true;
+        row.classList.add('is-dragging');
+        document.body.classList.add('is-tagdrag');
+        raf = requestAnimationFrame(tick);
+      }
+      paint();
+    }
+    function up(e) {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointercancel', up);
+      cancelAnimationFrame(raf);
+      if (!on) return;             // a tap: the click opens the chips
+      dropping = true;
+      setTimeout(function () { dropping = false; }, 0);
+      row.classList.remove('is-dragging');
+      row.style.transform = '';
+      document.body.classList.remove('is-tagdrag');
+      var to = e.type === 'pointerup' && target ? target.getAttribute('data-tag-group') || null : undefined;
+      if (target) target.classList.remove('is-droptarget');
+      if (to !== undefined) moveTask(t, to);
+    }
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
+  });
 }
 
 /* Half a second's press on a phone row, not on one of its buttons. */
@@ -309,8 +481,10 @@ export function renderTasks() {
 
   var visible = tasks().filter(function (t) { return showDone || !t.done; });
   if (editingId && !visible.some(function (t) { return t.id === editingId; })) editingId = null;
+  if (tagPickId && !visible.some(function (t) { return t.id === tagPickId; })) tagPickId = null;
 
-  fill(host, GROUPS.map(function (g) {
+  host.classList.toggle('groups--tags', viewMode === 'tag');
+  fill(host, viewMode === 'tag' ? tagGroups(visible) : GROUPS.map(function (g) {
     var items = visible.filter(function (t) { return bucketOf(t) === g.key; }).sort(byDue);
     if (g.optional && !items.length) return null;
     return el('div', [
@@ -319,6 +493,8 @@ export function renderTasks() {
                    : el('p.muted', g.emptyText)
     ]);
   }));
+  paintViewSwitch();
+  paintTagSelect();
 
   var s = taskSummary();
   var counts = s.due + ' na dnes · ' + s.open + ' otevřených · ' + s.overdue + ' po termínu';
@@ -332,6 +508,204 @@ export function renderTasks() {
   var todayDone = todayAll.filter(function (t) { return t.done; }).length;
   $('doneRatio').textContent = todayDone + ' / ' + todayAll.length;
   $('taskBar').style.width = (todayAll.length ? Math.round(todayDone / todayAll.length * 100) : 0) + '%';
+}
+
+/* ---- the full view by tag ----------------------------------------------- */
+
+/** "1 úkol", "3 úkoly", "5 úkolů". */
+function countWord(n) {
+  return n + (n === 1 ? ' úkol' : n >= 2 && n <= 4 ? ' úkoly' : ' úkolů');
+}
+
+/* Open ones first, in the order they come due; done ones after. */
+function byTagOrder(a, b) {
+  if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+  return byDue(a, b);
+}
+
+/* One group per tag, in the owner's order; "Bez štítku" when something is
+   in it; then the cell that adds a tag. */
+function tagGroups(visible) {
+  var tags = tagList();
+  var none = !visible.length;
+  var out = [];
+  /* Nothing to sort: say so once, instead of every group asking for a drag. */
+  if (none) out.push(el('p.empty.tasks__none', tasks().length
+    ? 'Všechno je hotové a hotové jsou skryté.'
+    : 'Žádné úkoly. Přidej úkol, nebo řekni „KC, přidej …“ — Kacey mu štítek vybere sama.'));
+  if (!tags.length) out.push(el('p.empty.tasks__none', 'Zatím žádné štítky. Přidej první níž — Kacey pak do nich bude úkoly řadit sama.'));
+  out = out.concat(tags.map(function (g) {
+    return tagGroup(g, visible.filter(function (t) { return t.tag === g.id; }), none);
+  }));
+  var loose = visible.filter(function (t) { return !tagById(tags, t.tag); });
+  if (loose.length) out.push(tagGroup(null, loose));
+  out.push(addingTag ? newTagForm() : el('button.tag__more.tagnew', {
+    type: 'button', onclick: function () { addingTag = true; editingTag = null; renderTasks(); focusTagField(); }
+  }, '+ Nový štítek'));
+  return out;
+}
+
+function tagGroup(g, items, none) {
+  var open = items.filter(function (t) { return !t.done; }).length;
+  var head = g && editingTag === g.id ? tagEditForm(g) : el('h3.subhead.subhead--row', [
+    el('span.subhead__name', g ? g.name : 'Bez štítku'),
+    el('span.subhead__meta.num', open ? countWord(open) : items.length ? 'vše hotovo' : ''),
+    g ? el('button.link.push', {
+      type: 'button', 'aria-label': 'Upravit štítek ' + g.name,
+      onclick: function () { editingTag = g.id; addingTag = false; armedTag = null; renderTasks(); focusTagField(); }
+    }, 'Upravit') : null
+  ]);
+  return el('div', { 'data-tag-group': g ? g.id : '' }, [
+    head,
+    g ? null : el('p.muted-3.tasks__hint', 'Kacey nevěděla, kam patří. Přetáhni je za ⋮⋮ pod štítek.'),
+    items.length ? items.sort(byTagOrder).map(function (t) { return taskRow(t, true, true); })
+                 : el('p.muted.tasks__drop', none ? 'Prázdné.' : 'Prázdné. Přetáhni sem úkol za ⋮⋮.')
+  ]);
+}
+
+function focusTagField() {
+  var f = document.querySelector('#taskGroups .tagedit .input');
+  if (f) { f.focus(); f.select(); }
+}
+
+function saveTags(next) { store.patchSettings({ taskTags: next }); }
+
+/** A name nobody else has, or why not: '' when it is fine. */
+function nameProblem(name, exceptId) { return tagNameProblem(name, tagList(), exceptId); }
+
+/* The group head while its tag is being edited: the name, Uložit, Smazat
+   (twice — the tasks stay, under "Bez štítku"), Zrušit. Escape cancels. */
+function tagEditForm(g) {
+  var input = el('input.input', { type: 'text', value: g.name, maxlength: String(TAG_NAME_MAX), 'aria-label': 'Název štítku' });
+  var note = el('p.muted-3.tagedit__note', 'Smazáním se úkoly nesmažou — přejdou do Bez štítku.');
+  var n = tasks().filter(function (t) { return t.tag === g.id; }).length;
+  function close() { editingTag = null; armedTag = null; renderTasks(); }
+  var del = el('button.btn.btn--sm.btn--dangerghost', {
+    type: 'button',
+    onclick: function () {
+      if (armedTag !== g.id) {
+        armedTag = g.id;
+        del.textContent = 'Opravdu smazat?';
+        setTimeout(function () { if (armedTag === g.id) { armedTag = null; del.textContent = 'Smazat'; } }, 4000);
+        return;
+      }
+      deleteTag(g);
+    }
+  }, 'Smazat');
+  var form = el('form.tagedit', {
+    onsubmit: function (ev) {
+      ev.preventDefault();
+      var name = input.value.trim();
+      var problem = nameProblem(name, g.id);
+      if (problem) { note.textContent = problem; note.classList.add('is-err'); input.focus(); return; }
+      editingTag = null;
+      saveTags(tagList().map(function (x) { return x.id === g.id ? { id: x.id, name: name } : x; }));
+    }
+  }, [
+    input,
+    el('div.tagedit__acts', [
+      el('button.btn.btn--sm.btn--accent', { type: 'submit' }, 'Uložit'),
+      del,
+      el('button.btn.btn--sm', { type: 'button', onclick: close }, 'Zrušit')
+    ]),
+    el('p.muted-3.tagedit__count', n ? countWord(n) + ' pod tímto štítkem' : 'Zatím pod ním nic není'),
+    note
+  ]);
+  form.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
+  });
+  return form;
+}
+
+function deleteTag(g) {
+  var tagsBefore = tagList();
+  var moved = tasks().filter(function (t) { return t.tag === g.id; }).map(function (t) { return t.id; });
+  editingTag = null; armedTag = null;
+  saveTags(tagsBefore.filter(function (x) { return x.id !== g.id; }));
+  store.patch('tasks', function (list) {
+    return list.map(function (t) { return t.tag === g.id ? Object.assign({}, t, { tag: null }) : t; });
+  });
+  say('Štítek ' + g.name + ' smazán' + (moved.length ? ' · ' + countWord(moved.length) + ' bez štítku' : ''), {
+    label: 'Vrátit',
+    run: function () {
+      saveTags(tagsBefore);
+      store.patch('tasks', function (list) {
+        return list.map(function (t) { return moved.indexOf(t.id) !== -1 ? Object.assign({}, t, { tag: g.id }) : t; });
+      });
+    }
+  });
+}
+
+/* The last cell: a name and Přidat. The new tag goes to the end. */
+function newTagForm() {
+  var input = el('input.input', { type: 'text', maxlength: String(TAG_NAME_MAX), placeholder: 'Název — např. Zdraví', 'aria-label': 'Název nového štítku' });
+  var note = el('p.muted-3.tagedit__note', 'Kacey do něj bude řadit podle názvu. Úkoly sem přetáhneš za ⋮⋮.');
+  function close() { addingTag = false; renderTasks(); }
+  var form = el('form.tagedit.tagedit--new', {
+    onsubmit: function (ev) {
+      ev.preventDefault();
+      var name = input.value.trim();
+      var problem = nameProblem(name, null);
+      if (problem) { note.textContent = problem; note.classList.add('is-err'); input.focus(); return; }
+      addingTag = false;
+      var tags = tagList();
+      saveTags(tags.concat([{ id: newTagId(name, tags), name: name }]));
+      say('Štítek ' + name + ' přidán.');
+    }
+  }, [
+    el('span.tagedit__cap', 'NOVÝ ŠTÍTEK'),
+    input,
+    el('div.tagedit__acts', [
+      el('button.btn.btn--sm.btn--accent', { type: 'submit' }, 'Přidat'),
+      el('button.btn.btn--sm', { type: 'button', onclick: close }, 'Zrušit')
+    ]),
+    note
+  ]);
+  form.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
+  });
+  return form;
+}
+
+/* ---- the switch and the add form's tag ---------------------------------- */
+
+function setView(mode) {
+  viewMode = mode === 'tag' ? 'tag' : 'time';
+  try { localStorage.setItem(VIEW_KEY, viewMode); } catch (e) { /* private mode: this load only */ }
+  tagPickId = null; editingTag = null; armedTag = null;
+  renderTasks();
+}
+
+/* Both copies of the switch: the card head (desktop), the summary card (phone). */
+function paintViewSwitch() {
+  var opts = document.querySelectorAll('[data-task-view]');
+  for (var i = 0; i < opts.length; i++) {
+    opts[i].setAttribute('aria-pressed', String(opts[i].getAttribute('data-task-view') === viewMode));
+  }
+}
+
+var tagTouched = false;    // the owner picked the add form's tag: stop guessing
+
+/* The add form's tag: the owner's tags, and until something is typed, "Štítek
+   odhadne Kacey". As the text grows, the guess follows it — until the owner
+   picks one themselves. */
+function paintTagSelect() {
+  var sel = $('taskTag');
+  if (!sel) return;
+  var keep = sel.value;
+  fill(sel, [el('option', { value: '' }, 'Štítek: odhadne Kacey')].concat(tagList().map(function (g) {
+    return el('option', { value: g.id }, g.name);
+  })));
+  sel.value = tagById(tagList(), keep) ? keep : '';
+}
+
+function guessIntoSelect() {
+  var sel = $('taskTag');
+  if (!sel || tagTouched) return;
+  var guess = guessTag($('taskInput').value, tagList());
+  sel.value = guess || '';
+  sel.classList.toggle('is-guess', !!guess);
+  sel.title = guess ? 'Odhad podle textu — změň, když nesedí' : '';
 }
 
 /** Counts the brief and the main rail both need. */
@@ -481,9 +855,26 @@ export function initTasks() {
   $('taskForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var due = dueFrom($('taskDate').value, $('taskTime').value);
-    if (addTask($('taskInput').value, { due_at: due })) {
+    if (addTask($('taskInput').value, { due_at: due, tag: $('taskTag').value || null })) {
       $('taskInput').value = ''; $('taskDate').value = ''; $('taskTime').value = '';
+      tagTouched = false; guessIntoSelect();
     }
+  });
+  $('taskInput').addEventListener('input', guessIntoSelect);
+  $('taskTag').addEventListener('change', function () {
+    tagTouched = !!$('taskTag').value;
+    $('taskTag').classList.remove('is-guess');
+    $('taskTag').title = '';
+  });
+
+  document.querySelectorAll('[data-task-view]').forEach(function (b) {
+    b.addEventListener('click', function () { setView(b.getAttribute('data-task-view')); });
+  });
+  $('newTag').addEventListener('click', function () {
+    addingTag = true; editingTag = null;
+    setView('tag');
+    var f = document.querySelector('#taskGroups .tagedit--new .input');
+    if (f) { f.scrollIntoView({ block: 'nearest' }); f.focus(); }
   });
 
   $('todayTaskForm').addEventListener('submit', function (ev) {

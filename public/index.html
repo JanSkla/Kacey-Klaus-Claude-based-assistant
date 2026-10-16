@@ -348,11 +348,17 @@
     <div class="card__head">
       <h2 class="card__title card__title--lg">Úkoly</h2>
       <span class="muted" id="taskCounts">—</span>
-      <button type="button" class="btn btn--sm push" id="toggleDone">Skrýt hotové</button>
+      <!-- By when or by tag (tasks.js setView); the phone's copy is in the summary card. -->
+      <span class="seg push" role="group" aria-label="Zobrazit úkoly">
+        <button type="button" class="seg__opt" data-task-view="time" aria-pressed="true">Podle termínu</button>
+        <button type="button" class="seg__opt" data-task-view="tag" aria-pressed="false">Podle štítků</button>
+      </span>
+      <button type="button" class="btn btn--sm" id="toggleDone">Skrýt hotové</button>
     </div>
     <div class="card__body card__body--scroll groups" id="taskGroups"></div>
     <form class="card__foot row desk-only" id="taskForm">
       <input class="input" id="taskInput" type="text" placeholder="Přidat úkol — nebo řekni „KC, přidej …“" autocomplete="off" />
+      <select class="select input--when" id="taskTag" aria-label="Štítek — prázdný odhadne Kacey podle textu"></select>
       <input class="input input--when" id="taskDate" type="date" aria-label="Termín — datum (prázdné = bez termínu)" title="Termín (prázdné = bez termínu)" />
       <input class="input input--when" id="taskTime" type="time" step="300" aria-label="Termín — čas (s časem se úkol ukáže v kalendáři)" title="Čas (s časem se úkol ukáže v kalendáři)" />
       <button type="submit" class="btn btn--accent">Přidat</button>
@@ -379,6 +385,10 @@
       <p class="big" id="doneRatio">0 / 0</p>
       <span class="bar"><span class="bar__fill" id="taskBar"></span></span>
       <p class="muted phone-only" id="taskCountsM">—</p>
+      <span class="seg seg--fill phone-only taskview" role="group" aria-label="Zobrazit úkoly">
+        <button type="button" class="seg__opt" data-task-view="time" aria-pressed="true">Podle termínu</button>
+        <button type="button" class="seg__opt" data-task-view="tag" aria-pressed="false">Podle štítků</button>
+      </span>
       <div class="pairrow phone-only">
         <button type="button" class="btn" data-task-act="toggleDone">Skrýt hotové</button>
         <button type="button" class="btn" data-task-act="clearDone">Smazat hotové</button>
@@ -387,6 +397,7 @@
     <section class="card">
       <h2 class="card__title card__title--bar">Akce</h2>
       <div class="fnlist">
+        <button type="button" class="btn btn--fn" id="newTag">Nový štítek</button>
         <button type="button" class="btn btn--fn" id="clearDone">Smazat hotové</button>
       </div>
     </section>
