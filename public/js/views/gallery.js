@@ -29,13 +29,14 @@ var MODEL_EDGE = 1568;         // what the model reads; wider gains nothing
 var MAX_BYTES = 25 * 1024 * 1024;
 
 var photos = [];               // what the server last listed (plus local uploads on top)
-var uploads = [];              // { key, url, name, state: 'uploading' | 'error', error }
+var uploads = [];              // { key, file, url, name, state: 'uploading' | 'error', error, offline }
 var tags = [];
 var total = 0, describing = 0, index = null;
 var query = '', tag = '';
 var openId = null;             // the photo in the sheet
 var armedDelete = false;
 var loadSeq = 0, queryTimer = 0;
+var loaded = false, stale = false;   // a list has come at least once; the last load failed
 
 /* ---- words ------------------------------------------------------------------- */
 
@@ -77,6 +78,7 @@ function load() {
     .then(function (j) {
       if (seq !== loadSeq) return;
       if (!j.ok) throw new Error(j.error || 'chyba');
+      loaded = true; stale = false;
       photos = j.photos || [];
       tags = j.tags || [];
       total = j.total || 0;
@@ -86,12 +88,28 @@ function load() {
     })
     .catch(function () {
       if (seq !== loadSeq) return;
+      stale = true;
+      var off = navigator.onLine === false;
+      // What was loaded before stays on screen; only an empty grid says it failed.
+      if (loaded) {
+        $('galHint').hidden = false;
+        $('galHint').textContent = off ? 'Jsi offline — ukazuju, co jsem načetla naposledy.' : 'Server kaceybody neodpovídá — ukazuju, co jsem načetla naposledy.';
+        return;
+      }
+      $('galGrid').classList.add('is-empty');
       fill($('galGrid'), el('div.galempty', [
-        el('h3', 'Galerii se nepodařilo načíst.'),
-        el('p', 'Server kaceybody neodpovídá. Zkusím to znovu, až se sem vrátíš.'),
+        el('span.galempty__mark.galempty__mark--err', { 'aria-hidden': 'true' }),
+        el('h3', off ? 'Jsi offline.' : 'Galerii se nepodařilo načíst.'),
+        el('p', off ? 'Fotky jsou na kaceybody. Načtu je, až se připojíš.' : 'Server kaceybody neodpovídá. Zkusím to znovu, až se připojí.'),
         el('button.btn', { type: 'button', onclick: load }, 'Zkusit znovu')
       ]));
     });
+}
+
+/* Back online, or the socket is up again: what failed is loaded and sent again. */
+function reconnected() {
+  if (stale) load();
+  uploads.filter(function (u) { return u.state === 'error' && u.offline; }).forEach(function (u) { uploadOne(u.file, u); });
 }
 
 /* ---- the grid ------------------------------------------------------------------- */
@@ -129,7 +147,9 @@ function uploadTile(u) {
     ]),
     el('span.gtile__title', u.state === 'error' ? u.error : u.name),
     el('span.gtile__meta', u.state === 'error'
-      ? el('button.link', { type: 'button', onclick: function () { dropUpload(u.key); } }, 'Zavřít')
+      ? [u.retryable ? el('button.link', { type: 'button', onclick: function () { uploadOne(u.file, u); } }, 'Zkusit znovu') : null,
+         u.retryable ? el('span', ' · ') : null,
+         el('button.link.link--muted', { type: 'button', onclick: function () { dropUpload(u.key); } }, 'Zahodit')]
       : 'ukládám na kaceybody')
   ]);
 }
@@ -262,14 +282,18 @@ function dropUpload(key) {
   render();
 }
 
-async function uploadOne(file) {
-  var u = { key: 'u' + Date.now() + Math.random().toString(36).slice(2, 6), url: URL.createObjectURL(file), name: file.name || 'fotka', state: 'uploading' };
-  uploads.unshift(u);
+/* Resolves true when the photo is on the server. `again` is a failed upload
+   tried once more ("Zkusit znovu", or by itself when the connection is back). */
+async function uploadOne(file, again) {
+  var u = again || { key: 'u' + Date.now() + Math.random().toString(36).slice(2, 6), file: file, url: URL.createObjectURL(file), name: file.name || 'fotka' };
+  u.state = 'uploading'; u.error = ''; u.offline = false; u.retryable = false;
+  if (!again) uploads.unshift(u);
   // Uploads show at the top of the unfiltered grid; a search would hide them.
   if (query.trim() || tag) { query = ''; tag = ''; $('galQuery').value = ''; load(); } else render();
 
   try {
     if (file.size > MAX_BYTES) throw new Error('moc velká (limit 25 MB)');
+    if (navigator.onLine === false) { u.offline = true; throw new Error('jsi offline. Uložím ji, až se připojíš'); }
     var dataUrl = await readAsDataURL(file);
     var img = await loadImage(dataUrl);
     var big = Math.max(img.naturalWidth, img.naturalHeight) > MODEL_EDGE || file.size > 4.5 * 1048576 || file.type === 'image/gif';
@@ -280,15 +304,25 @@ async function uploadOne(file) {
       name: file.name || '', width: img.naturalWidth, height: img.naturalHeight,
       taken_at: file.lastModified ? new Date(file.lastModified).toISOString() : undefined
     };
-    var r = await fetch('/api/gallery', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    var r;
+    try {
+      r = await fetch('/api/gallery', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    } catch (e) {
+      u.offline = true;
+      throw new Error(navigator.onLine === false ? 'jsi offline. Uložím ji, až se připojíš' : 'server kaceybody neodpovídá');
+    }
     var j = await r.json().catch(function () { return {}; });
-    if (!r.ok || !j.ok) throw new Error(j.error || 'server fotku nepřijal');
+    if (r.status === 413) throw new Error('moc velká pro server');
+    if (!r.ok || !j.ok) { u.retryable = r.status >= 500; throw new Error(j.error || 'server fotku nepřijal'); }
     upsert(j.photo);
     dropUpload(u.key);
+    return true;
   } catch (err) {
     u.state = 'error';
+    if (u.offline) u.retryable = true;
     u.error = 'Neuloženo — ' + String(err.message || err).replace(/^\w/, function (c) { return c.toLowerCase(); });
     render();
+    return false;
   }
 }
 
@@ -298,8 +332,11 @@ async function uploadFiles(list) {
   if (ok.length < files.length) say('Uložím jen fotky (JPEG, PNG, WebP, GIF) — ' + (files.length - ok.length) + ' ' + plural(files.length - ok.length, 'soubor', 'soubory', 'souborů') + ' jsem vynechala.');
   if (!ok.length) return;
   go('gallery');
-  for (var i = 0; i < ok.length; i++) await uploadOne(ok[i]);
-  say(ok.length === 1 ? 'Fotka je na kaceybody. Popis a štítky dopíšu za chvilku.' : fotek(ok.length) + ' na kaceybody. Popisy dopíšu za chvilku.');
+  var saved = 0;
+  for (var i = 0; i < ok.length; i++) if (await uploadOne(ok[i])) saved++;
+  if (!saved) return;   // each failed tile says why
+  if (saved < ok.length) say(fotek(saved) + ' na kaceybody, ' + (ok.length - saved) + ' se nepovedlo — u nich je proč.');
+  else say(saved === 1 ? 'Fotka je na kaceybody. Popis a štítky dopíšu za chvilku.' : fotek(saved) + ' na kaceybody. Popisy dopíšu za chvilku.');
 }
 
 /* The server's row for a photo replaces whatever the grid had for it. */
@@ -456,14 +493,16 @@ function deletePhoto() {
   }
   var p = byId(openId);
   if (!p) return;
+  if (navigator.onLine === false) { say('Jsi offline — smazat půjde, až se připojíš.'); return; }
   fetch('/api/gallery/' + encodeURIComponent(p.id), { method: 'DELETE' })
-    .then(function (r) { if (!r.ok) throw new Error(); })
+    // 404: already gone (deleted on another device) — the same outcome.
+    .then(function (r) { if (!r.ok && r.status !== 404) throw new Error(); })
     .then(function () {
       closePhoto();
       removeLocal(p.id);
       say('Fotka smazána · ' + (p.title || 'bez popisu'));
     })
-    .catch(function () { say('Smazat se nepovedlo — server neodpověděl.'); });
+    .catch(function () { armedDelete = false; paintDelete(); say('Smazat se nepovedlo — server kaceybody neodpověděl.'); });
 }
 
 function removeLocal(id) {
@@ -474,10 +513,11 @@ function removeLocal(id) {
 }
 
 function retry(id) {
+  if (navigator.onLine === false) { say('Jsi offline — popis zkusím znovu, až se připojíš.'); return; }
   fetch('/api/gallery/' + encodeURIComponent(id) + '/retry', { method: 'POST' })
     .then(function (r) { return r.json(); })
-    .then(function (j) { if (j.ok) upsert(j.photo); })
-    .catch(function () { say('Server neodpověděl — zkus to za chvíli.'); });
+    .then(function (j) { if (j.ok) upsert(j.photo); else say(j.error || 'Popsat znovu nejde.'); })
+    .catch(function () { say('Server kaceybody neodpověděl — zkus to za chvíli.'); });
 }
 
 /* Into the composer with the photo attached: the question is the owner's. */
@@ -607,6 +647,7 @@ export function initGallery() {
   }, true);
 
   bus.on('gallery', onFrame);
+  window.addEventListener('online', reconnected);
   onEnter('gallery', load);
   // The counts in the sidebar and in Víc, before anyone opens the gallery.
   if (currentView() !== 'gallery') load();

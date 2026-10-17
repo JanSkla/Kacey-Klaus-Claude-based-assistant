@@ -1358,7 +1358,8 @@ app.post('/api/gallery/:id/retry', (req, res) => {
 });
 
 app.delete('/api/gallery/:id', (req, res) => {
-  res.json({ ok: true, deleted: gallery.remove(req.params.id) });
+  if (gallery.remove(req.params.id)) res.json({ ok: true, deleted: true });
+  else res.status(404).json({ ok: false, error: 'Taková fotka není — možná už je smazaná.' });
 });
 
 app.use('/gallery-files', express.static(GALLERY_DIR, { maxAge: '30d', immutable: true, fallthrough: false }));
@@ -1801,6 +1802,11 @@ server.listen(PORT, HOST, () => {
         'an event from Google or TimeTree will fail. Set KLAUS_CALENDARS.');
   }
   log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
+  /* Photos the last run was still describing when it stopped. */
+  try {
+    const n = gallery.resumeInterrupted();
+    if (n) log(`gallery: describing ${n} photo(s) again after the restart`);
+  } catch (err) { log(`gallery resume failed: ${err.message}`); }
   if (PREVIEW) {
     log('PREVIEW of a kaceyFeature branch — no night routine, no screen, no music');
     // An empty gallery shows nothing to compare: paint a few sample photos.

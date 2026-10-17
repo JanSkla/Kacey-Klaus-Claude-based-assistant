@@ -19,6 +19,32 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.4 — 2026-10-17
+
+**Galerie — photos with descriptions and search by meaning**
+- New screen Galerie (desktop: DALŠÍ → Galerie; phone: Víc → Galerie): take a
+  photo (the webcam on a computer, the phone's own camera app), upload or drop
+  photos. They are stored on kaceybody — the files in `data/gallery`
+  (`KACEY_GALLERY_DIR`), the rows in the new `kacey_photo` table
+  ([gallery.js](gallery.js)).
+- Kacey writes each photo's title, caption, tags and hidden search keywords;
+  they are not edited by hand. A description that fails can be retried, and a
+  photo left half-described by a restart is described again on start.
+- The search ranks by meaning over a vector index ([vectors.js](vectors.js)):
+  built-in hashed vectors by default, or an Ollama-compatible embedder via
+  `KACEY_EMBED_URL` / `KACEY_EMBED_MODEL`; vectors from another embedder are
+  rebuilt lazily. Tags filter the grid.
+- In the chat: "ulož mi tuto fotku" saves the attached picture
+  (`app_gallery_save`, Kacey writes the description herself) and "najdi fotku
+  z hor" searches (`app_gallery_search`); both show the photos in the chat.
+  Kacey's persona has a Galerie section.
+- The server checks the image bytes (JPEG, PNG, WebP, GIF; up to 25 MB) and
+  stores what they really are.
+- Offline: a loaded grid stays on screen with a note and reloads on return;
+  uploads that failed offline go up by themselves once connected; a failed
+  upload offers Zkusit znovu · Zahodit.
+- Tests: [test/gallery.mjs](test/gallery.mjs) (`npm run test:gallery`).
+
 ## KC 1.0.3 — 2026-10-16
 
 **The day kept current**

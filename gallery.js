@@ -43,6 +43,21 @@ function emit(event, photo, extra) { try { listener({ event, photo, ...extra });
 
 function newId() { return 'p' + Date.now().toString(36) + randomBytes(3).toString('hex'); }
 
+/* What the bytes are, whatever the page said they were: a file named .jpg that
+   is really a PDF is refused, and a PNG sent as image/jpeg is stored as PNG. */
+export function sniff(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  if (/^GIF8[79]a/.test(buf.toString('latin1', 0, 6))) return 'image/gif';
+  return null;
+}
+
+/* The model call that writes a description. Tests put their own in. */
+let describer = (img) => describe(img);
+export function setDescriber(fn) { describer = typeof fn === 'function' ? fn : (img) => describe(img); }
+
 /* ---- rows ------------------------------------------------------------------- */
 
 function parseTags(s) { try { const a = JSON.parse(s); return Array.isArray(a) ? a.map(String) : []; } catch { return []; } }
@@ -133,11 +148,19 @@ export async function list({ q = '', tag = '', limit = 200 } = {}) {
 
 /* ---- saving ------------------------------------------------------------------------ */
 
-function writeFile(id, suffix, media_type, data) {
+function writeFile(id, suffix, media_type, buf) {
   mkdirSync(GALLERY_DIR, { recursive: true });
   const file = `${id}${suffix}.${TYPES[media_type]}`;
-  writeFileSync(path.join(GALLERY_DIR, file), Buffer.from(data, 'base64'));
+  writeFileSync(path.join(GALLERY_DIR, file), buf);
   return file;
+}
+
+/** { media_type, buf } for an image its bytes confirm, else null. */
+function decode(img) {
+  if (!img || typeof img.data !== 'string' || !img.data) return null;
+  const buf = Buffer.from(img.data, 'base64');
+  const media_type = sniff(buf);
+  return media_type ? { media_type, buf } : null;
 }
 
 function cleanMeta(meta) {
@@ -170,26 +193,31 @@ async function finish(id, meta) {
  * described it in the chat; otherwise the description runs in the background.
  */
 export async function save({ image, thumb, small, name = '', width, height, taken_at, source = 'gallery', meta } = {}) {
-  if (!image || !TYPES[image.media_type]) throw new Error('Tohle není fotka, kterou umím uložit (JPEG, PNG, WebP, GIF).');
-  const bytes = Math.floor(String(image.data || '').length * 3 / 4);
-  if (!bytes) throw new Error('Fotka je prázdná.');
-  if (bytes > MAX_BYTES) throw new Error(`Fotka je moc velká (limit ${MAX_BYTES / 1024 / 1024} MB).`);
+  if (!image || !image.data) throw new Error('Fotka je prázdná.');
+  if (Math.floor(String(image.data).length * 3 / 4) > MAX_BYTES) throw new Error(`Fotka je moc velká (limit ${MAX_BYTES / 1024 / 1024} MB).`);
+  const orig = decode(image);
+  if (!orig) throw new Error('Tohle není fotka, kterou umím uložit (JPEG, PNG, WebP, GIF).');
+  const th = decode(thumb);
+  const sm = decode(small);
 
   const id = newId();
-  const file = writeFile(id, '', image.media_type, image.data);
-  const thumbFile = thumb && TYPES[thumb.media_type] ? writeFile(id, '-t', thumb.media_type, thumb.data) : null;
+  const file = writeFile(id, '', orig.media_type, orig.buf);
+  const thumbFile = th ? writeFile(id, '-t', th.media_type, th.buf) : null;
   const at = now();
+  const when = taken_at && !isNaN(new Date(taken_at)) ? new Date(taken_at).toISOString() : at;
   open().prepare(
     `INSERT INTO kacey_photo (photo_id, file, thumb, media_type, bytes, width, height, name, source, status,
        taken_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'describing', ?, ?, ?)`,
-  ).run(id, file, thumbFile, image.media_type, bytes, Number(width) || null, Number(height) || null,
-    String(name).slice(0, 200), source === 'chat' ? 'chat' : 'gallery', taken_at || at, at, at);
+  ).run(id, file, thumbFile, orig.media_type, orig.buf.length, Number(width) || null, Number(height) || null,
+    String(name).replace(/[\\/]/g, '_').slice(0, 200), source === 'chat' ? 'chat' : 'gallery', when, at, at);
   emit('added', get(id));
 
-  if (meta) return finish(id, meta);
-
-  const forModel = small && TYPES[small.media_type] ? small : image;
-  describeLater(id, forModel);
+  if (meta) {
+    // Kacey's own words from the chat. Were they unusable (no title, no tag),
+    // the photo is not lost: the model describes it as it would an upload.
+    try { return await finish(id, meta); } catch (err) { log(`${id} chat description not used: ${err.message}`); }
+  }
+  describeLater(id, sm ? { media_type: sm.media_type, data: small.data } : { media_type: orig.media_type, data: image.data });
   return get(id);
 }
 
@@ -199,7 +227,7 @@ const pendingImages = new Map();
 
 function describeLater(id, img) {
   pendingImages.set(id, img);
-  describe(img)
+  Promise.resolve().then(() => describer(img))
     .then((meta) => finish(id, meta))
     .catch((err) => {
       log(`${id} not described: ${err.message}`);
@@ -218,6 +246,7 @@ export function retry(id) {
   if (!img) {
     // Prefer the grid copy when the original is too big for the model.
     const pick = r.bytes > MODEL_MAX_BYTES && r.thumb ? r.thumb : r.file;
+    if (!existsSync(path.join(GALLERY_DIR, pick))) throw new Error('Soubor fotky na serveru chybí.');
     const ext = pick.split('.').pop();
     const type = Object.keys(TYPES).find((t) => TYPES[t] === ext) || r.media_type;
     img = { media_type: type, data: readBase64(pick) };
@@ -226,6 +255,23 @@ export function retry(id) {
   emit('added', get(r.photo_id));
   describeLater(r.photo_id, img);
   return get(r.photo_id);
+}
+
+/**
+ * After a restart: a photo that was being described when the server stopped
+ * would say "Popisuji…" for ever. Describe it again from the stored file.
+ * Returns how many were picked up.
+ */
+export function resumeInterrupted() {
+  const stuck = open().prepare(`SELECT photo_id FROM kacey_photo WHERE status = 'describing'`).all()
+    .filter((r) => !pendingImages.has(r.photo_id));
+  for (const r of stuck) {
+    try { retry(r.photo_id); } catch (err) {
+      open().prepare(`UPDATE kacey_photo SET status = 'failed', error = ?, updated_at = ? WHERE photo_id = ?`)
+        .run(String(err.message).slice(0, 200), now(), r.photo_id);
+    }
+  }
+  return stuck.length;
 }
 
 function readBase64(file) {

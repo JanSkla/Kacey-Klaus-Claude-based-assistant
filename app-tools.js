@@ -925,6 +925,7 @@ function makeGallerySave(ctx) {
       if (!img) return fail('V téhle konverzaci žádnou fotku nemám — popros pána, ať ji pošle (sponka nebo vložit).');
       try {
         const photo = await gallery.save({ image: img, source: 'chat', meta: { title, caption, tags, keywords } });
+        if (photo.status !== 'ready') return ok('Uloženo do Galerie, ale tvůj popis se nepoužil — popis a štítky dopíše galerie sama za chvilku.');
         ctx?.send?.({ type: 'gallery', event: 'saved_chat', photo });
         return ok(`Uloženo do Galerie: ${gallery.describeForModel(photo)}`);
       } catch (err) {
@@ -946,7 +947,10 @@ function makeGallerySearch(ctx) {
       limit: z.number().int().min(1).max(12).optional(),
     },
     async ({ query: q, tag, limit = 6 }) => {
-      const r = await gallery.list({ q, tag: tag || '', limit });
+      let r;
+      try { r = await gallery.list({ q, tag: tag || '', limit }); } catch (err) {
+        return fail(`Galerii se nepodařilo prohledat: ${err.message}`);
+      }
       const ready = r.photos.filter((p) => p.status === 'ready');
       ctx?.send?.({ type: 'gallery', event: 'hits', query: q, tag: tag || '', photos: ready });
       if (!r.total) return ok('Galerie je zatím prázdná.');
@@ -992,6 +996,11 @@ export function makeAppServer(ctx = {}) {
       'Novou funkci nebo změnu aplikace samotné předáš přes app_upgrade_request. ' +
       'Fotku z chatu uložíš do pánovy Galerie přes app_gallery_save (popis a štítky píšeš ty); ' +
       'na staré fotky se ptá app_gallery_search.',
-    tools: [...APP_TOOLS, makeUpgradeRequest(ctx), makeGallerySave(ctx), makeGallerySearch(ctx)],
+    tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx)],
   });
+}
+
+/** The two gallery tools for one session (tests call them directly). */
+export function makeGalleryTools(ctx = {}) {
+  return [makeGallerySave(ctx), makeGallerySearch(ctx)];
 }

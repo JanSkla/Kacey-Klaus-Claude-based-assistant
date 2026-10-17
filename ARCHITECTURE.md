@@ -534,6 +534,26 @@ dream.js's runner, cached until the unread set changes) and Kacey's
 `app_notifications` tool see only that it exists. Every new row is broadcast as a
 `notifications` frame with no text in it; a page fetches what it shows.
 
+### The photo gallery
+
+[gallery.js](gallery.js) keeps the photos: the file (and a 480px grid copy) in
+`GALLERY_DIR`, one `kacey_photo` row each with what Kacey wrote — title,
+caption, tags shown, keywords not shown — and its vector. The owner never edits
+the text. Two ways in: the Galerie screen posts to `POST /api/gallery` and the
+row is `describing` until one headless `query()` writes the JSON (`ready`, or
+`failed` with a retry); the chat's `app_gallery_save` already has Kacey looking
+at the picture (`ctx.images()`, the last turn that had any), so she writes the
+text in the call and the row is `ready` at once. Rows still `describing` at
+start are described again (`resumeInterrupted`). The bytes decide the type
+(`sniff`), not the page's label.
+
+The search ([vectors.js](vectors.js)) embeds that text — a built-in hashed
+vector of Czech word stems and trigrams, or an Ollama-compatible
+`KACEY_EMBED_URL` — and ranks by cosine, plus a nudge for a tag said word for
+word. Each vector remembers its model and is rebuilt when the embedder changes;
+the index is the table read into memory. Every change is broadcast as a
+`gallery` frame; `app_gallery_search` sends its hits to its own chat only.
+
 ### The night routine (D.R.E.A.M.)
 
 **Spec: [docs/DREAM.md](docs/DREAM.md).** Read it before touching anything to do
