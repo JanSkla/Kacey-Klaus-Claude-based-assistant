@@ -383,6 +383,18 @@ export async function runNight({ date, trigger, now = new Date(), force = false 
 
   const report = { target_date: date, trigger, attempt: run.attempts, started_at: now.toISOString() };
   let status = 'done';
+  /* Every calendar synced first (calsync.js), so the plan sees what changed in
+     Google today and the morning's "?" are current. A failed sync does not
+     fail the run: the night plans on the mirror as it is. */
+  if (deps.syncCalendar) {
+    try {
+      const s = await deps.syncCalendar('night');
+      report.calendar_sync = { status: s.ok ? 'done' : 'failed', events: s.events, invites: s.invites, error: s.error || undefined };
+    } catch (err) {
+      report.calendar_sync = { status: 'failed', error: err.message };
+      log(`calendar sync failed: ${err.message}`);
+    }
+  }
   try {
     const ctx = collect(date, report);
     const rulesOut = rulesPass(ctx, date, now, report);

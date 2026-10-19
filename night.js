@@ -281,6 +281,10 @@ export function runSummary(r) {
     started_at: r.started_at, finished_at: r.finished_at,
     tasks: (rep.rules?.created || []).length, proposals: rep.reasoning?.proposals || 0,
     reasoning: rep.reasoning?.status || null, brief: rep.brief?.status || null,
+    // The calendar sync at the run's start (calsync.js): done / failed, and the open invitations.
+    calendar_sync: rep.calendar_sync
+      ? { status: rep.calendar_sync.status, invites: rep.calendar_sync.invites || 0, error_cs: humanError(rep.calendar_sync.error) }
+      : null,
     error, error_cs: humanError(error), attempt_list: attempts,
   };
 }

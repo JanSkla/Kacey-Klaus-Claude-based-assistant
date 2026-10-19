@@ -241,6 +241,16 @@ CREATE TABLE IF NOT EXISTS kacey_event_flag (
   updated_at TEXT NOT NULL
 );
 
+/* The owner's answer to an invitation, read from Google at each calendar sync
+   (calsync.js): needsAction · tentative · accepted · declined. Keyed like
+   kacey_event_flag; the sync rewrites the whole table, so an answer given in
+   Google replaces the old one by the next run. */
+CREATE TABLE IF NOT EXISTS kacey_event_response (
+  event_id   TEXT PRIMARY KEY,
+  status     TEXT NOT NULL CHECK (status IN ('needsAction','tentative','accepted','declined')),
+  synced_at  TEXT NOT NULL
+);
+
 /* The phone's notifications, relayed by the Android app (notifications.js).
    One row per thing said: a messaging app's notification carries several
    messages, and each is its own row. dedupe_key is what makes the phone's

@@ -174,6 +174,13 @@ export function cycleModel(c, now) {
       if (i < attempts.length - 1 && a.status === 'done') step.meta = step.meta.split(' · ')[0];
       steps.push(step);
     });
+    // The run's first step: every calendar synced, so the plan saw today's changes.
+    var cs = run && run.calendar_sync;
+    if (cs) {
+      steps.push(cs.status === 'done'
+        ? { time: hm(run.started_at), title: 'Kalendář ✓', meta: 'synchronizován' + (cs.invites ? ' · ' + plural(cs.invites, 'pozvánka čeká', 'pozvánky čekají', 'pozvánek čeká') + ' na odpověď' : ''), st: 'done' }
+        : { time: hm(run.started_at), title: 'Kalendář', meta: 'synchronizace selhala' + (cs.error_cs ? ' — ' + cs.error_cs : '') + ' · plán ze starších dat', st: 'warn' });
+    }
   } else {
     steps.push({ time: '—', title: 'Noční běh', meta: 'po usnutí' + (s.fallback_on === false ? '' : ' · záloha ' + (s.fallback || '04:00')), st: 'pend' });
   }

@@ -564,6 +564,15 @@
     <div class="weekstrip" id="calWeek"></div>
     <p class="cal__meta muted" id="calMeta">—</p>
     <p class="cal__hint">Táhni přes dny a porovnáš až 7 vedle sebe.</p>
+    <!-- The last sync with Google and TimeTree, and a button to run one now (calsync.js). -->
+    <div class="calsync" id="calSync">
+      <span class="calsync__dot" id="calSyncDot" aria-hidden="true"></span>
+      <span class="calsync__text" role="status" aria-live="polite">
+        <span class="calsync__state" id="calSyncState">—</span>
+        <span class="calsync__meta" id="calSyncMeta"></span>
+      </span>
+      <button type="button" class="btn btn--sm calsync__btn" id="calSyncBtn">Synchronizovat</button>
+    </div>
     <div class="card__foot card__foot--block cal__foot psheet" id="calSourcesSheet" aria-label="Zdroje kalendáře">
       <div class="psheet__head phone-only">
         <h2 class="sheet__title">Zdroje kalendáře</h2>

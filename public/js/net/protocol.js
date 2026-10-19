@@ -209,6 +209,12 @@ export function onServer(msg) {
       bus.emit('gallery', msg);
       break;
 
+    case 'calendar_sync':
+      /* A calendar sync started or ended — the night's, or Synchronizovat on
+         any open page (calsync.js on the server, ui/calendar.js here). */
+      bus.emit('calendar_sync', msg);
+      break;
+
     case 'app_changed':
       /* Kacey edited the app through her own tools. Reload the section she
          touched and offer to put it back — a routine imported from a

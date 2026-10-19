@@ -33,6 +33,7 @@ import * as screen from './screen.js';
 import { targetDate } from './sleep.js';
 import { kvGet, kvSet } from './db.js';
 import { tentativeMap, setTentative, dropFlag } from './eventflags.js';
+import * as calsync from './calsync.js';
 import { ruleOffers, draftRuleFromExamples } from './nightplan.js';
 import { BRIEF_AUDIO_DIR, makeSdkRunner } from './dream.js';
 import * as notifications from './notifications.js';
@@ -1038,10 +1039,18 @@ app.get('/api/calendar', async (req, res) => {
 
     const today = logicalDayOf(new Date().toISOString());
     const month = wantMonth || today.slice(0, 7);
+    // A preview shows sample invitations (calsync.js); the real app never has these.
+    if (PREVIEW) {
+      rows.push(...calsync.sampleRows(month));
+      rows.sort((a, b) => (a.starts_at < b.starts_at ? -1 : 1));
+    }
 
     // Unsure events are Kacey's own flag (eventflags.js); klaus_memory has no column for it.
     let unsure = new Map();
     try { unsure = tentativeMap(); } catch (err) { log(`calendar: unsure flags unreadable (${err.message})`); }
+    // The owner's answer to an invitation, from the last sync (calsync.js).
+    let answers = new Map();
+    try { answers = calsync.responseMap(); } catch (err) { log(`calendar: invitation answers unreadable (${err.message})`); }
 
     /* Resolve each event once to the range of days it covers. Ranges rather
        than a single bucket: an event that runs from July to August belongs on
@@ -1072,10 +1081,13 @@ app.get('/api/calendar', async (req, res) => {
         if (date < s.first || date > s.last) continue;
         const count = dayIndex(s.last) - dayIndex(s.first) + 1;
         const index = dayIndex(date) - dayIndex(s.first) + 1;
+        const meta = parseSourceMeta(s.row.source_meta);
         events.push({
           ...s.row,
-          source_meta: parseSourceMeta(s.row.source_meta),
+          source_meta: meta,
           all_day: s.allDay,
+          // needsAction · tentative · accepted · declined, or null: not an invitation.
+          response: s.row.response || calsync.responseOf(s.row.event_id, meta, answers),
           tentative: unsure.has(s.row.event_id),
           tentative_note: unsure.get(s.row.event_id) || '',
           // Which slice of the event this day is, so the row can say so rather
@@ -1109,6 +1121,7 @@ app.get('/api/calendar', async (req, res) => {
       monthsWithEvents,
       days,
       routine,
+      sync: calsync.syncState(),
     });
   } catch (err) {
     log(`calendar read failed: ${err.message}`);
@@ -1199,6 +1212,22 @@ app.post('/api/calendar/:id/delete', express.json({ limit: '4kb' }), async (req,
   log(`calendar delete ${id}: ${r.ok ? 'ok' : 'FAILED ' + r.error}`);
   if (r.ok) dropFlag(id);
   res.status(r.ok ? 200 : 400).json(r);
+});
+
+/* Sync every calendar now — the calendar page's Synchronizovat (calsync.js).
+   The night run does the same at its start. Answers when the sync is over;
+   the `calendar_sync` frame tells every other open page. */
+app.get('/api/calendar/sync', (_req, res) => {
+  try { res.json(calsync.syncState()); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/calendar/sync', async (_req, res) => {
+  try {
+    const last = await calsync.runSync('user');
+    res.status(last.ok ? 200 : 502).json({ ok: last.ok, last });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 /* Unsure or settled. Kacey's own flag, so no klaus_memory process: the event
@@ -1807,8 +1836,10 @@ server.listen(PORT, HOST, () => {
     const n = gallery.resumeInterrupted();
     if (n) log(`gallery: describing ${n} photo(s) again after the restart`);
   } catch (err) { log(`gallery resume failed: ${err.message}`); }
+  calsync.setBroadcast(broadcast);
   if (PREVIEW) {
     log('PREVIEW of a kaceyFeature branch — no night routine, no screen, no music');
+    calsync.seedPreview();
     // An empty gallery shows nothing to compare: paint a few sample photos.
     import('./gallery-samples.js')
       .then((m) => m.seedSamples())
@@ -1842,6 +1873,8 @@ server.listen(PORT, HOST, () => {
     broadcast,
     persona: briefPersona,
     onWrite: (section) => broadcast({ type: 'app_changed', section }),
+    // Every calendar synced first, so the night plans on fresh data (calsync.js).
+    syncCalendar: (by) => calsync.runSync(by),
   });
 });
 

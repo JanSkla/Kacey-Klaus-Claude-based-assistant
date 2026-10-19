@@ -123,15 +123,24 @@ function colourFor(source) {
 }
 
 /* An unsure event ("?" on a poster, "maybe Saturday") — Kacey's own flag, sent
-   by /api/calendar. Dotted instead of solid, and a "?" before the title. */
-function unsure(e) { return !!(e && e.tentative); }
+   by /api/calendar. Dotted instead of solid, and a "?" before the title.
+   An invitation the owner has not said yes to in Google (`response`
+   needsAction, or "Možná" = tentative, read at each sync) is drawn the same
+   way; once accepted there, the next sync takes the "?" away. */
+function invited(e) { return !!(e && (e.response === 'needsAction' || e.response === 'tentative')); }
+function unsure(e) { return !!(e && (e.tentative || invited(e))); }
+function unsureWhy(e) {
+  if (e.response === 'needsAction') return 'nepotvrzeno';
+  if (e.response === 'tentative') return 'možná';
+  return 'nejisté';
+}
 function unsureMark(e) {
-  return unsure(e) ? el('span.unsure', { title: 'nejisté', 'aria-label': 'nejisté' }, '?') : null;
+  return unsure(e) ? el('span.unsure', { title: unsureWhy(e), 'aria-label': unsureWhy(e) }, '?') : null;
 }
 function edge(width, e) {
   return 'border-left:' + width + 'px ' + (unsure(e) ? 'dotted ' : 'solid ') + colourFor(sourceOf(e));
 }
-function unsureWord(e) { return unsure(e) ? 'nejisté · ' : ''; }
+function unsureWord(e) { return unsure(e) ? unsureWhy(e) + ' · ' : ''; }
 
 function sourceEnabled(source) {
   var on = store.data.settings.calOn || {};
@@ -417,7 +426,99 @@ async function fetchMonth(m) {
   if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
   payloads[body.month] = body;
   fetchedAt = Date.now();
+  if (body.sync) setSync(body.sync, false);
   return body;
+}
+
+/* ---- syncing with Google and TimeTree -------------------------------------
+   klaus_memory's mirror is what the calendar reads; the sync refreshes it.
+   It runs every night (the night run's first step) and on Synchronizovat
+   here. The strip says how the last one went and how many invitations still
+   wait for an answer. */
+
+var sync = null;           // { last, running } from the month, POST /api/calendar/sync, the calendar_sync frame
+var syncSeenAt = null;     // the last finished sync this page has redrawn for
+
+function whenWord(iso) {
+  var d = new Date(iso);
+  if (isNaN(d)) return '';
+  var day = new Date(); day.setHours(0, 0, 0, 0);
+  var then = new Date(d); then.setHours(0, 0, 0, 0);
+  var diff = Math.round((day - then) / 86400000);
+  var t = clockOf(iso);
+  if (diff === 0) return 'dnes ' + t;
+  if (diff === 1) return 'včera ' + t;
+  return d.getDate() + '. ' + (d.getMonth() + 1) + '. ' + t;
+}
+
+function invitesWord(n) {
+  if (n === 1) return '1 pozvánka čeká na odpověď';
+  if (n >= 2 && n <= 4) return n + ' pozvánky čekají na odpověď';
+  return n + ' pozvánek čeká na odpověď';
+}
+
+/** A new state arrived. `redraw`: a finished sync this page has not seen yet
+    reloads the month, so the "?" follow what was answered in Google. */
+function setSync(s, redraw) {
+  sync = s;
+  var at = s && s.last && !s.running ? s.last.at : null;
+  var fresh = redraw && at && at !== syncSeenAt;
+  if (at) syncSeenAt = at;
+  if (fresh) refreshCalendar();
+  renderSync();
+}
+
+function renderSync() {
+  if (!$('calSync')) return;
+  var s = sync || {};
+  var last = s.last;
+  var st, state, meta = [];
+  if (s.running) {
+    st = 'busy';
+    state = 'Synchronizuji…';
+    meta.push(s.running.by === 'night' ? 'noční režim' : 'Google · TimeTree');
+  } else if (!last) {
+    st = 'never';
+    state = 'Zatím nesynchronizováno';
+    meta.push('poprvé v noci, nebo teď ručně');
+  } else if (!last.ok) {
+    st = 'err';
+    state = 'Synchronizace se nepovedla · ' + whenWord(last.at);
+    meta.push(last.error_cs || 'kalendář neodpověděl');
+    if (last.last_ok_at) meta.push('platí stav z ' + whenWord(last.last_ok_at));
+  } else {
+    st = 'ok';
+    state = 'Synchronizováno ' + whenWord(last.at);
+    meta.push(last.by === 'night' ? 'v noci' : 'ručně');
+  }
+  var nodes = [meta.join(' · ')];
+  if (!s.running && last && last.invites) {
+    nodes.push(' · ', el('span.calsync__invites', invitesWord(last.invites)));
+  }
+  $('calSync').setAttribute('data-st', st);
+  $('calSyncState').textContent = state;
+  fill($('calSyncMeta'), nodes);
+  var btn = $('calSyncBtn');
+  btn.disabled = !!s.running;
+  btn.textContent = s.running ? 'Synchronizuji…' : 'Synchronizovat';
+}
+
+async function runSync() {
+  if (sync && sync.running) return;
+  setSync({ last: sync && sync.last, running: { by: 'user', started_at: new Date().toISOString() } }, false);
+  try {
+    var res = await fetch('/api/calendar/sync', { method: 'POST' });
+    var out = await res.json();
+    var last = out.last;
+    if (!last) throw new Error(out.error || ('HTTP ' + res.status));
+    setSync({ last: last, running: null }, true);
+    say(last.ok
+      ? 'Kalendář synchronizován' + (last.invites ? ' · ' + invitesWord(last.invites) + '.' : '.')
+      : 'Synchronizace se nepovedla — ' + (last.error_cs || 'kalendář neodpověděl') + '.');
+  } catch (err) {
+    setSync({ last: sync && sync.last, running: null }, false);
+    say(navigator.onLine === false ? 'Jsi offline — synchronizovat teď nejde.' : 'Synchronizace se nepovedla: ' + err.message);
+  }
 }
 
 /** A range reached into a month nobody has fetched: get it, then redraw. */
@@ -909,11 +1010,15 @@ function openEvent(e, topPx, col) {
       el('button.sheet__close.push', { type: 'button', 'data-psheet-close': true, 'aria-label': 'Zavřít' }, '×')
     ]) : null,
     /* An unsure event leads with its "?" and says so; Kacey's reason (the
-       note) gets a line of its own under the head. */
+       note) gets a line of its own under the head. An invitation says where
+       it is answered: in Google, not here. */
     unsure(e)
-      ? el('p.label', [unsureMark(e), 'NEJISTÉ · ' + hours.toUpperCase() + ' · ' + sourceOf(e).toUpperCase()])
+      ? el('p.label', [unsureMark(e), unsureWhy(e).toUpperCase() + ' · ' + hours.toUpperCase() + ' · ' + sourceOf(e).toUpperCase()])
       : el('p.muted-3', hours + ' · ' + sourceOf(e)),
-    unsure(e) && e.tentative_note ? el('p.muted', e.tentative_note) : null,
+    invited(e) ? el('p.muted', e.response === 'tentative'
+      ? 'Na pozvánku je odpověď „Možná“. Až ji v Google Kalendáři změníš na Ano, otazník po synchronizaci zmizí.'
+      : 'Pozvánka čeká na tvou odpověď. Přijmi ji v Google Kalendáři — otazník po synchronizaci zmizí.') : null,
+    e.tentative && e.tentative_note ? el('p.muted', e.tentative_note) : null,
     input,
     el('div.row', { style: 'margin-top:8px' }, [
       el('button.btn.btn--accent.btn--sm', {
@@ -921,12 +1026,13 @@ function openEvent(e, topPx, col) {
         onclick: async function () { await writeEvent(e.event_id, 'update', { title: input.value }); }
       }, 'Uložit název'),
       /* Settling an unsure event (or making one unsure) is Kacey's own flag, so
-         it can happen here as well as in the conversation. */
-      el('button.btn.btn--sm' + (unsure(e) ? '.btn--outlineaccent' : ''), {
+         it can happen here as well as in the conversation. An open invitation
+         is settled in Google, so it gets no button of its own. */
+      invited(e) && !e.tentative ? null : el('button.btn.btn--sm' + (e.tentative ? '.btn--outlineaccent' : ''), {
         type: 'button',
-        title: unsure(e) ? 'Událost je jistá' : 'Zatím nejisté — v kalendáři tečkovaně',
-        onclick: function () { writeEvent(e.event_id, 'tentative', { tentative: !unsure(e) }); }
-      }, unsure(e) ? 'Potvrdit' : 'S otazníkem'),
+        title: e.tentative ? 'Událost je jistá' : 'Zatím nejisté — v kalendáři tečkovaně',
+        onclick: function () { writeEvent(e.event_id, 'tentative', { tentative: !e.tentative }); }
+      }, e.tentative ? 'Potvrdit' : 'S otazníkem'),
       el('button.btn.btn--sm.btn--dangerghost', {
         type: 'button',
         onclick: function (ev) {
@@ -1652,6 +1758,8 @@ export function initCalendar(opts) {
   $('calSourcesOpen').addEventListener('click', function () { openSheet($('calSourcesSheet')); });
   $('calReloadM').addEventListener('click', function () { refreshCalendar(); say('Kalendář načten znovu.'); });
   $('calReload').addEventListener('click', refreshCalendar);
+  $('calSyncBtn').addEventListener('click', runSync);
+  bus.on('calendar_sync', function (msg) { setSync({ last: msg.last, running: msg.running }, true); });
 
   /* The routine on the shown date: add for the day, sick days, back to default. */
   $('routineAdd').addEventListener('click', function () { openAdd(selected); });
