@@ -477,6 +477,7 @@ function renderSync() {
     st = 'busy';
     state = 'Synchronizuji…';
     meta.push(s.running.by === 'night' ? 'noční režim' : 'Google · TimeTree');
+    if (last && last.at) meta.push('naposledy ' + whenWord(last.at));
   } else if (!last) {
     st = 'never';
     state = 'Zatím nesynchronizováno';
@@ -491,7 +492,8 @@ function renderSync() {
     state = 'Synchronizováno ' + whenWord(last.at);
     meta.push(last.by === 'night' ? 'v noci' : 'ručně');
   }
-  var nodes = [meta.join(' · ')];
+  // One small line: the state, then its details after a " · ".
+  var nodes = [' · ' + meta.join(' · ')];
   if (!s.running && last && last.invites) {
     nodes.push(' · ', el('span.calsync__invites', invitesWord(last.invites)));
   }
@@ -500,7 +502,7 @@ function renderSync() {
   fill($('calSyncMeta'), nodes);
   var btn = $('calSyncBtn');
   btn.disabled = !!s.running;
-  btn.textContent = s.running ? 'Synchronizuji…' : 'Synchronizovat';
+  btn.setAttribute('aria-label', s.running ? 'Synchronizuji…' : 'Synchronizovat kalendáře');
 }
 
 async function runSync() {

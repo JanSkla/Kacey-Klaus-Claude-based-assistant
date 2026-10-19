@@ -566,12 +566,10 @@
     <p class="cal__hint">Táhni přes dny a porovnáš až 7 vedle sebe.</p>
     <!-- The last sync with Google and TimeTree, and a button to run one now (calsync.js). -->
     <div class="calsync" id="calSync">
-      <span class="calsync__dot" id="calSyncDot" aria-hidden="true"></span>
-      <span class="calsync__text" role="status" aria-live="polite">
-        <span class="calsync__state" id="calSyncState">—</span>
-        <span class="calsync__meta" id="calSyncMeta"></span>
-      </span>
-      <button type="button" class="btn btn--sm calsync__btn" id="calSyncBtn">Synchronizovat</button>
+      <span class="calsync__text" role="status" aria-live="polite"><span class="calsync__state" id="calSyncState">—</span><span class="calsync__meta" id="calSyncMeta"></span></span>
+      <button type="button" class="iconbtn calsync__btn" id="calSyncBtn" aria-label="Synchronizovat kalendáře" title="Synchronizovat s Googlem a TimeTree">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 4v5h-5M4 20v-5h5M5.1 9a7.5 7.5 0 0 1 13.3-1.8L20 9M4 15l1.6 1.8A7.5 7.5 0 0 0 18.9 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
     <div class="card__foot card__foot--block cal__foot psheet" id="calSourcesSheet" aria-label="Zdroje kalendáře">
       <div class="psheet__head phone-only">

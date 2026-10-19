@@ -723,21 +723,19 @@ body.is-tagdrag, body.is-tagdrag * { cursor: grabbing !important; user-select: n
 .cal__hint { margin: 0; padding: 0 14px 12px; font-size: 12px; color: var(--ink3); }
 .cal__foot { margin-top: auto; }
 .cal__foot > * + * { margin-top: 8px; }
-/* The last sync with Google and TimeTree: a state dot (green = done, accent
-   pulsing = running, red = failed, hollow = never), its words, Synchronizovat. */
-.calsync { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
-.calsync__dot { width: 8px; height: 8px; flex: none; border: 1px solid var(--ink3); }
-.calsync[data-st="ok"] .calsync__dot { background: var(--ok); border-color: var(--ok); }
-.calsync[data-st="busy"] .calsync__dot { background: var(--acc); border-color: var(--acc); animation: pulseDot 1.4s infinite; }
-.calsync[data-st="err"] .calsync__dot { background: var(--err); border-color: var(--err); }
-.calsync__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-.calsync__state { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* The last sync with Google and TimeTree: one small line saying when (and how
+   it went), and the sync icon button (spins while running). */
+.calsync { display: flex; align-items: center; gap: 10px; padding: 6px 14px; border-top: 1px solid var(--line); }
+.calsync__text { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.4; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.calsync__state { color: var(--ink2); }
 .calsync[data-st="err"] .calsync__state { color: var(--err); }
 .calsync[data-st="busy"] .calsync__state { color: var(--acc); }
-.calsync__meta { font-size: 12px; color: var(--ink3); font-variant-numeric: tabular-nums; }
 .calsync__invites { color: var(--warn); }
-.calsync__btn { flex: none; }
-body.is-hidden .calsync__dot { animation: none; }
+.calsync__btn:disabled { cursor: default; }
+.calsync[data-st="busy"] .calsync__btn { color: var(--acc); border-color: var(--acc); }
+.calsync[data-st="busy"] .calsync__btn svg { animation: calsyncSpin 1s linear infinite; }
+@keyframes calsyncSpin { to { transform: rotate(360deg); } }
+body.is-hidden .calsync__btn svg { animation: none; }
 .cal__jump { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
 
 /* Segmented choice: joined buttons, one pressed. The calendar's range switch. */
@@ -1780,7 +1778,7 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .view[data-view="calendar"][data-month="open"] .weekstrip { display: none; }
   /* The sync strip stays under the week, folded or not. */
   .calsync { padding: 6px 12px; border-top: 0; border-bottom: 1px solid var(--line); }
-  .calsync__btn { min-height: 44px; }
+  .calsync__btn { width: 44px; height: 44px; }
   .weekday {
     min-height: 62px; padding: 4px 0; font: inherit; cursor: pointer;
     background: var(--l1); border: 1px solid var(--line); color: var(--ink);
