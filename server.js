@@ -40,6 +40,7 @@ import * as notifications from './notifications.js';
 import * as monitor from './monitor.js';
 import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
+import * as whiteboard from './whiteboard.js';
 import { addDays, turnClock } from './public/js/core/due.js';
 
 import {
@@ -48,7 +49,7 @@ import {
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
   XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL, NOWPLAYING_URL, DUCK_PERCENT,
-  LOGICAL_DAY_START_HOUR, LIGHTSD_URL, PREVIEW, SELFUPDATE, GALLERY_DIR,
+  LOGICAL_DAY_START_HOUR, LIGHTSD_URL, PREVIEW, SELFUPDATE, GALLERY_DIR, WHITEBOARD_DIR,
 } from './config.js';
 
 // ---------------------------------------------------------------------------
@@ -217,6 +218,10 @@ class KaceySession {
     // The pictures of the last turn that had any — what "ulož mi tuto fotku"
     // points at, even a turn or two after the photo came (app_gallery_save).
     this.lastImages = [];
+
+    // The whiteboard the page has open as this turn was sent — what "tady",
+    // "na plochu" and "tohle" point at (app_whiteboard_*): { id, view, selected }.
+    this.pageBoard = null;
   }
 
   send(frame) {
@@ -231,6 +236,16 @@ class KaceySession {
    * text still carries the nudge below, because it has to be the LAST thing
    * the model reads and blocks are read in order.
    */
+  /* The board on the owner's screen, so "dej to sem" needs no question. */
+  boardNote() {
+    const id = this.pageBoard?.id;
+    const b = id ? whiteboard.get(id) : null;
+    if (!b) return '';
+    return ` Pán má na obrazovce otevřený whiteboard „${b.name}“ (${b.id}, ${b.doc.items.length} objektů)` +
+      (this.pageBoard.selected?.length ? `, vybráno ${this.pageBoard.selected.length}` : '') +
+      ' — „tady“, „na plochu“ a „tohle“ myslí ten; přečti ho přes app_whiteboard_read.';
+  }
+
   pushUserMessage(text, images) {
     // Two rules keep slipping despite being in the persona, because the system
     // prompt sits far back in context while the model's tool-use reflex fires
@@ -243,7 +258,7 @@ class KaceySession {
     const nudge =
       '\n\n[systémová poznámka: ' + turnClock(new Date(), LOGICAL_DAY_START_HOUR) + ' Veškerý text česky — včetně úvodní věty před ' +
       'použitím nástroje. O sobě mluv v ženském rodě (ráda, podívala jsem se). ' +
-      'Anglicky jen tehdy, když uživatel píše anglicky.]';
+      'Anglicky jen tehdy, když uživatel píše anglicky.' + this.boardNote() + ']';
 
     const list = Array.isArray(images) ? images : [];
     const content = list.length
@@ -306,6 +321,7 @@ class KaceySession {
           [APP_SERVER_NAME]: makeAppServer({
             sessionId: () => this.sessionId,
             images: () => this.lastImages,
+            board: () => this.pageBoard,
             send: (frame) => this.send(frame),
           }),
         },
@@ -1393,6 +1409,80 @@ app.delete('/api/gallery/:id', (req, res) => {
 
 app.use('/gallery-files', express.static(GALLERY_DIR, { maxAge: '30d', immutable: true, fallthrough: false }));
 
+/* ---------------------------------------------------------------------------
+ * Whiteboards (whiteboard.js). The Whiteboard screen saves the whole document
+ * here, debounced, with the revision it started from; Kacey's tools write
+ * through the same module. Every change goes out as a `whiteboard` frame.
+ * ------------------------------------------------------------------------- */
+
+whiteboard.onEvent((ev) => broadcast({ type: 'whiteboard', ...ev }));
+
+/* What the page says it has open, cleaned: the id, the part of the board on
+   screen, what is selected. Anything else is dropped. */
+function pageBoardOf(v) {
+  if (!v || typeof v !== 'object' || typeof v.id !== 'string' || !/^b[a-z0-9]{4,40}$/.test(v.id)) return null;
+  const view = v.view && typeof v.view === 'object' && ['x', 'y', 'w', 'h', 'z'].every((k) => Number.isFinite(v.view[k]))
+    ? { x: v.view.x, y: v.view.y, w: v.view.w, h: v.view.h, z: v.view.z } : null;
+  const selected = Array.isArray(v.selected) ? v.selected.filter((s) => typeof s === 'string').slice(0, 50).map((s) => s.slice(0, 40)) : [];
+  return { id: v.id, view, selected };
+}
+
+const boardError = (res, err, status = 400) => res.status(status).json({ ok: false, error: err?.message || 'Whiteboard se nepodařilo uložit.' });
+
+app.get('/api/whiteboards', (req, res) => {
+  try { res.json({ ok: true, boards: whiteboard.list() }); } catch (err) { log(`whiteboards list failed: ${err?.message || err}`); boardError(res, { message: 'Whiteboardy se nepodařilo načíst.' }, 500); }
+});
+
+app.post('/api/whiteboards', express.json({ limit: '4mb' }), (req, res) => {
+  const b = req.body || {};
+  try { res.json({ ok: true, board: whiteboard.create({ name: b.name, doc: b.doc }) }); } catch (err) { boardError(res, err); }
+});
+
+app.get('/api/whiteboards/:id', (req, res) => {
+  const b = whiteboard.get(req.params.id);
+  if (b) res.json({ ok: true, board: b });
+  else res.status(404).json({ ok: false, error: 'Takový whiteboard není — možná je smazaný.' });
+});
+
+app.put('/api/whiteboards/:id', express.json({ limit: '4mb' }), (req, res) => {
+  const b = req.body || {};
+  try {
+    res.json({ ok: true, board: whiteboard.save(req.params.id, b.doc, { rev: b.rev, by: 'page', origin: String(b.origin || '').slice(0, 40) }) });
+  } catch (err) {
+    if (err instanceof whiteboard.Conflict) res.status(409).json({ ok: false, conflict: true, board: err.board, error: err.message });
+    else boardError(res, err, 404);
+  }
+});
+
+app.patch('/api/whiteboards/:id', express.json({ limit: '4kb' }), (req, res) => {
+  try { res.json({ ok: true, board: whiteboard.summary(whiteboard.rename(req.params.id, req.body?.name)) }); } catch (err) { boardError(res, err); }
+});
+
+app.post('/api/whiteboards/:id/duplicate', express.json({ limit: '4kb' }), (req, res) => {
+  try { res.json({ ok: true, board: whiteboard.duplicate(req.params.id, req.body?.name) }); } catch (err) { boardError(res, err, 404); }
+});
+
+app.delete('/api/whiteboards/:id', (req, res) => {
+  if (whiteboard.remove(req.params.id)) res.json({ ok: true });
+  else res.status(404).json({ ok: false, error: 'Takový whiteboard není — možná už je smazaný.' });
+});
+
+app.post('/api/whiteboards/:id/restore', (req, res) => {
+  try { res.json({ ok: true, board: whiteboard.restore(req.params.id) }); } catch (err) { boardError(res, err, 404); }
+});
+
+app.post('/api/whiteboard-files', express.json({ limit: '40mb' }), (req, res) => {
+  const b = req.body || {};
+  try { res.json({ ok: true, file: whiteboard.saveFile({ name: b.name, type: b.type, data: b.data }) }); } catch (err) { boardError(res, err); }
+});
+
+/* Anything may be dropped on a board, so nothing served from here may run on
+   Kacey's origin: an SVG or an HTML file opened in a tab is sandboxed. */
+app.use('/whiteboard-files', express.static(WHITEBOARD_DIR, {
+  maxAge: '30d', immutable: true, fallthrough: false,
+  setHeaders: (res) => { res.setHeader('Content-Security-Policy', 'sandbox'); res.setHeader('X-Content-Type-Options', 'nosniff'); },
+}));
+
 /**
  * Normalise text for XTTS.
  *
@@ -1767,6 +1857,7 @@ wss.on('connection', (ws, req) => {
         return;
       }
       noteInteraction('message');
+      session.pageBoard = pageBoardOf(frame.board);
       session.onUserMessage(text || 'Podívej se na tohle.', images);
     } else if (frame?.type === 'interrupt') {
       await session.onInterrupt();
@@ -1845,6 +1936,8 @@ server.listen(PORT, HOST, () => {
       .then((m) => m.seedSamples())
       .then((n) => { if (n) log(`gallery: ${n} sample photos for the preview`); })
       .catch((err) => log(`gallery samples not made: ${err.message}`));
+    // And two whiteboards, so the gallery and a full board have something to show.
+    try { const n = whiteboard.seedSamples(); if (n) log(`whiteboard: ${n} sample boards for the preview`); } catch (err) { log(`whiteboard samples not made: ${err.message}`); }
     return;
   }
   if (SELFUPDATE) {

@@ -209,6 +209,13 @@ export function onServer(msg) {
       bus.emit('gallery', msg);
       break;
 
+    case 'whiteboard':
+      /* A board made, changed, renamed or deleted (by Kacey or another page),
+         or Kacey asking this page to open one (whiteboard.js on the server,
+         views/whiteboard.js and views/boards.js here). */
+      bus.emit('whiteboard', msg);
+      break;
+
     case 'calendar_sync':
       /* A calendar sync started or ended — the night's, or Synchronizovat on
          any open page (calsync.js on the server, ui/calendar.js here). */
@@ -319,7 +326,7 @@ export function submit(text) {
   dom.input.value = '';
   dom.input.classList.remove('is-interim');
 
-  var ok = transport.send({ type: 'user_message', text: msg, images: images });
+  var ok = transport.send({ type: 'user_message', text: msg, images: images, board: state.pageBoard || undefined });
   if (!ok) showAlert(t().errOfflineSend);
   else { clearAttachments(); syncOrb(); }
 }

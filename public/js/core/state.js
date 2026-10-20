@@ -41,5 +41,8 @@ export var state = {
   sessionId: null,
   night: null,             // the server's last `night_state` (sleep, screen, run) — read-only
   voiceWarned: false,
-  voice: 'Nova Hogarth'    // XTTS speaker, or 'browser' for the built-in engine
+  voice: 'Nova Hogarth',   // XTTS speaker, or 'browser' for the built-in engine
+  // The whiteboard on screen, sent with each turn so "dej to sem" needs no
+  // question: { id, view, selected } or null. views/whiteboard.js writes it.
+  pageBoard: null
 };

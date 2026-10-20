@@ -36,6 +36,8 @@
        journal.js     dictation, autosave, the side chat
        library.js     every entry, filtered and searchable
        gallery.js     photos on kaceybody, described by Kacey, searched by meaning
+       whiteboard.js  one board full screen: cards, areas, images, documents, arrows
+       boards.js      the named boards, and Kacey's board edits in the chat
        brief.js       the spoken daily brief
        timers.js      timers and their presets
        controller.js  sources, memory sections, tool permissions
@@ -96,6 +98,8 @@ import { initTasks } from './js/views/tasks.js';
 import { initJournal } from './js/views/journal.js';
 import { initLibrary } from './js/views/library.js';
 import { initGallery } from './js/views/gallery.js';
+import { initWhiteboard } from './js/views/whiteboard.js';
+import { initBoards } from './js/views/boards.js';
 import { initBrief } from './js/views/brief.js';
 import { initTimers } from './js/views/timers.js';
 import { initController } from './js/views/controller.js';
@@ -175,6 +179,8 @@ initTasks();
 initJournal(askAside);
 initLibrary();
 initGallery();
+initWhiteboard();
+initBoards();
 initBrief();
 initTimers();
 initController(restartSession);

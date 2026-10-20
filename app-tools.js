@@ -34,6 +34,7 @@ import * as calsync from './calsync.js';
 import * as notifications from './notifications.js';
 import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
+import * as whiteboard from './whiteboard.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -912,7 +913,7 @@ const morningAdd = tool(
 let onUpgrade = null;
 export function setUpgradeHandler(fn) { onUpgrade = typeof fn === 'function' ? fn : null; }
 
-const VIEW_NAMES = ['main', 'tasks', 'calendar', 'journal', 'library', 'gallery', 'brief', 'timer', 'controller', 'rules', 'morning', 'lights'];
+const VIEW_NAMES = ['main', 'tasks', 'calendar', 'journal', 'library', 'gallery', 'boards', 'board', 'brief', 'timer', 'controller', 'rules', 'morning', 'lights'];
 
 function makeUpgradeRequest(ctx) {
   return tool(
@@ -1008,6 +1009,134 @@ function makeGallerySearch(ctx) {
   );
 }
 
+/* ---- whiteboards ---------------------------------------------------------- */
+
+/* All three need the session: which board the owner has open (`ctx.board()`,
+   from the page's user_message), and the chat to show the change in
+   (`ctx.send`). A board is named by its id or its name; none means the open one. */
+
+function boardFor(ctx, ref) {
+  const open = ctx?.board?.() || null;
+  const b = ref ? whiteboard.find(ref) : open?.id ? whiteboard.get(open.id) : null;
+  if (!b) {
+    throw new Error(ref
+      ? `Whiteboard „${ref}“ nemám. Seznam vrátí app_whiteboard_manage (action list).`
+      : 'Pán teď žádný whiteboard otevřený nemá — řekni který (board), nebo založ nový (app_whiteboard_manage create).');
+  }
+  return { b, open: open && open.id === b.id ? open : null };
+}
+
+function makeWhiteboardRead(ctx) {
+  return tool(
+    'app_whiteboard_read',
+    'Přečte whiteboard (volnou plochu na myšlenky): každý objekt s id, druhem (text, obdélník, obrázek, dokument), barvou, ' +
+      'textem, polohou x/y a velikostí, v kterém obdélníku leží a zhruba kde, šipky mezi objekty (od → k) a co pán právě vidí ' +
+      'a má vybráno. Obdélníky jsou oblasti: co leží uvnitř, k nim patří. Zavolej PŘED každou úpravou.',
+    {
+      board: z.string().max(80).optional().describe('Id nebo jméno whiteboardu. Bez něj ten, který má pán otevřený.'),
+    },
+    async ({ board }) => {
+      try {
+        const { b, open } = boardFor(ctx, board);
+        return ok(whiteboard.describe(b, { view: open?.view, selected: open?.selected }));
+      } catch (err) { return fail(err.message); }
+    },
+  );
+}
+
+const WB_OP = z.object({
+  op: z.enum(['add', 'update', 'delete', 'connect', 'disconnect', 'tidy', 'clear']),
+  ref: z.string().max(40).optional().describe('add/connect: tvoje značka pro nový objekt, na kterou se odkážou další operace téhož volání'),
+  id: z.string().max(80).optional().describe('update/delete/disconnect/tidy: id objektu (nebo ref, nebo jeho přesný text)'),
+  kind: z.enum(['text', 'rect', 'image']).optional().describe('add: text = karta s textem, rect = barevný obdélník (oblast s nadpisem), image = fotka z Galerie'),
+  text: z.string().max(4000).optional().describe('Text karty, nadpis obdélníku, popisek obrázku'),
+  kicker: z.string().max(60).optional().describe('Malý štítek nad textem karty, odkud to je: „ÚKOL · DNES 17:00“, „KALENDÁŘ · ČT 10:30“, „DENÍK · 12. 10.“. Prázdný = smazat.'),
+  color: z.string().max(20).optional().describe('šedá, žlutá, zelená, tyrkysová, modrá, fialová, růžová, červená'),
+  x: z.number().optional(), y: z.number().optional(),
+  w: z.number().optional(), h: z.number().optional(),
+  dx: z.number().optional(), dy: z.number().optional(),
+  inside: z.string().max(80).optional().describe('add/update: dej do obdélníku (id/ref/nadpis) na první volné místo; obdélník se zvětší. tidy: který obdélník srovnat.'),
+  near: z.string().max(80).optional().describe('add/update: polož vedle tohoto objektu'),
+  side: z.enum(['right', 'left', 'below', 'above']).optional().describe('S near: na kterou stranu (výchozí below)'),
+  photo: z.string().max(60).optional().describe('add image: id fotky z Galerie'),
+  from: z.string().max(80).optional(), to: z.string().max(80).optional(),
+  label: z.string().max(80).optional().describe('connect: popisek šipky („pak“, „blokuje“, „kvůli“)'),
+  both: z.boolean().optional().describe('disconnect: i šipku opačným směrem'),
+  with_contents: z.boolean().optional().describe('delete obdélníku: smazat i to, co v něm leží'),
+});
+
+function makeWhiteboardEdit(ctx) {
+  return tool(
+    'app_whiteboard_edit',
+    'Upraví whiteboard seznamem operací, v pořadí: add (text, rect, image), update (text, barva, štítek, posun x/y nebo dx/dy, ' +
+      'velikost, inside = přesunout do obdélníku), delete, connect (šipka from → to s popiskem), disconnect, tidy (srovná obsah ' +
+      'obdélníku), clear (vše pryč). Přesunutý obdélník bere svůj obsah s sebou. Bez x/y se objekt položí sám: do obdélníku ' +
+      '(inside), vedle objektu (near + side), jinak vpravo od všeho. Pro třídění myšlenek: obdélník na každou skupinu, karty ' +
+      'dovnitř přes inside, souvislosti šipkami; ke kartám z aplikace dej kicker, odkud jsou. Pán vidí změnu hned a může ji vrátit.',
+    {
+      board: z.string().max(80).optional().describe('Id nebo jméno whiteboardu. Bez něj ten, který má pán otevřený.'),
+      ops: z.array(WB_OP).min(1).max(120),
+    },
+    async ({ board, ops }) => {
+      try {
+        const { b } = boardFor(ctx, board);
+        const r = whiteboard.applyOps(b, ops, { gallery: (id) => gallery.get(id) });
+        if (r.changes) ctx?.send?.({ type: 'whiteboard', event: 'edited_chat', board: whiteboard.summary(r.board), counts: r.counts });
+        const head = r.changes
+          ? `Hotovo na ${r.board.name} (${r.board.id}): přidáno ${r.counts.added}, upraveno ${r.counts.changed}, smazáno ${r.counts.removed}.`
+          : 'Nic se nezměnilo.';
+        const body = [head, ...r.done, ...(r.errors.length ? ['NEPOVEDLO SE:', ...r.errors] : [])].join('\n');
+        return r.errors.length && !r.changes ? fail(body) : ok(body);
+      } catch (err) { return fail(err.message); }
+    },
+  );
+}
+
+function makeWhiteboardManage(ctx) {
+  return tool(
+    'app_whiteboard_manage',
+    'Whiteboardy jako celek: list (všechny podle jména), create (nový, prázdný), duplicate (kopie), rename, delete (jde vrátit ' +
+      'do týdne), open (otevře ho pánovi na obrazovce). Po create a duplicate se nový whiteboard pánovi rovnou otevře.',
+    {
+      action: z.enum(['list', 'create', 'duplicate', 'rename', 'delete', 'open']),
+      board: z.string().max(80).optional().describe('duplicate/rename/delete/open: id nebo jméno. Bez něj ten otevřený.'),
+      name: z.string().max(60).optional().describe('create/rename/duplicate: jméno'),
+    },
+    async ({ action, board, name }) => {
+      try {
+        if (action === 'list') {
+          const all = whiteboard.list();
+          if (!all.length) return ok('Žádné whiteboardy zatím nejsou.');
+          const openId = ctx?.board?.()?.id;
+          return ok(all.map((s) => `- (${s.id}) „${s.name}“ · ${s.counts.items} objektů · ${s.counts.links} šipek · upraveno ${s.updated_at.slice(0, 16).replace('T', ' ')}${s.id === openId ? ' · OTEVŘENÝ' : ''}`).join('\n'));
+        }
+        if (action === 'create') {
+          const b = whiteboard.create({ name: name || 'Nový whiteboard' });
+          ctx?.send?.({ type: 'whiteboard', event: 'open', id: b.id });
+          return ok(`Založen a otevřen whiteboard „${b.name}“ (${b.id}). Je prázdný.`);
+        }
+        const { b } = boardFor(ctx, board);
+        if (action === 'duplicate') {
+          const c = whiteboard.duplicate(b.id, name);
+          ctx?.send?.({ type: 'whiteboard', event: 'open', id: c.id });
+          return ok(`Kopie „${c.name}“ (${c.id}) z „${b.name}“, otevřená.`);
+        }
+        if (action === 'rename') {
+          if (!name) return fail('Jaké jméno? (name)');
+          const r = whiteboard.rename(b.id, name);
+          return ok(`Přejmenováno na „${r.name}“.`);
+        }
+        if (action === 'delete') {
+          whiteboard.remove(b.id);
+          return ok(`Whiteboard „${b.name}“ smazán. Pán ho může do týdne vrátit.`);
+        }
+        ctx?.send?.({ type: 'whiteboard', event: 'open', id: b.id });
+        return ok(`Otevřen whiteboard „${b.name}“.`);
+      } catch (err) { return fail(err.message); }
+    },
+  );
+}
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
@@ -1023,6 +1152,7 @@ export const APP_TOOL_NAMES = [
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
+  'app_whiteboard_read', 'app_whiteboard_edit', 'app_whiteboard_manage',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 /** `ctx.sessionId()` names the chat that asks for an improvement (the history marks it). */
@@ -1044,9 +1174,18 @@ export function makeAppServer(ctx = {}) {
       's replace: true; u každé hodiny vyplň note (předmět), room (místnost) a who (vyučující). ' +
       'Novou funkci nebo změnu aplikace samotné předáš přes app_upgrade_request. ' +
       'Fotku z chatu uložíš do pánovy Galerie přes app_gallery_save (popis a štítky píšeš ty); ' +
-      'na staré fotky se ptá app_gallery_search.',
-    tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx)],
+      'na staré fotky se ptá app_gallery_search. ' +
+      'Whiteboardy (volné plochy na třídění myšlenek: karty s textem, barevné obdélníky jako oblasti, obrázky, ' +
+      'dokumenty a šipky) čte app_whiteboard_read, mění app_whiteboard_edit a spravuje app_whiteboard_manage. ' +
+      'Když pán chce něco ujasnit nebo rozvrhnout („pomoz mi ujasnit si povinnosti“), sesbírej podklady z aplikace ' +
+      '(app_read, kalendář, deník) a rozlož je na whiteboard.',
+    tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx), ...makeWhiteboardTools(ctx)],
   });
+}
+
+/** The three whiteboard tools for one session (tests call them directly). */
+export function makeWhiteboardTools(ctx = {}) {
+  return [makeWhiteboardRead(ctx), makeWhiteboardEdit(ctx), makeWhiteboardManage(ctx)];
 }
 
 /** The two gallery tools for one session (tests call them directly). */

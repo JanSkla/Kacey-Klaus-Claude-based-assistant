@@ -25,6 +25,9 @@ var STR = {
     tool: function (n) {
       if (n === 'app_gallery_save') return 'Ukládám fotku do galerie…';
       if (n === 'app_gallery_search') return 'Hledám v galerii…';
+      if (n === 'app_whiteboard_read') return 'Prohlížím whiteboard…';
+      if (n === 'app_whiteboard_edit') return 'Kreslím na whiteboard…';
+      if (n === 'app_whiteboard_manage') return 'Chystám whiteboard…';
       return n === 'klaus-memory' ? 'Prohledávám paměť…' : 'Používám ' + n + '…';
     },
     readyInfo: function (model, mcp) {

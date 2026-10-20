@@ -13,11 +13,12 @@ import { $ } from '../core/dom.js';
 import { clear as clearToast } from './toast.js';
 import { closeSheet } from './psheet.js';
 
-var VIEWS = ['main', 'tasks', 'journal', 'library', 'gallery', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus',
+var VIEWS = ['main', 'tasks', 'journal', 'library', 'gallery', 'boards', 'board', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus',
   'morning', 'proposals', 'rules', 'upgrade'];
 
 var LABELS = {
   main: 'main', tasks: 'úkoly', journal: 'deník', library: 'knihovna deníku', gallery: 'galerie',
+  boards: 'whiteboardy', board: 'whiteboard',
   calendar: 'kalendář', brief: 'ranní brief', timer: 'časovače', lights: 'světla',
   controller: 'controller', task: 'úkol probíhá', focus: 'focus',
   morning: 'ráno', proposals: 'návrhy', rules: 'pravidla', upgrade: 'porovnání verzí'
@@ -27,6 +28,7 @@ var LABELS = {
    right; a phone has room for one word, so it is the view's name. */
 var TITLES = {
   main: 'Kacey', tasks: 'Úkoly', journal: 'Deník', library: 'Knihovna deníku', gallery: 'Galerie',
+  boards: 'Whiteboardy', board: 'Whiteboard',
   calendar: 'Kalendář', brief: 'Ranní brief', timer: 'Časovače', lights: 'Světla',
   controller: 'Controller', task: 'Úkol', focus: 'Focus',
   morning: 'Ráno', proposals: 'Návrhy', rules: 'Pravidla', upgrade: 'Porovnání'
@@ -34,16 +36,29 @@ var TITLES = {
 
 var current = 'main';
 var enterHooks = {};
+var leaveHooks = {};
 
 export function onEnter(view, fn) {
   (enterHooks[view] || (enterHooks[view] = [])).push(fn);
+}
+
+/* Leaving a view: the whiteboard saves and stops telling Kacey it is on screen. */
+export function onLeave(view, fn) {
+  (leaveHooks[view] || (leaveHooks[view] = [])).push(fn);
 }
 
 export function currentView() { return current; }
 
 export function go(view) {
   if (VIEWS.indexOf(view) === -1) view = 'main';
+  var left = current;
   current = view;
+  if (left !== view) {
+    var bye = leaveHooks[left] || [];
+    for (var b = 0; b < bye.length; b++) {
+      try { bye[b](); } catch (e) { console.error('[kacey] view leave hook failed', e); }
+    }
+  }
   clearToast();
   closeSheet();
   // The phone stylesheet keys a few things off the view (the toast's height

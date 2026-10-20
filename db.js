@@ -317,6 +317,21 @@ CREATE TABLE IF NOT EXISTS kacey_photo (
   updated_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS kacey_photo_created_idx ON kacey_photo (created_at);
+
+/* Whiteboards (whiteboard.js): one row per named board, the whole document as
+   JSON (public/js/core/board.js). Files dropped on a board sit in
+   WHITEBOARD_DIR. A deleted board keeps its row for a week, so it can be put
+   back. */
+CREATE TABLE IF NOT EXISTS kacey_whiteboard (
+  board_id     TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  doc          TEXT NOT NULL DEFAULT '{}',
+  rev          INTEGER NOT NULL DEFAULT 1,
+  deleted_at   TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS kacey_whiteboard_updated_idx ON kacey_whiteboard (updated_at);
 `;
 
 export function now() { return new Date().toISOString(); }

@@ -44,6 +44,11 @@
 
   --gap: 8px;
   --motion: 110ms cubic-bezier(.2, 0, .38, .9);
+
+  /* The whiteboard's plane: darker than the page, so the cards (on --l1) lift
+     off it, and a grid of square dots a shade lighter. */
+  --wb-bg: #0e0e0e;
+  --wb-dot: #343434;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3068,4 +3073,321 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .gchat { gap: 12px; padding: 10px 12px; }
   .gchat__thumb { width: 84px; height: 84px; }
   .gchat__strip { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ==== Whiteboards (views/whiteboard.js, views/boards.js, 2026-10-20) ==================
+   One board over the whole window: no header, no sidebar. The plane is --wb-bg with a
+   2px square dot on every 24px of the board (fewer when zoomed far out); cards on --l1
+   with a 4px edge in their data colour, rectangles as tinted areas with a title, arrows
+   in --ink3 (--acc when picked). The corner button opens the navigation; the tools sit
+   at the bottom, Kacey's line at the bottom right. */
+body[data-view="board"] { padding: 0; gap: 0; }
+body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="board"] .tabbar { display: none; }
+.view--board { position: relative; display: block; overflow: hidden; background: var(--wb-bg); }
+.view--board[hidden] { display: none; }
+
+.wb {
+  position: absolute; inset: 0; overflow: hidden; touch-action: none; outline: none;
+  background-color: var(--wb-bg);
+  background-image: conic-gradient(from 0deg at 2px 2px, transparent 0 75%, var(--wb-dot) 0);
+  background-size: 24px 24px;
+  user-select: none; -webkit-user-select: none;
+}
+.wb[data-tool="text"], .wb[data-tool="rect"] { cursor: crosshair; }
+.wb.is-panning { cursor: grabbing; }
+.wb__world { position: absolute; left: 0; top: 0; transform-origin: 0 0; --z: 1; }
+.wb__rects, .wb__items { position: absolute; left: 0; top: 0; }
+.wb__links { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.wb__marquee { position: absolute; z-index: 4; border: 1px solid var(--acc); background: var(--acc-dim); pointer-events: none; }
+
+/* The things on it */
+.wbitem { position: absolute; color: var(--ink); --port: 12px; }
+.wbitem--text {
+  display: flex; flex-direction: column; padding: 10px 12px; overflow: hidden;
+  background: var(--l1); border: 1px solid var(--line); border-left: 4px solid var(--c);
+  font-size: 14px; line-height: 1.5; cursor: default;
+}
+.wbitem__kicker { flex: none; margin-bottom: 4px; font-size: 11px; line-height: 16px; letter-spacing: .06em; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wbitem__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wbitem--text.is-blank .wbitem__text::before { content: 'Prázdná karta'; color: var(--ink3); }
+.wbitem--rect {
+  background: color-mix(in srgb, var(--c) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 65%, transparent);
+}
+.wbitem__title {
+  position: absolute; left: 0; top: 0; right: 0; height: 40px; display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; font-size: 15px; font-weight: 600; letter-spacing: .04em; cursor: move;
+  white-space: nowrap; overflow: hidden;
+}
+.wbitem__titletext { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wbitem__sw { flex: none; width: 10px; height: 10px; background: var(--c); }
+.wbitem--image { background: var(--l1); border: 1px solid var(--line); overflow: hidden; }
+.wbitem__img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.wbitem--image.has-cap .wbitem__img { height: calc(100% - 26px); }
+.wbitem__cap { height: 26px; padding: 0 10px; font-size: 12px; line-height: 26px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--line); }
+.wbitem__missing { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 12px; color: var(--ink3); }
+.wbitem__badge {
+  position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px; font-size: 12px; background: var(--bg); border: 1px solid var(--acc); color: var(--ink);
+}
+.wbitem__dot { width: 8px; height: 8px; flex: none; background: var(--acc); animation: pulseDot 1.4s ease-in-out infinite; }
+.wbitem.is-uploading .wbitem__img { opacity: .55; }
+.wbitem--doc {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  background: var(--l1); border: 1px solid var(--line); border-left: 4px solid var(--c);
+}
+.wbitem__docicon {
+  flex: none; position: relative; width: 34px; height: 42px; display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 5px; font-size: 9px; font-weight: 600; letter-spacing: .04em; color: var(--ink2);
+  background: var(--l2); border: 1px solid var(--line2);
+}
+.wbitem__docicon::before { content: ''; position: absolute; top: -1px; right: -1px; width: 10px; height: 10px; background: var(--l1); border-left: 1px solid var(--line2); border-bottom: 1px solid var(--line2); }
+.wbitem__docbody { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.wbitem__docname { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wbitem__docmeta { font-size: 12px; color: var(--ink3); }
+.wbitem__docopen { flex: none; font-size: 13px; }
+
+/* Picked, and the handles: arrows come out of the four edges, size from the corner.
+   They keep their size on screen at any zoom (--z). */
+.wbitem.is-selected { outline: calc(2px / var(--z)) solid var(--acc); outline-offset: calc(3px / var(--z)); }
+.wbitem.is-target { outline: calc(2px / var(--z)) dashed var(--acc); outline-offset: calc(3px / var(--z)); }
+.wbitem.is-new { animation: wbNew 2.4s cubic-bezier(.2, 0, .38, .9); }
+@keyframes wbNew { 0%, 30% { box-shadow: 0 0 0 calc(4px / var(--z)) var(--acc); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.wbport {
+  position: absolute; z-index: 2; width: calc(var(--port) / var(--z)); height: calc(var(--port) / var(--z));
+  background: var(--bg); border: calc(2px / var(--z)) solid var(--acc); cursor: crosshair; display: none;
+}
+.wbport:hover { background: var(--acc); }
+.wbport--n { left: 50%; top: 0; transform: translate(-50%, -50%); }
+.wbport--s { left: 50%; top: 100%; transform: translate(-50%, -50%); }
+.wbport--e { left: 100%; top: 50%; transform: translate(-50%, -50%); }
+.wbport--w { left: 0; top: 50%; transform: translate(-50%, -50%); }
+.wbitem--text .wbport--w, .wbitem--doc .wbport--w { left: -2px; }
+.wbitem.is-selected .wbport { display: block; }
+@media (hover: hover) and (pointer: fine) {
+  .wb:not(.is-dragging):not(.is-panning) .wbitem:hover .wbport { display: block; }
+}
+.wbresize {
+  position: absolute; z-index: 3; right: 0; bottom: 0; transform: translate(50%, 50%);
+  width: calc(10px / var(--z)); height: calc(10px / var(--z)); background: var(--acc); cursor: nwse-resize;
+}
+.wbitem.is-editing .wbport, .wbitem.is-editing .wbresize { display: none; }
+
+/* Typing in place */
+.wbedit { font: inherit; color: var(--ink); background: none; border: 0; outline: none; padding: 0; margin: 0; user-select: text; -webkit-user-select: text; }
+.wbedit--text { flex: 1; width: 100%; min-height: 21px; resize: none; overflow: hidden; line-height: 1.5; font-size: 14px; }
+.wbedit--title { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; letter-spacing: .04em; }
+.wbedit--cap { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; padding: 0 10px; font-size: 12px; background: var(--l1); border-top: 1px solid var(--acc); }
+.wbitem.is-editing { outline: calc(2px / var(--z)) solid var(--acc); outline-offset: calc(3px / var(--z)); }
+.wblabeledit { position: absolute; transform: translate(-50%, -50%); z-index: 5; }
+.wbedit--label { width: 180px; padding: 4px 8px; font-size: 12px; text-align: center; background: var(--bg); border: 1px solid var(--acc); }
+
+/* Arrows */
+.wblink__hit { fill: none; stroke: transparent; stroke-width: 16px; pointer-events: stroke; cursor: pointer; vector-effect: non-scaling-stroke; }
+.wblink__line { fill: none; stroke: var(--ink3); stroke-width: 2px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.wblink:hover .wblink__line { stroke: var(--ink2); }
+.wblink.is-selected .wblink__line { stroke: var(--acc); }
+.wblink__label {
+  font: 12px var(--mono); fill: var(--ink2); pointer-events: none;
+  paint-order: stroke; stroke: var(--wb-bg); stroke-width: 6px; stroke-linejoin: miter;
+}
+.wblink.is-selected .wblink__label { fill: var(--acc); }
+.wb__headink { fill: var(--ink3); }
+.wb__headacc { fill: var(--acc); }
+.wblink__ghost { fill: none; stroke: var(--acc); stroke-width: 2px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
+
+/* States of the plane */
+.wbempty {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(46ch, calc(100% - 48px));
+  padding: 24px; text-align: center; pointer-events: none; background: var(--bg); border: 1px solid var(--line);
+}
+.wbempty h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
+.wbempty p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink2); text-wrap: pretty; }
+.wbempty__mark, .galempty__mark--board { position: relative; display: block; width: 44px; height: 34px; margin: 0 auto 16px; border: 2px dashed var(--line2); }
+.wbempty__mark::after, .galempty__mark--board::after { content: ''; position: absolute; left: 6px; top: 6px; width: 12px; height: 8px; margin: 0; background: var(--acc); border: 0; border-radius: 0; }
+.wbloading { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--wb-bg); }
+.wbloading p { margin: 0; font-size: 14px; color: var(--ink2); }
+.wbdrop {
+  position: absolute; inset: 0; z-index: 9; display: flex; align-items: center; justify-content: center;
+  background: var(--acc-dim); outline: 2px dashed var(--acc); outline-offset: -12px; pointer-events: none;
+}
+.wbdrop p { margin: 0; padding: 10px 16px; background: var(--l1); border: 1px solid var(--acc); font-size: 15px; font-weight: 600; }
+
+/* The corner: the board's name; behind it the board's actions and the app's navigation */
+.wbnav { position: absolute; left: 12px; top: 12px; z-index: 20; }
+.wbnav__btn {
+  display: flex; align-items: center; gap: 10px; height: 40px; max-width: min(360px, calc(100vw - 24px)); padding: 0 10px 0 12px;
+  font: inherit; font-size: 14px; color: var(--ink); cursor: pointer;
+  background: var(--l1); border: 1px solid var(--line2);
+}
+.wbnav__btn:hover { background: var(--l2); }
+.wbnav__btn[aria-expanded="true"] { border-color: var(--acc); background: var(--l2); }
+.wbnav__mark { flex: none; width: 12px; height: 12px; background: var(--acc); }
+.wbnav__mark[data-st="busy"] { animation: pulseDot 1.4s ease-in-out infinite; }
+.wbnav__mark[data-st="err"] { background: var(--err); }
+.wbnav__name { min-width: 0; font-weight: 600; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wbnav__chev { flex: none; color: var(--ink3); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; }
+.wbnav__btn[aria-expanded="true"] .wbnav__chev { transform: rotate(180deg); color: var(--acc); }
+.wbmenu {
+  position: absolute; left: 0; top: 48px; width: 300px; max-height: calc(100dvh - 72px); overflow-y: auto;
+  background: var(--l1); border: 1px solid var(--line2); box-shadow: 0 8px 24px rgb(0 0 0 / .5);
+}
+.wbmenu__board { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
+.wbmenu__board .label { margin: 0; }
+.wbmenu__name .input { width: 100%; font-size: 15px; font-weight: 600; }
+.wbmenu__meta { margin: 0; font-size: 12px; color: var(--ink3); }
+.wbmenu__meta.is-err { color: var(--err); }
+.wbmenu__acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.wbmenu__nav .sidenav__group { background: none; border: 0; }
+.wbmenu__nav .sidenav__group + .sidenav__group { border-top: 1px solid var(--line); }
+
+/* What can be done with the picked things */
+.wbsel {
+  position: absolute; z-index: 15; display: flex; align-items: center; gap: 4px; padding: 4px;
+  background: var(--l1); border: 1px solid var(--line2); box-shadow: 0 2px 6px rgb(0 0 0 / .5); white-space: nowrap;
+}
+.wbsel .btn--sm { padding: 6px 10px; }
+.wbsel a.btn { text-decoration: none; }
+.wbsel__colors { display: flex; gap: 4px; padding: 0 4px; }
+.wbsel__sw { width: 22px; height: 22px; padding: 0; background: var(--c); border: 0; cursor: pointer; }
+.wbsel__sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--l1), 0 0 0 4px var(--ink); }
+.wbsel__sep { width: 1px; height: 22px; margin: 0 4px; background: var(--line); }
+.wbsel__cap { padding: 0 8px; font-size: 11px; letter-spacing: .08em; color: var(--ink3); }
+
+/* The tools */
+.wbtools {
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 15;
+  display: flex; align-items: center; gap: 2px; padding: 4px;
+  background: var(--l1); border: 1px solid var(--line2);
+}
+.wbtool {
+  display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0;
+  font: inherit; font-size: 13px; cursor: pointer; background: none; border: 1px solid transparent; color: var(--ink2);
+}
+.wbtool svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter; }
+.wbtool:hover:not(:disabled) { background: var(--l2); color: var(--ink); }
+.wbtool[aria-pressed="true"] { background: var(--acc-dim); border-color: var(--acc); color: var(--acc); }
+.wbtool:disabled { opacity: .45; cursor: default; }
+.wbtools__sep { width: 1px; height: 24px; margin: 0 4px; background: var(--line); }
+.wbtools__zoom { min-width: 64px; height: 40px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--ink2); background: none; border: 1px solid transparent; cursor: pointer; }
+.wbtools__zoom:hover { background: var(--l2); color: var(--ink); }
+
+/* Kacey on the board */
+.wbask { position: absolute; right: 16px; bottom: 16px; z-index: 15; width: min(400px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 6px; }
+.wbask__reply {
+  display: flex; align-items: baseline; gap: 8px; padding: 8px 10px; text-align: left;
+  font: inherit; font-size: 13px; line-height: 1.45; cursor: pointer;
+  background: var(--l1); border: 1px solid var(--line); border-left: 4px solid var(--acc); color: var(--ink2);
+}
+.wbask__reply b { flex: none; font-weight: 600; color: var(--acc); }
+#wbReplyText { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wbask__chat { flex: none; color: var(--acc); }
+.wbask .composer { height: 48px; gap: 6px; padding: 0 4px 0 12px; }
+.wbask .composer__input { font-size: 15px; }
+.wbask .composer .btn { height: 38px; padding: 0 14px; }
+.wbask__mic { flex: none; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; background: none; border: 1px solid transparent; color: var(--ink3); cursor: pointer; }
+.wbask__mic svg { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.wbask__mic:hover { color: var(--acc); border-color: var(--line2); }
+@media (min-width: 761px) and (max-width: 1240px) {
+  .wbtools { left: 16px; transform: none; }
+}
+
+/* The gallery of boards */
+.boardsfind .input { width: 100%; font-size: 15px; padding: 10px 12px; }
+.boardsfind .input::-webkit-search-cancel-button { display: none; }
+.boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; align-content: start; padding: 12px 14px 14px; }
+.wbtile { display: flex; flex-direction: column; min-width: 0; background: var(--l2); border: 1px solid var(--line); }
+.wbtile.is-current { border-color: var(--line2); }
+.wbtile__open { display: flex; flex-direction: column; gap: 3px; padding: 0 0 10px; font: inherit; text-align: left; color: var(--ink); background: none; border: 0; cursor: pointer; }
+.wbtile:hover:not(.is-renaming) { background: var(--l3); }
+.wbtile__frame {
+  position: relative; display: block; aspect-ratio: 16 / 10; margin-bottom: 7px; overflow: hidden;
+  background-color: var(--wb-bg);
+  background-image: conic-gradient(from 0deg at 1px 1px, transparent 0 75%, var(--wb-dot) 0);
+  background-size: 10px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.wbtile__frame .wbdraw { display: block; width: 100%; height: 100%; }
+.wbdraw__card { fill: var(--l2); stroke: var(--line2); stroke-width: .5px; vector-effect: non-scaling-stroke; }
+.wbdraw__img { fill: var(--l3); }
+.wbdraw__link { stroke: var(--ink3); }
+.wbtile__tag { position: absolute; top: 8px; right: 8px; padding: 1px 6px; font-size: 11px; letter-spacing: .04em; color: var(--ink2); background: var(--bg); border: 1px solid var(--line2); }
+.wbtile__blank { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ink3); }
+.wbtile__name { padding: 0 12px; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wbtile__meta { padding: 0 12px; font-size: 12px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wbtile__acts { display: flex; align-items: center; gap: 14px; min-height: 40px; padding: 4px 12px; border-top: 1px solid #2e2e2e; }
+.wbtile__acts .link { font-size: 13px; }
+.wbtile__acts .push { margin-left: auto; }
+.wbtile__rename { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.wbtile__rename .input { font-size: 15px; font-weight: 600; }
+.wbtile__renameacts { display: flex; gap: 6px; }
+.wbtile--new {
+  align-items: center; justify-content: center; gap: 8px; min-height: 200px;
+  font: inherit; font-size: 14px; color: var(--ink2); cursor: pointer;
+  background: none; border: 1px dashed var(--line2);
+}
+.wbtile--new:hover { background: var(--l1); border-color: var(--acc); color: var(--ink); }
+.wbtile__plus { font-size: 28px; line-height: 1; color: var(--acc); }
+.boards__empty { grid-column: 1 / -1; }
+.boardsacts .btn--fn svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.boardstats .big { font-size: 20px; }
+.boardstats__say { line-height: 1.7; color: var(--ink2); }
+
+/* Kacey's board edit in the chat */
+.gchat--board .gchat__thumb { width: 160px; height: 100px; margin: 0; padding: 0; border: 1px solid var(--line); aspect-ratio: auto; }
+
+@media (max-width: 760px) {
+  /* Whiteboard: the corner button and the tools are the only chrome; Kacey's line opens over the tools. */
+  .view.view--board { display: block; height: 100%; padding: 0; overflow: hidden; }
+  .wbnav { left: 8px; top: 8px; }
+  .wbnav__btn { height: 44px; max-width: calc(100vw - 16px); }
+  .wbmenu { position: fixed; left: 8px; right: 8px; top: calc(60px + env(safe-area-inset-top)); width: auto; max-height: calc(100dvh - 150px); }
+  .wbmenu__acts .btn { min-height: 44px; flex: 1 1 auto; }
+  .wbmenu__nav .sidenav__item { min-height: 44px; }
+  .wbitem { --port: 22px; }
+  .wbresize { width: calc(18px / var(--z)); height: calc(18px / var(--z)); }
+  .wbtools {
+    left: 0; right: 0; bottom: 0; transform: none; justify-content: space-between; gap: 0;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-width: 1px 0 0; overflow-x: auto;
+  }
+  .wbtool { width: 44px; height: 44px; flex: none; }
+  .wbtools__sep { margin: 0 2px; }
+  .wbtools__zoom { min-width: 56px; height: 44px; padding: 0 4px; }
+  .wbtool--kacey { width: auto; padding: 0 12px; font-weight: 600; color: var(--acc); border-color: var(--line2); }
+  .wbtool--kacey[aria-expanded="true"] { background: var(--acc-dim); border-color: var(--acc); }
+  .wbask {
+    display: none; left: 0; right: 0; width: auto; bottom: calc(57px + env(safe-area-inset-bottom));
+    padding: 8px; background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .wbask.is-open { display: flex; }
+  .wbask .composer { height: 52px; }
+  .wbask .composer__input { font-size: 16px; }
+  .wbask .composer .btn { height: 44px; }
+  .wbask__mic { width: 44px; height: 44px; }
+  .wbsel {
+    left: 8px; right: 8px; bottom: calc(66px + env(safe-area-inset-bottom)); top: auto; overflow-x: auto;
+  }
+  .view--board:has(.wbask.is-open) .wbsel { display: none; }
+  .wbsel .btn--sm { min-height: 40px; }
+  .wbsel__sw { width: 30px; height: 30px; flex: none; }
+  .wbempty { top: 45%; }
+
+  /* Whiteboardy: one column of boards, Nový whiteboard docked at the bottom. */
+  .view[data-view="boards"] { gap: 10px; padding-bottom: 0; }
+  .view[data-view="boards"] > section.card { display: contents; }
+  .view[data-view="boards"] > section.card > .card__head { display: none; }
+  .view[data-view="boards"] .boardsfind { order: 1; padding: 0; border: 0; }
+  .view[data-view="boards"] .boardsfind .input { background: var(--l1); font-size: 16px; }
+  .view[data-view="boards"] .boards { order: 2; grid-template-columns: 1fr; gap: 10px; padding: 0; overflow: visible; }
+  .view[data-view="boards"] .wbtile--new { display: none; }
+  .view[data-view="boards"] > .col--rail { order: 3; position: sticky; bottom: 0; z-index: 5; margin: auto -12px 0; }
+  .view[data-view="boards"] .boardstats { display: none; }
+  .view[data-view="boards"] .boardsacts { border-width: 1px 0 0; border-color: var(--line2); }
+  .view[data-view="boards"] .boardsacts .card__title--bar { display: none; }
+  .view[data-view="boards"] .boardsacts .fnlist { padding: 10px 12px; }
+  .view[data-view="boards"] .boardsacts .btn--fn { justify-content: center; min-height: 52px; }
+  .wbtile { background: var(--l1); }
+  .wbtile__acts { min-height: 48px; }
+  .wbtile__acts .link { min-height: 44px; }
+  .gchat--board .gchat__thumb { width: 112px; height: 72px; }
 }
