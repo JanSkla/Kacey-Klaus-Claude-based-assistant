@@ -567,6 +567,43 @@ word. Each vector remembers its model and is rebuilt when the embedder changes;
 the index is the table read into memory. Every change is broadcast as a
 `gallery` frame; `app_gallery_search` sends its hits to its own chat only.
 
+### Whiteboards
+
+[whiteboard.js](whiteboard.js) keeps named boards, one `kacey_whiteboard` row
+each with the whole document as JSON — `{ items, links, view }` as
+[public/js/core/board.js](public/js/core/board.js) defines and cleans it
+(`normalizeDoc`), the one module both the page and the server import, so they
+agree on kinds, colours, sizes and what "inside a rectangle" means (an item's
+centre in it). Files dropped on a board go to `WHITEBOARD_DIR`
+(`KACEY_WHITEBOARD_DIR`, `/whiteboard-files/`, served with
+`Content-Security-Policy: sandbox`); a text file keeps its first 6000
+characters in the document so Kacey can read it. Names are unique (folded);
+a deleted board keeps its row a week for Vrátit.
+
+The Whiteboard screen saves the whole document (`PUT /api/whiteboards/:id`),
+debounced, with the revision it started from: a stale revision gets a 409
+with the board as it is, and the page keeps its own version one Ctrl+Z away.
+Where a device was looking stays in its localStorage, not in the board.
+Every change is broadcast as a `whiteboard` frame (`changed` with `by` and the
+writing page's `origin`, so it ignores its own echo; `created`, `renamed`,
+`removed`, `restored`). After a dropped connection the page saves what waited
+and the gallery reads the list again (protocol.js emits `conn` on the bus).
+
+Kacey sees a board in words: `describe()` lists every object with its id,
+kind, colour, text, position and size, the rectangle it sits in and roughly
+where ("vlevo nahoře"), the arrows, what the owner's screen shows and what is
+picked. The page sends `{ id, view, selected }` with each `user_message`
+(`state.pageBoard`, cleaned by `pageBoardOf` in server.js), the turn's nudge
+names the open board, and the three tools in [app-tools.js](app-tools.js)
+default to it: `app_whiteboard_read`, `app_whiteboard_edit` (a list of `add`,
+`update`, `delete`, `connect`, `disconnect`, `tidy`, `clear` — `applyOps`,
+which places things on its own: into a rectangle that grows, next to an
+object, or right of everything; objects are named by id, an earlier op's
+`ref`, or their text) and `app_whiteboard_manage` (list, create, duplicate,
+rename, delete, open — the last three ask the page to open the board with an
+`open` frame). Her edit also sends `edited_chat` to her own chat, which draws
+the board under her words.
+
 ### The night routine (D.R.E.A.M.)
 
 **Spec: [docs/DREAM.md](docs/DREAM.md).** Read it before touching anything to do

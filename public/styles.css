@@ -3225,6 +3225,7 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
 .wbnav__mark { flex: none; width: 12px; height: 12px; background: var(--acc); }
 .wbnav__mark[data-st="busy"] { animation: pulseDot 1.4s ease-in-out infinite; }
 .wbnav__mark[data-st="err"] { background: var(--err); }
+.wbnav__mark[data-st="off"] { background: var(--ink3); }
 .wbnav__name { min-width: 0; font-weight: 600; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wbnav__chev { flex: none; color: var(--ink3); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; }
 .wbnav__btn[aria-expanded="true"] .wbnav__chev { transform: rotate(180deg); color: var(--acc); }

@@ -267,6 +267,12 @@ export function initBoards() {
   $('boardsNew').addEventListener('click', newBoard);
   $('boardsFind').addEventListener('input', function () { find = $('boardsFind').value; render(); });
   bus.on('whiteboard', onFrame);
+  // Changes made while the page was away arrive with nobody to frame them: read the list again.
+  var away = false;
+  bus.on('conn', function (st) {
+    if (st === 'offline') away = true;
+    else if (st === 'online' && (away || failed)) { away = false; load(); }
+  });
   onEnter('boards', load);
   load();
 }

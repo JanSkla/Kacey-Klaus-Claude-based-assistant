@@ -233,7 +233,11 @@ function itemNode(it) {
   } else if (it.kind === 'image') {
     var src = it.src || it._up;
     parts = [
-      src ? el('img.wbitem__img', { src: src, alt: it.text || '', draggable: 'false' }) : el('span.wbitem__missing', 'Obrázek chybí'),
+      src ? el('img.wbitem__img', {
+        src: src, alt: it.text || '', draggable: 'false',
+        // A file gone from kaceybody (or no connection) says so instead of a broken icon.
+        onerror: function () { this.replaceWith(el('span.wbitem__missing', isOnline() ? 'Obrázek chybí' : 'Obrázek se načte, až se připojím')); }
+      }) : el('span.wbitem__missing', 'Obrázek chybí'),
       it.text ? el('div.wbitem__cap', it.text) : null,
       it._up ? el('span.wbitem__badge', [el('span.wbitem__dot', { 'aria-hidden': 'true' }), 'Nahrávám…']) : null
     ];
@@ -331,8 +335,11 @@ function paintUndo() {
 
 function paintSave(st) {
   var mark = $('wbSaveMark');
+  // Saved but cut off: the board may be behind what Kacey or another page did meanwhile.
+  if (st === 'ok' && !isOnline()) st = 'off';
   mark.setAttribute('data-st', st);
-  mark.title = st === 'err' ? 'Neuloženo — uložím, až to půjde' : st === 'busy' ? 'Ukládám…' : 'Uloženo';
+  mark.title = st === 'err' ? 'Neuloženo — uložím, až to půjde' : st === 'busy' ? 'Ukládám…'
+    : st === 'off' ? 'Jsi offline — změny uložím, až se připojím' : 'Uloženo';
 }
 
 function paintMeta() {
@@ -340,7 +347,8 @@ function paintMeta() {
   $('wbName').textContent = board.name;
   var parts = [objektu(doc.items.length)];
   if (doc.links.length) parts.push(sipek(doc.links.length));
-  parts.push(saveFailed ? (isOnline() ? 'neuloženo — zkouším znovu' : 'neuloženo — jsi offline') : dirty || saving ? 'ukládám…' : 'uloženo ' + when(board.updated_at));
+  parts.push(saveFailed ? (isOnline() ? 'neuloženo — zkouším znovu' : 'neuloženo — jsi offline') : dirty || saving ? 'ukládám…'
+    : 'uloženo ' + when(board.updated_at) + (isOnline() ? '' : ' · jsi offline'));
   $('wbMeta').textContent = parts.join(' · ');
   $('wbMeta').classList.toggle('is-err', saveFailed);
 }
@@ -957,15 +965,17 @@ function scheduleSave() {
   saveTimer = setTimeout(flushSave, 600);
 }
 
-function flushSave() {
+function flushSave(ev) {
   clearTimeout(saveTimer);
   if (!board || !dirty) return;
   if (saving) { saveAgain = true; return; }
   dirty = false; saving = true;
   var id = board.id;
+  var body = JSON.stringify({ doc: payload(), rev: board.rev, origin: ORIGIN });
   fetch('/api/whiteboards/' + encodeURIComponent(id), {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ doc: payload(), rev: board.rev, origin: ORIGIN })
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: body,
+    // Closing the tab: the browser carries a small enough board out after the page is gone.
+    keepalive: !!(ev && ev.type === 'pagehide') && body.length < 60000
   }).then(function (r) { return r.json(); }).then(function (j) {
     saving = false;
     if (!board || board.id !== id) return;
@@ -976,8 +986,15 @@ function flushSave() {
       paintMeta();
       if (dirty || saveAgain) { saveAgain = false; flushSave(); }
     } else if (j.conflict && j.board) {
+      // Someone else (Kacey, another page) saved first. Their board wins on screen;
+      // what was typed here stays one Ctrl+Z (or the toast) away.
+      var mine = snapshot();
       adopt(j.board);
-      say('Whiteboard se mezitím změnil jinde — ukazuju jeho novou podobu.');
+      pushUndo(mine);
+      say('Whiteboard se mezitím změnil jinde — ukazuju jeho novou podobu.', {
+        label: 'Vrátit moje',
+        run: function () { before(); restore(mine); changed(); }
+      });
     } else {
       throw new Error(j.error || 'chyba');
     }
@@ -1386,8 +1403,16 @@ export function initWhiteboard() {
   initAsk();
   bus.on('whiteboard', onFrame);
   window.addEventListener('resize', function () { if (currentView() === 'board') applyView(); });
-  window.addEventListener('online', function () { if (dirty) flushSave(); });
-  window.addEventListener('beforeunload', flushSave);
+  // Back online: what waited is saved, and a board that could not load tries again.
+  bus.on('conn', function (st) {
+    if (st === 'online') {
+      if (dirty && !saving) { clearTimeout(retryTimer); flushSave(); }
+      if (currentView() === 'board' && !board && !$('wbLoading').hidden) enter();
+    }
+    if (board && !saving && !dirty && !saveFailed) paintSave('ok');
+    paintMeta();
+  });
+  window.addEventListener('pagehide', flushSave);
 
   setTool('select');
   onEnter('board', enter);

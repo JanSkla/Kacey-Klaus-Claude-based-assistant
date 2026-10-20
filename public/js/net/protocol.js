@@ -275,6 +275,8 @@ export function onConn(next, retryMs) {
     if (left > 0) connCountdown = setInterval(paint, 1000);
   }
   syncOrb();
+  // Screens that save on their own (the whiteboard) catch up when the server is back.
+  bus.emit('conn', next);
 }
 
 /** Whether a turn can go to Kacey now (the task dock falls back to a local task). */

@@ -19,6 +19,39 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.6 — 2026-10-20
+
+**Whiteboard — a free plane for thoughts**
+- New screens Whiteboardy (desktop: DALŠÍ → Whiteboardy; phone: Víc →
+  Whiteboardy) and Whiteboard. The gallery lists named boards with a small
+  drawing of each: open, rename in place, duplicate, delete (Vrátit in the
+  toast; a deleted board is kept a week). Names are unique.
+- A board fills the whole window: a near-black plane with a grid of lighter
+  square dots that pans and zooms (drag, wheel, Ctrl + wheel, pinch). On it
+  text cards, coloured rectangles that carry what lies in them, images and
+  documents (picked, dropped or pasted; up to 25 MB, kept in
+  `data/whiteboard`, `KACEY_WHITEBOARD_DIR`), and arrows pulled from an
+  object's edge to another object or into empty space. Eight colours, undo and
+  redo, keyboard shortcuts. The only chrome is the corner button: the board's
+  name, rename, Duplikovat, + Nový, all boards and the app's navigation.
+- Stored in the new `kacey_whiteboard` table ([whiteboard.js](whiteboard.js),
+  `/api/whiteboards…`, `whiteboard` frames); the page saves the whole board,
+  debounced, with its revision — a save that lost to another change shows the
+  board as it is and keeps the page's own version one Ctrl+Z (or "Vrátit
+  moje") away. Offline the corner mark goes grey, edits wait and are saved
+  when the server is back.
+- Kacey has full access from the chat and by voice: `app_whiteboard_read`
+  (every object with its position, size, colour, the rectangle it lies in and
+  roughly where, the arrows, what the owner sees and has picked),
+  `app_whiteboard_edit` (add, update, delete, connect, disconnect, tidy,
+  clear — things place themselves into rectangles or next to each other) and
+  `app_whiteboard_manage` (list, create, duplicate, rename, delete, open). The
+  open board travels with each turn, so "dej to sem" needs no question. Her
+  edits flash on the board and toast with Vrátit; the chat shows the board.
+  The persona tells her to gather from the app (tasks, calendar, journal)
+  before laying things out — "Pomoz mi ujasnit si všechny povinnosti".
+- Tests: [test/whiteboard.mjs](test/whiteboard.mjs) (`npm run test:whiteboard`).
+
 ## KC 1.0.5 — 2026-10-20
 
 **Kalendář — unanswered invitations, nightly and manual sync**
