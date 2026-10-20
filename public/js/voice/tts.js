@@ -21,7 +21,7 @@ import { syncOrb } from '../ui/orb.js';
 import { showAlert, flashHint } from '../ui/log.js';
 import { noteSynthMs } from '../ui/telemetry.js';
 import { uiAudio } from './chime.js';
-import { takeSentences } from './sentences.js';
+import { takeSentences, forSpeech } from './sentences.js';
 import { noteSpoken, clearSpoken } from './barge.js';
 import { stopRecognition, maybeResumeVoiceLoop } from './recognition.js';
 
@@ -225,6 +225,7 @@ function speakChunkXtts(text) {
 }
 
 function speakChunk(text) {
+  text = forSpeech(text);            // never an address out loud
   if (state.muted || !text || !text.trim()) return;
   if (state.voice !== 'browser') {
     // Feedback-loop guard applies to both engines.

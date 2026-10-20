@@ -16,6 +16,7 @@ import { state, EMBED } from '../core/state.js';
 import { el, fill } from '../core/el.js';
 import { addMessage, showAlert } from './log.js';
 import { reconnect } from '../net/protocol.js';
+import { showWeb } from './websources.js';
 
 var btn = null, panel = null;
 
@@ -81,7 +82,10 @@ function resume(id) {
     return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status); return d; });
   }).then(function (data) {
     dom.log.textContent = '';
-    (data.messages || []).forEach(function (m) { addMessage(m.role === 'user' ? 'user' : 'assistant', m.text); });
+    (data.messages || []).forEach(function (m) {
+      if (m.role === 'web') showWeb(m.frames);
+      else addMessage(m.role === 'user' ? 'user' : 'assistant', m.text);
+    });
     reconnect(id);
   }, function (err) { showAlert(err.message); });
 }

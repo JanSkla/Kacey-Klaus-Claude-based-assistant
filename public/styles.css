@@ -3046,6 +3046,8 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
 .webchat__src.is-failed .webchat__title { color: var(--ink3); }
 .webchat__src.is-failed .webchat__host { color: var(--err); }
 .webchat__empty { margin: 0; font-size: 13px; color: var(--ink3); }
+.webchat.is-err { border-left-color: var(--err); }
+.webchat.is-err .webchat__empty { color: var(--ink2); }
 .webchat__more { align-self: flex-start; font-size: 12px; }
 
 @media (max-width: 760px) {

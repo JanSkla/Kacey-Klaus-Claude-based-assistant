@@ -247,14 +247,18 @@ and on a phone; the preview's port is only ever reached on loopback.
 
 ## Tool permissions
 
-Kacey runs with **no built-in tools at all** — no shell, no file read or write, no
-web access. She gets only an explicit allow-list of `klaus_memory` tools.
+Kacey runs with **almost no built-in tools** — no shell, no file read or write.
+The one exception is read-only web access in the chat: `WebSearch` and
+`WebFetch` (`WEB_TOOLS` in `config.js`), for public facts such as a doctor's
+office hours. Besides those she gets an explicit allow-list of `klaus_memory`
+tools and her own app tools.
 
 The allow-list is the `MEMORY_TOOLS` array in `config.js`, with a
 comment explaining how to widen it and why certain tools are left out. Three layers
 enforce it:
 
-1. `tools: []` — every built-in tool is removed from the model's context.
+1. `tools: [...WEB_TOOLS]` — every other built-in tool is removed from the
+   model's context (the night run, the brief and the gallery keep `tools: []`).
 2. `allowedTools: [...]` — only the allow-listed memory tools run, and they run
    without a confirmation prompt.
 3. `permissionMode: 'dontAsk'` — anything not pre-approved is denied rather than
@@ -291,6 +295,7 @@ Server → client:
 { "type": "thinking" }
 { "type": "delta",   "text": "..." }              // assistant speech, verbatim
 { "type": "tool",    "name": "memory_search", "phase": "start" }
+{ "type": "web",     "tool": "search", "ok": true, "query": "…", "sources": [{ "title": "…", "url": "https://…" }] }   // a web lookup; "fetch": one page, ok = it opened
 { "type": "done" }
 { "type": "error",   "message": "..." }
 { "type": "night_state", "sleep": { "state": "winding_down", "since": "…", "until": "…" },

@@ -53,3 +53,21 @@ export function takeSentences(buf, final) {
   }
   return { sentences: keep, rest: rest };
 }
+
+/* What of a sentence is said out loud. The persona keeps addresses out of
+   her answers — the sources are under the answer in the chat (ui/websources.js)
+   — but a slipped "https://www.ordinace-novakova.cz/hodiny" read letter by
+   letter is the worst thing a voice can do, so it is caught here as well:
+   a Markdown link keeps its words, a bare address goes. */
+var MD_LINK = /\[([^\]\n]+)\]\((?:https?:\/\/|www\.)[^)\s]*\)/gi;
+var BARE_URL = /\b(?:https?:\/\/|www\.)[^\s<>"«»“”]*[^\s<>"«»“”.,;:!?)\]]/gi;
+
+export function forSpeech(text) {
+  var s = String(text == null ? '' : text);
+  if (!/https?:\/\/|www\./i.test(s)) return s;
+  return s.replace(MD_LINK, '$1')
+    .replace(BARE_URL, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/[ \t]+([,.;:!?…])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ');
+}

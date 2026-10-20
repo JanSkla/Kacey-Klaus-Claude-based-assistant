@@ -41,6 +41,7 @@ import * as monitor from './monitor.js';
 import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
 import * as whiteboard from './whiteboard.js';
+import { webTracker, webOfTranscript, isTurnStart } from './web.js';
 import { addDays, turnClock } from './public/js/core/due.js';
 
 import {
@@ -107,63 +108,6 @@ const log = (...a) => console.log('[kacey]', ...a);
 /** Strip the mcp__server__ prefix so the UI shows "memory_search". */
 const shortToolName = (name) =>
   name?.startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name;
-
-/* The sources of a web lookup, for the page to show under the answer — she
-   never reads an address aloud, so this is the only place the owner sees where
-   the opening hours came from. `structured` is the SDK's tool_use_result
-   (WebSearchOutput / WebFetchOutput) when the message carried just this one
-   result; without it the result text is parsed. Only http(s) addresses get
-   through: the page turns them into links. */
-const WEB_SOURCES_MAX = 4;
-
-function webUrl(u) {
-  try {
-    const url = new URL(String(u));
-    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
-  } catch { return null; }
-}
-
-function resultText(block) {
-  const c = block.content;
-  if (typeof c === 'string') return c;
-  return Array.isArray(c) ? c.map((b) => (b.type === 'text' ? b.text : '')).join('\n') : '';
-}
-
-function webFrame(call, block, structured) {
-  const failed = block.is_error === true;
-  if (call.name === 'WebFetch') {
-    const url = webUrl(structured?.url || call.input.url);
-    if (!url) return null;
-    const code = Number(structured?.code) || 0;
-    return {
-      type: 'web', tool: 'fetch', ok: !failed && (!code || code < 400),
-      sources: [{ title: '', url }],
-    };
-  }
-
-  let hits = [];
-  if (Array.isArray(structured?.results)) {
-    for (const r of structured.results) if (r && Array.isArray(r.content)) hits.push(...r.content);
-  } else {
-    // "Web search results for query: "…"\n\nLinks: [{"title":…,"url":…}, …]"
-    const m = /Links:\s*(\[[\s\S]*?\])\s*(?:\n|$)/.exec(resultText(block));
-    if (m) { try { hits = JSON.parse(m[1]); } catch { hits = []; } }
-  }
-  const seen = new Set();
-  const sources = [];
-  for (const h of hits) {
-    const url = webUrl(h?.url);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    sources.push({ title: String(h.title || '').slice(0, 160), url });
-    if (sources.length >= WEB_SOURCES_MAX) break;
-  }
-  return {
-    type: 'web', tool: 'search', ok: !failed,
-    query: String(structured?.query || call.input.query || '').slice(0, 200),
-    sources,
-  };
-}
 
 /* What the user is told when a turn dies for a reason explainError() below does
    not recognise. The SDK's own wording is English diagnostics
@@ -262,8 +206,8 @@ class KaceySession {
     this.toolNames = new Map();
 
     // WebSearch / WebFetch calls by tool_use_id, with their input: the query or
-    // the address, which the page shows under the answer (webFrame below).
-    this.webCalls = new Map();
+    // the address, which the page shows under the answer (web.js).
+    this.web = webTracker(WEB_TOOLS);
 
     // True once we have seen at least one text_delta. From then on we trust the
     // delta stream for assistant text and ignore the completed assistant text
@@ -400,7 +344,9 @@ class KaceySession {
         // Filtered through the controller's switches, so denying a tool there
         // actually removes it from the session rather than only dimming a chip.
         allowedTools: [...ALLOWED_TOOLS, ...APP_TOOL_NAMES].filter((t) => appstate.toolAllowed(t)),
-        disallowedTools: CHAT_DISALLOWED_TOOLS,
+        // A web tool switched off in the Controller is not only left out of
+        // `tools` but refused outright.
+        disallowedTools: [...CHAT_DISALLOWED_TOOLS, ...WEB_TOOLS.filter((t) => !appstate.toolAllowed(t))],
 
         // Never prompt for permission (there is no terminal and no human to ask);
         // anything not pre-approved above is denied outright. This is what keeps a
@@ -496,7 +442,7 @@ class KaceySession {
           if (block.type === 'tool_use') {
             const short = shortToolName(block.name);
             this.toolNames.set(block.id, short);
-            if (WEB_TOOLS.includes(block.name)) this.webCalls.set(block.id, { name: block.name, input: block.input || {} });
+            this.web.use(block);
             this.send({ type: 'tool', name: short, phase: 'start' });
           } else if (block.type === 'text' && !this.sawTextDelta && block.text) {
             // Fallback only: partial messages unavailable, so send the whole text.
@@ -512,12 +458,8 @@ class KaceySession {
         if (!Array.isArray(content)) return;
         for (const block of content) {
           if (block.type === 'tool_result') {
-            const web = this.webCalls.get(block.tool_use_id);
-            if (web) {
-              this.webCalls.delete(block.tool_use_id);
-              const frame = webFrame(web, block, content.length === 1 ? msg.tool_use_result : null);
-              if (frame) this.send(frame);
-            }
+            const frame = this.web.result(block, content.length === 1 ? msg.tool_use_result : null);
+            if (frame) this.send(frame);
             const name = this.toolNames.get(block.tool_use_id);
             if (name) {
               this.toolNames.delete(block.tool_use_id);
@@ -557,6 +499,7 @@ class KaceySession {
           this.send({ type: 'tool', name, phase: 'end' });
         }
         this.toolNames.clear();
+        this.web.clear();
 
         this.turnActive = false;
         this.interrupted = false;
@@ -649,15 +592,22 @@ const chats = {
 
 const NUDGE_START = '\n\n[systémová poznámka';
 
-/** A stored session as the transcript shows it: user and Kacey text only. */
+/** A stored session as the transcript shows it: user and Kacey text, and
+ *  after an answer that went to the web its sources ({ role: 'web', frames },
+ *  the same `web` frames the live turn sent — web.js). */
 function transcriptOf(messages) {
   const out = [];
+  const web = webOfTranscript(messages, WEB_TOOLS);
+  let turn = -1;
+  const sources = () => { if (turn >= 0 && web[turn]?.length) out.push({ role: 'web', frames: web[turn] }); };
   for (const m of messages) {
     if (m.parent_tool_use_id) continue;
     const content = m.message?.content;
     if (m.type === 'user') {
+      if (!isTurnStart(m)) continue;
+      sources(); turn++;
       if (typeof content === 'string') out.push({ role: 'user', text: content.split(NUDGE_START)[0] });
-      else if (Array.isArray(content) && !content.some((b) => b.type === 'tool_result')) {
+      else {
         const text = content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').split(NUDGE_START)[0];
         const imgs = content.filter((b) => b.type === 'image').length;
         out.push({ role: 'user', text: text + (imgs ? ` [${imgs === 1 ? '1 obrázek' : `${imgs} obrázky`}]` : '') });
@@ -667,6 +617,7 @@ function transcriptOf(messages) {
       if (text) out.push({ role: 'assistant', text });
     }
   }
+  sources();
   return out;
 }
 

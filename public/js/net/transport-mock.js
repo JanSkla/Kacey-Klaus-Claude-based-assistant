@@ -4,7 +4,8 @@
    ?mock=1 bypasses the WebSocket and replays the exact same frame types from a
    script, so the whole UI can be built and tested with no backend, no API key
    and no memory database. Type "/error", "/offline", "/long" or "/web" (or ask
-   for "ordinační hodiny") to exercise those branches.
+   for "ordinační hodiny"; "/web offline" for a search that fails) to exercise
+   those branches.
 
    It deliberately produces awkward output — chunks that split mid-word, a
    preamble before a tool call, sentences without the space after the full stop
@@ -87,6 +88,17 @@ export function makeMockTransport(onServer, onConn, submit) {
       at(t, function () { onServer({ type: 'thinking' }); });
       say('Podívám se na internet.');
       at(t += 200, function () { onServer({ type: 'tool', name: 'WebSearch', phase: 'start' }); });
+      if (/offline|chyba/.test(lower)) {
+        /* The server cannot reach the web: the search fails, the card says so. */
+        at(t += 900, function () {
+          onServer({ type: 'web', tool: 'search', ok: false, query: 'ordinační hodiny MUDr. Nováková Brno', sources: [] });
+          onServer({ type: 'tool', name: 'WebSearch', phase: 'end' });
+        });
+        t += 200;
+        say('Na internet se teď nedostanu. Zkusím to za chvíli, nebo můžete ordinaci rovnou zavolat.');
+        at(t += 160, function () { onServer({ type: 'done' }); });
+        return;
+      }
       at(t += 1400, function () {
         onServer({ type: 'web', tool: 'search', ok: true, query: 'MUDr. Nováková praktická lékařka Brno ordinační hodiny', sources: [
           { title: 'MUDr. Jana Nováková — praktický lékař pro dospělé', url: 'https://www.ordinace-novakova.cz/ordinacni-hodiny' },

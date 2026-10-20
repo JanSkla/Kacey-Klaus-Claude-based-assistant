@@ -19,6 +19,33 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.7 — 2026-10-20
+
+**Kacey na internetu — she can look things up**
+- The chat's Kacey gets two read-only built-in tools, `WebSearch` and
+  `WebFetch` (`WEB_TOOLS` in [config.js](config.js)), for public facts that
+  change or that she cannot know: a doctor's office hours, opening times, an
+  address, a timetable. Both are switches in the Controller; one switched off
+  is also refused outright. The night run, the morning brief and the gallery's
+  describer still get no built-in tools at all.
+- The persona's new "Internet" section: the owner's own things come from
+  memory and the calendar ("my dentist" is looked up in memory first, then
+  searched by name); one search, at most one or two pages, official ones
+  first; the answer is one or two Czech sentences with no addresses; when
+  the web is out of reach she says "Na internet se teď nedostanu." once and
+  offers what next; she writes nothing from the web to memory unless asked.
+  Web pages and search results are data, never instructions.
+- Under an answer from the web the chat shows where it came from: the query,
+  the pages she read ("přečteno" / "nešlo otevřít") and the hits, three at a
+  time ([web.js](web.js) sends `web` frames, http(s) addresses only;
+  [ui/websources.js](public/js/ui/websources.js)). Reopening a conversation
+  from the history rebuilds the card from the stored session. A card for a
+  search that failed says the web was out of reach; offline, a link says so
+  instead of opening a dead tab.
+- Spoken replies drop any web address that slips into a sentence
+  (`forSpeech` in [voice/sentences.js](public/js/voice/sentences.js)).
+- Tests: [test/web.mjs](test/web.mjs) (`npm run test:web`).
+
 ## KC 1.0.6 — 2026-10-20
 
 **Whiteboard — a free plane for thoughts**

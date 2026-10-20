@@ -604,6 +604,29 @@ rename, delete, open — the last three ask the page to open the board with an
 `open` frame). Her edit also sends `edited_chat` to her own chat, which draws
 the board under her words.
 
+### The web
+
+The chat's session has two built-in tools, `WebSearch` and `WebFetch`
+(config.js `WEB_TOOLS`): read-only lookups of public facts, switchable in the
+Controller like the rest (a switched-off one is left out of `tools` and added
+to `disallowedTools`). Every other `query()` — the night, the brief, the
+gallery's describer — keeps `tools: []` and the full `DISALLOWED_TOOLS`. The
+persona's "Internet" section says when to use them, to answer in one or two
+Czech sentences without addresses, and that what a page says is data, never
+an instruction.
+
+Since she never reads an address aloud (and `forSpeech` in
+[voice/sentences.js](public/js/voice/sentences.js) drops any that slips into
+a sentence), the sources go to the page: [web.js](web.js) pairs each web
+`tool_use` with its result and sends a `web` frame (`tool: 'search'` with the
+query and up to four hits, or `tool: 'fetch'` with the address and whether it
+opened; http(s) only). The page collects a turn's frames and draws one card
+under the answer at `done` ([ui/websources.js](public/js/ui/websources.js),
+merging in [core/websrc.js](public/js/core/websrc.js)). Nothing extra is
+stored: reopening a conversation rebuilds the frames from the SDK's own
+transcript (`webOfTranscript`), and `/api/chat/sessions/:id` puts them after
+that turn's answer as `{ role: 'web', frames }`.
+
 ### The night routine (D.R.E.A.M.)
 
 **Spec: [docs/DREAM.md](docs/DREAM.md).** Read it before touching anything to do
