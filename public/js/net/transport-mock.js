@@ -3,8 +3,8 @@
 
    ?mock=1 bypasses the WebSocket and replays the exact same frame types from a
    script, so the whole UI can be built and tested with no backend, no API key
-   and no memory database. Type "/error", "/offline" or "/long" to exercise
-   those branches.
+   and no memory database. Type "/error", "/offline", "/long" or "/web" (or ask
+   for "ordinační hodiny") to exercise those branches.
 
    It deliberately produces awkward output — chunks that split mid-word, a
    preamble before a tool call, sentences without the space after the full stop
@@ -72,6 +72,38 @@ export function makeMockTransport(onServer, onConn, submit) {
       open = false;
       onConn('offline', 4000);
       at(4000, ready);
+      return;
+    }
+
+    /* A question for the web: a search, one page read, sources under the answer. */
+    if (lower.indexOf('/web') === 0 || /ordina|otevírac|internet|na webu/.test(lower)) {
+      var t = 260;
+      var say = function (text) {
+        chunk(text).forEach(function (piece) {
+          t += 22 + Math.floor(Math.random() * 30);
+          at(t, function () { onServer({ type: 'delta', text: piece }); });
+        });
+      };
+      at(t, function () { onServer({ type: 'thinking' }); });
+      say('Podívám se na internet.');
+      at(t += 200, function () { onServer({ type: 'tool', name: 'WebSearch', phase: 'start' }); });
+      at(t += 1400, function () {
+        onServer({ type: 'web', tool: 'search', ok: true, query: 'MUDr. Nováková praktická lékařka Brno ordinační hodiny', sources: [
+          { title: 'MUDr. Jana Nováková — praktický lékař pro dospělé', url: 'https://www.ordinace-novakova.cz/ordinacni-hodiny' },
+          { title: 'Nováková Jana MUDr. | Firmy.cz', url: 'https://www.firmy.cz/detail/12345-mudr-jana-novakova-brno.html' },
+          { title: 'Praktičtí lékaři Brno-střed — seznam ordinací', url: 'https://www.brno-stred.cz/zdravotnictvi/prakticti-lekari' },
+          { title: 'MUDr. Jana Nováková, Brno — recenze a hodnocení', url: 'https://www.znamylekar.cz/mudr-jana-novakova/prakticky-lekar/brno' }
+        ] });
+        onServer({ type: 'tool', name: 'WebSearch', phase: 'end' });
+      });
+      at(t += 150, function () { onServer({ type: 'tool', name: 'WebFetch', phase: 'start' }); });
+      at(t += 1100, function () {
+        onServer({ type: 'web', tool: 'fetch', ok: true, sources: [{ title: '', url: 'https://www.ordinace-novakova.cz/ordinacni-hodiny' }] });
+        onServer({ type: 'tool', name: 'WebFetch', phase: 'end' });
+      });
+      t += 200;
+      say('Paní doktorka Nováková ordinuje v pondělí a ve středu od sedmi do jedné, v úterý a ve čtvrtek odpoledne od dvou do šesti, v pátek jen do jedenácti. Odběry jsou každé ráno do půl deváté.');
+      at(t += 160, function () { onServer({ type: 'done' }); });
       return;
     }
 

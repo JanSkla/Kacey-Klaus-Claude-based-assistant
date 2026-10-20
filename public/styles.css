@@ -3031,6 +3031,32 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
 .gchat__hit span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gchat--hits .link { align-self: flex-start; }
 
+/* Where an answer from the web came from (ui/websources.js): a quiet card tucked
+   under Kacey's bubble — her words keep the accent edge, the sources do not. */
+.msg--web { max-width: min(78%, 64ch); width: 100%; margin-top: -10px; }
+.webchat { display: flex; flex-direction: column; gap: 6px; padding: 8px 14px 10px; background: var(--l1); border: 1px solid var(--line); border-left: 4px solid var(--line2); }
+.webchat__kicker { margin: 0; font-size: 12px; letter-spacing: .06em; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.webchat__list { list-style: none; margin: 0; padding: 0; }
+.webchat__list li + li { border-top: 1px solid #2e2e2e; }
+.webchat__src { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 6px 0; color: var(--ink); text-decoration: none; }
+.webchat__title { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.webchat__host { flex: none; max-width: 45%; font-size: 12px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.webchat__src:hover .webchat__title { color: var(--acc); text-decoration: underline; }
+.webchat__src:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.webchat__src.is-failed .webchat__title { color: var(--ink3); }
+.webchat__src.is-failed .webchat__host { color: var(--err); }
+.webchat__empty { margin: 0; font-size: 13px; color: var(--ink3); }
+.webchat__more { align-self: flex-start; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .msg--web { max-width: 88%; margin-top: -8px; }
+  .webchat { padding: 6px 12px 8px; }
+  .webchat__src { flex-direction: column; align-items: stretch; gap: 1px; min-height: 44px; justify-content: center; padding: 5px 0; }
+  .webchat__title { flex: none; }
+  .webchat__host { max-width: 100%; }
+  .webchat__more { min-height: 44px; }
+}
+
 @media (max-width: 760px) {
   /* Galerie: search on top, two columns of photos, Vyfotit · Nahrát docked at the bottom. */
   .view[data-view="gallery"] { gap: 10px; padding-bottom: 0; }

@@ -35,6 +35,7 @@ import { makeSocketTransport } from './transport-socket.js';
 import { makeMockTransport } from './transport-mock.js';
 import { announceVoicePage, onVoiceWake, onVoiceStop } from '../voice/voicecast.js';
 import { receiveUpgrade, noteVersion } from '../views/upgrade.js';
+import { noteWeb, flushWeb, dropWeb } from '../ui/websources.js';
 
 var transport = null;
 var toolDepth = 0;
@@ -184,6 +185,7 @@ export function onServer(msg) {
       unlockHint();
       flushTTS();
       endAssistant();
+      flushWeb();
       // muted? then nothing will speak — reopen the mic straight away
       if (state.ttsPending === 0) setTimeout(maybeResumeVoiceLoop, 250);
       break;
@@ -199,8 +201,16 @@ export function onServer(msg) {
       unlockHint();
       cancelSpeech();
       endAssistant(true);
+      dropWeb();
       showAlert(typeof msg.message === 'string' && msg.message ? msg.message : t().errRec, true);
       state.resumeVoiceLoop = false;
+      break;
+
+    case 'web':
+      /* What a web search found or a page she read (server.js webFrame).
+         Collected and drawn under the answer when the turn is done; a side
+         chat's turn has no answer in the transcript to put it under. */
+      if (!aside) noteWeb(msg);
       break;
 
     case 'gallery':

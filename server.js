@@ -46,7 +46,7 @@ import { addDays, turnClock } from './public/js/core/due.js';
 import {
   HERE, VERSION, PORT, HOST, MODEL, EFFORT, PERSONA_PATH, PUBLIC_DIR,
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
-  MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, DISALLOWED_TOOLS,
+  MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, CHAT_DISALLOWED_TOOLS, WEB_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
   XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL, NOWPLAYING_URL, DUCK_PERCENT,
   LOGICAL_DAY_START_HOUR, LIGHTSD_URL, PREVIEW, SELFUPDATE, GALLERY_DIR, WHITEBOARD_DIR,
@@ -107,6 +107,63 @@ const log = (...a) => console.log('[kacey]', ...a);
 /** Strip the mcp__server__ prefix so the UI shows "memory_search". */
 const shortToolName = (name) =>
   name?.startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name;
+
+/* The sources of a web lookup, for the page to show under the answer — she
+   never reads an address aloud, so this is the only place the owner sees where
+   the opening hours came from. `structured` is the SDK's tool_use_result
+   (WebSearchOutput / WebFetchOutput) when the message carried just this one
+   result; without it the result text is parsed. Only http(s) addresses get
+   through: the page turns them into links. */
+const WEB_SOURCES_MAX = 4;
+
+function webUrl(u) {
+  try {
+    const url = new URL(String(u));
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+  } catch { return null; }
+}
+
+function resultText(block) {
+  const c = block.content;
+  if (typeof c === 'string') return c;
+  return Array.isArray(c) ? c.map((b) => (b.type === 'text' ? b.text : '')).join('\n') : '';
+}
+
+function webFrame(call, block, structured) {
+  const failed = block.is_error === true;
+  if (call.name === 'WebFetch') {
+    const url = webUrl(structured?.url || call.input.url);
+    if (!url) return null;
+    const code = Number(structured?.code) || 0;
+    return {
+      type: 'web', tool: 'fetch', ok: !failed && (!code || code < 400),
+      sources: [{ title: '', url }],
+    };
+  }
+
+  let hits = [];
+  if (Array.isArray(structured?.results)) {
+    for (const r of structured.results) if (r && Array.isArray(r.content)) hits.push(...r.content);
+  } else {
+    // "Web search results for query: "…"\n\nLinks: [{"title":…,"url":…}, …]"
+    const m = /Links:\s*(\[[\s\S]*?\])\s*(?:\n|$)/.exec(resultText(block));
+    if (m) { try { hits = JSON.parse(m[1]); } catch { hits = []; } }
+  }
+  const seen = new Set();
+  const sources = [];
+  for (const h of hits) {
+    const url = webUrl(h?.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    sources.push({ title: String(h.title || '').slice(0, 160), url });
+    if (sources.length >= WEB_SOURCES_MAX) break;
+  }
+  return {
+    type: 'web', tool: 'search', ok: !failed,
+    query: String(structured?.query || call.input.query || '').slice(0, 200),
+    sources,
+  };
+}
 
 /* What the user is told when a turn dies for a reason explainError() below does
    not recognise. The SDK's own wording is English diagnostics
@@ -203,6 +260,10 @@ class KaceySession {
     // Maps tool_use_id -> short tool name, so we can pair a tool_result back to
     // the tool that produced it and emit { phase: 'end' }.
     this.toolNames = new Map();
+
+    // WebSearch / WebFetch calls by tool_use_id, with their input: the query or
+    // the address, which the page shows under the answer (webFrame below).
+    this.webCalls = new Map();
 
     // True once we have seen at least one text_delta. From then on we trust the
     // delta stream for assistant text and ignore the completed assistant text
@@ -333,12 +394,13 @@ class KaceySession {
         // racing at startup is also what made klaus-memory time out.
         strictMcpConfig: true,
 
-        // No built-in tools whatsoever; only the allow-listed MCP tools.
-        tools: [],
+        // No built-in tools but the read-only web (config.js WEB_TOOLS); the
+        // rest are the allow-listed MCP tools.
+        tools: WEB_TOOLS.filter((t) => appstate.toolAllowed(t)),
         // Filtered through the controller's switches, so denying a tool there
         // actually removes it from the session rather than only dimming a chip.
         allowedTools: [...ALLOWED_TOOLS, ...APP_TOOL_NAMES].filter((t) => appstate.toolAllowed(t)),
-        disallowedTools: DISALLOWED_TOOLS,
+        disallowedTools: CHAT_DISALLOWED_TOOLS,
 
         // Never prompt for permission (there is no terminal and no human to ask);
         // anything not pre-approved above is denied outright. This is what keeps a
@@ -434,6 +496,7 @@ class KaceySession {
           if (block.type === 'tool_use') {
             const short = shortToolName(block.name);
             this.toolNames.set(block.id, short);
+            if (WEB_TOOLS.includes(block.name)) this.webCalls.set(block.id, { name: block.name, input: block.input || {} });
             this.send({ type: 'tool', name: short, phase: 'start' });
           } else if (block.type === 'text' && !this.sawTextDelta && block.text) {
             // Fallback only: partial messages unavailable, so send the whole text.
@@ -449,6 +512,12 @@ class KaceySession {
         if (!Array.isArray(content)) return;
         for (const block of content) {
           if (block.type === 'tool_result') {
+            const web = this.webCalls.get(block.tool_use_id);
+            if (web) {
+              this.webCalls.delete(block.tool_use_id);
+              const frame = webFrame(web, block, content.length === 1 ? msg.tool_use_result : null);
+              if (frame) this.send(frame);
+            }
             const name = this.toolNames.get(block.tool_use_id);
             if (name) {
               this.toolNames.delete(block.tool_use_id);
@@ -749,7 +818,7 @@ app.get('/api/app', (_req, res) => {
   appstate.seedTools(ALLOWED_TOOLS);
   // deniedTools is read-only context, not part of the stored document: these
   // are refused by configuration and no switch in the UI can change that.
-  res.json({ ...appstate.get(), deniedTools: DISALLOWED_TOOLS });
+  res.json({ ...appstate.get(), deniedTools: CHAT_DISALLOWED_TOOLS });
 });
 
 app.put('/api/app/:section', express.json({ limit: '1mb' }), (req, res) => {
@@ -1921,7 +1990,7 @@ server.listen(PORT, HOST, () => {
         'Reads still work (they come from the mirror), but deleting or editing ' +
         'an event from Google or TimeTree will fail. Set KLAUS_CALENDARS.');
   }
-  log(`allowed tools (${ALLOWED_TOOLS.length}): ${MEMORY_TOOLS.join(', ')}`);
+  log(`allowed tools (${ALLOWED_TOOLS.length}): ${[...MEMORY_TOOLS, ...WEB_TOOLS].join(', ')}`);
   /* Photos the last run was still describing when it stopped. */
   try {
     const n = gallery.resumeInterrupted();
