@@ -168,19 +168,20 @@ export function cycleModel(c, now) {
     if (!bySleep && attempts[0].trigger === 'fallback' && log.winding_at) {
       steps.push({ time: '—', title: 'Noční běh', meta: 'nespuštěn — čekal na spánek', st: 'pend' });
     }
-    attempts.forEach(function (a, i) {
-      var step = attemptStep(a, run, log);
-      // An earlier failed attempt has no count of its own.
-      if (i < attempts.length - 1 && a.status === 'done') step.meta = step.meta.split(' · ')[0];
-      steps.push(step);
-    });
-    // The run's first step: every calendar synced, so the plan saw today's changes.
+    /* The run's first step, before its own: every calendar synced, so the plan
+       saw today's changes (calsync.js). */
     var cs = run && run.calendar_sync;
     if (cs) {
       steps.push(cs.status === 'done'
         ? { time: hm(run.started_at), title: 'Kalendář ✓', meta: 'synchronizován' + (cs.invites ? ' · ' + plural(cs.invites, 'pozvánka čeká', 'pozvánky čekají', 'pozvánek čeká') + ' na odpověď' : ''), st: 'done' }
         : { time: hm(run.started_at), title: 'Kalendář', meta: 'synchronizace selhala' + (cs.error_cs ? ' — ' + cs.error_cs : '') + ' · plán ze starších dat', st: 'warn' });
     }
+    attempts.forEach(function (a, i) {
+      var step = attemptStep(a, run, log);
+      // An earlier failed attempt has no count of its own.
+      if (i < attempts.length - 1 && a.status === 'done') step.meta = step.meta.split(' · ')[0];
+      steps.push(step);
+    });
   } else {
     steps.push({ time: '—', title: 'Noční běh', meta: 'po usnutí' + (s.fallback_on === false ? '' : ' · záloha ' + (s.fallback || '04:00')), st: 'pend' });
   }

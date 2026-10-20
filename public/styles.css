@@ -730,6 +730,8 @@ body.is-tagdrag, body.is-tagdrag * { cursor: grabbing !important; user-select: n
 .calsync__state { color: var(--ink2); }
 .calsync[data-st="err"] .calsync__state { color: var(--err); }
 .calsync[data-st="busy"] .calsync__state { color: var(--acc); }
+.calsync[data-st="off"] .calsync__state { color: var(--ink3); }
+.calsync[data-st="off"] .calsync__btn { opacity: .45; }
 .calsync__invites { color: var(--warn); }
 .calsync__btn:disabled { cursor: default; }
 .calsync[data-st="busy"] .calsync__btn { color: var(--acc); border-color: var(--acc); }
@@ -1778,7 +1780,8 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .view[data-view="calendar"][data-month="open"] .weekstrip { display: none; }
   /* The sync strip stays under the week, folded or not. */
   .calsync { padding: 6px 12px; border-top: 0; border-bottom: 1px solid var(--line); }
-  .calsync__btn { width: 44px; height: 44px; }
+  .calsync__btn { width: 44px; height: 44px; flex: none; }
+  .calsync__more { display: none; }
   .weekday {
     min-height: 62px; padding: 4px 0; font: inherit; cursor: pointer;
     background: var(--l1); border: 1px solid var(--line); color: var(--ink);

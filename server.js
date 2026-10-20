@@ -1121,7 +1121,7 @@ app.get('/api/calendar', async (req, res) => {
       monthsWithEvents,
       days,
       routine,
-      sync: calsync.syncState(),
+      sync: (() => { try { return calsync.syncState(); } catch { return null; } })(),
     });
   } catch (err) {
     log(`calendar read failed: ${err.message}`);
@@ -1210,7 +1210,7 @@ app.post('/api/calendar/:id/delete', express.json({ limit: '4kb' }), async (req,
 
   const r = await calendarWrite({ action: 'delete', event_id: id });
   log(`calendar delete ${id}: ${r.ok ? 'ok' : 'FAILED ' + r.error}`);
-  if (r.ok) dropFlag(id);
+  if (r.ok) { dropFlag(id); calsync.dropResponse(id); }
   res.status(r.ok ? 200 : 400).json(r);
 });
 

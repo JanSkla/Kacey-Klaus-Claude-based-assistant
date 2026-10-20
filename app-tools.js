@@ -30,6 +30,7 @@ import { guessTag, newTagId, tagById, tagByName, tagNameProblem, tagsFrom } from
 import { logicalDateOf } from './rules.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
+import * as calsync from './calsync.js';
 import * as notifications from './notifications.js';
 import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
@@ -726,13 +727,16 @@ const rulePreview = tool(
    The name says "calendar" on purpose: protocol.js refreshes the calendar
    view after any tool whose name does. */
 
-function describeUnsure(e) {
-  // Local time: the calendar stores UTC ("…+00:00"), and she says the hour aloud.
-  const d = new Date(e.starts_at);
-  const when = isNaN(d) ? String(e.starts_at || '')
+/* Local time: the calendar stores UTC ("…+00:00"), and she says the hour aloud. */
+function localStamp(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? String(iso || '')
     : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ` +
       `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  return `- (${e.event_id}) ${e.title || '(bez názvu)'} — ${when}${e.source ? ` · ${e.source}` : ''}${e.note ? ` · ${e.note}` : ''}`;
+}
+
+function describeUnsure(e) {
+  return `- (${e.event_id}) ${e.title || '(bez názvu)'} — ${localStamp(e.starts_at)}${e.source ? ` · ${e.source}` : ''}${e.note ? ` · ${e.note}` : ''}`;
 }
 
 const calendarTentative = tool(
@@ -760,6 +764,50 @@ const calendarTentative = tool(
         : `Potvrzeno, už není nejisté: ${describeUnsure(ev)}`);
     } catch (err) {
       return fail(`${err.message}. Nic se nezměnilo.`);
+    }
+  },
+);
+
+/* ---- syncing the calendars, and the open invitations ----------------------
+   calsync.js runs klaus_memory's sync and keeps the owner's answers to
+   invitations. Kacey can run it ("synchronizuj kalendář") and read what still
+   waits for an answer; the answer itself is given in Google, not here. */
+
+function syncLine(last) {
+  if (!last) return 'Kalendář se zatím nesynchronizoval.';
+  const when = localStamp(last.at);
+  return last.ok
+    ? `Poslední synchronizace ${when} (${last.by === 'night' ? 'v noci' : 'ručně'}) proběhla v pořádku` +
+      `${last.invites ? `; pozvánek bez odpovědi: ${last.invites}` : ''}.`
+    : `Poslední synchronizace ${when} se nepovedla: ${last.error_cs || 'kalendář neodpověděl'}.`;
+}
+
+function describeInvite(e) {
+  return describeUnsure(e) + (e.status === 'tentative' ? ' · odpověď „Možná“' : ' · bez odpovědi');
+}
+
+const calendarSync = tool(
+  'app_calendar_sync',
+  'Synchronizace kalendářů s Googlem a TimeTree a pozvánky, na které pán ještě neodpověděl. ' +
+  '"sync" stáhne změny hned (trvá i desítky sekund; jinak běží každou noc sama) — jen když o to pán řekne ' +
+  'nebo potřebuješ čerstvá data. "invites" vypíše nadcházející pozvánky bez odpovědi nebo s „Možná“ ' +
+  '(v kalendáři mají otazník). "status" řekne, kdy a jak proběhla poslední synchronizace. ' +
+  'Na pozvánku odpovídá pán sám v Google Kalendáři; po další synchronizaci otazník zmizí.',
+  { action: z.enum(['sync', 'invites', 'status']) },
+  async ({ action }) => {
+    try {
+      if (action === 'status') return ok(syncLine(calsync.syncState().last));
+      if (action === 'sync') {
+        const last = await calsync.runSync('user');
+        if (!last.ok) return fail(`Synchronizace se nepovedla: ${last.error_cs || 'kalendář neodpověděl'}. Kalendář ukazuje stav z poslední úspěšné.`);
+      }
+      const rows = calsync.listOpen({ limit: 20 });
+      const head = action === 'sync' ? 'Kalendář synchronizován. ' : '';
+      return ok(rows.length
+        ? `${head}Pozvánky čekající na odpověď (${rows.length}):\n${rows.map(describeInvite).join('\n')}`
+        : `${head}Žádná pozvánka nečeká na odpověď.`);
+    } catch (err) {
+      return fail(err.message);
     }
   },
 );
@@ -964,7 +1012,7 @@ function makeGallerySearch(ctx) {
 
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskTags, journalAdd,
-  rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative,
+  rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative, calendarSync,
   notificationsRead, morningAdd,
 ];
 
@@ -973,7 +1021,7 @@ export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours', 'app_routine_alter',
   'app_task_add', 'app_task_update', 'app_task_tags', 'app_journal_add',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
-  'app_calendar_tentative', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
+  'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
@@ -987,6 +1035,7 @@ export function makeAppServer(ctx = {}) {
       'štítky samotné upravuje app_task_tags), deník, ' +
       'a pravidla nočního plánování (rules_*, rule_*), podle kterých se v noci samy zakládají úkoly. ' +
       'Nejisté události kalendáře označuje app_calendar_tentative. ' +
+      'Synchronizaci kalendářů a pozvánky bez odpovědi obstarává app_calendar_sync. ' +
       'Oznámení z telefonu a zprávy z Instagramu čte app_notifications. ' +
       'Rutina je tvar běžného týdne (opakující se bloky), NE konkrétní události — ' +
       'ty patří do kalendáře přes klaus-memory. Změna jen pro konkrétní den (nemoc, zrušený nebo posunutý trénink) ' +

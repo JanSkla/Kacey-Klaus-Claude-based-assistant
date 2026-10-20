@@ -409,7 +409,7 @@ have.
 | `config.js`            | Every knob from the environment, all with working defaults; `MCP_SERVERS` and `MEMORY_TOOLS` |
 | Persona loading        | `persona/kacey.md` read at startup, `{{TODAY}}`/`{{NOW}}` rendered per connection |
 | `KaceySession`         | One WebSocket == one continuous `query()` in streaming-input mode |
-| HTTP routes            | `/api/health` `/api/voices` `/api/calendar` (+ update/delete/tentative) `/api/routine/days` `/api/routine/alter` `/api/tts`, `/share-target` (fallback only — `public/sw.js` catches shares), then static `public/` |
+| HTTP routes            | `/api/health` `/api/voices` `/api/calendar` (+ update/delete/tentative, `/sync`) `/api/routine/days` `/api/routine/alter` `/api/tts`, `/share-target` (fallback only — `public/sw.js` catches shares), then static `public/` |
 | WebSocket              | `/ws`, JSON frames, one `KaceySession` per connection        |
 
 Two things about `KaceySession` that the frame protocol does not show:
@@ -466,6 +466,19 @@ so it is Kacey's own flag: `kacey_event_flag`, keyed by `event_id`
 ([eventflags.js](eventflags.js)). Kacey sets it with `app_calendar_tentative`,
 the event editor with `POST /api/calendar/:id/tentative`; confirming deletes the
 row, and deleting the event drops it. Outside Kacey the event looks ordinary.
+
+`response` is the owner's answer to an **invitation** — `needsAction`,
+`tentative` ("Možná"), `accepted`, `declined`, or null for an event that is
+not one. It is read from Google at each sync, not set here:
+[calsync.js](calsync.js) runs [tools/calendar_sync.py](tools/calendar_sync.py)
+(klaus_memory's `calendar_sync`, then the answers from its result and from
+`source_meta`) and rewrites `kacey_event_response` — unless the answers could
+not be read at all, when the old ones stay. The UI draws an open one like an
+unsure event. The sync runs first in every night run (`deps.syncCalendar` in
+dream.js; a failure does not fail the run), on `POST /api/calendar/sync`, and
+through Kacey's `app_calendar_sync`; one at a time, a second caller joins the
+running one. The last run is `kacey_kv` `calendar.sync`, broadcast as a
+`calendar_sync` frame when a sync starts and ends.
 
 ### The routine on concrete dates
 

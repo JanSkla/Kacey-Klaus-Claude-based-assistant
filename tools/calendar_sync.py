@@ -14,20 +14,34 @@ Prints one JSON object on stdout:
 Same construction as calendar_write.py: --calendars makes the Google sources
 exist at all, --env carries their credentials.
 
-DRAFT: klaus_memory's sync result is walked for anything that carries an
-event_id and a response status. Where its Google backend does not hand the
-status through yet, server.js also reads it from source_meta; the production
-pass makes the backend keep it.
+Where the answers come from, in order (a later one wins for the same event):
+  1. the sync result itself — anything in it that carries an event_id and a
+     response status, at any depth (klaus_memory's report shape is its own);
+  2. the mirror after the sync — calendar_event.source_meta, the attendee
+     marked `self` or a flat response_status, read straight from SQLite.
+`responses` is null when neither could be read at all (the server then keeps
+the answers it had); an empty object means "no open invitation anywhere".
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
+import sqlite3
 from pathlib import Path
 
 STATUSES = ("needsAction", "tentative", "accepted", "declined")
+
+
+def status_of(node):
+    """The owner's answer carried by one dict, or None."""
+    status = node.get("response_status") or node.get("responseStatus")
+    if status in STATUSES:
+        return status
+    for a in node.get("attendees") or []:
+        if isinstance(a, dict) and a.get("self") and a.get("responseStatus") in STATUSES:
+            return a["responseStatus"]
+    return None
 
 
 def collect(node, out, depth=0):
@@ -36,12 +50,8 @@ def collect(node, out, depth=0):
         return
     if isinstance(node, dict):
         eid = node.get("event_id")
-        status = node.get("response_status") or node.get("responseStatus")
-        if not status:
-            for a in node.get("attendees") or []:
-                if isinstance(a, dict) and a.get("self"):
-                    status = a.get("responseStatus")
-        if isinstance(eid, str) and status in STATUSES:
+        status = status_of(node)
+        if isinstance(eid, str) and status:
             out[eid] = status
         for v in node.values():
             collect(v, out, depth + 1)
@@ -50,12 +60,41 @@ def collect(node, out, depth=0):
             collect(v, out, depth + 1)
 
 
+def from_mirror(db_path, out):
+    """Answers kept in the mirror's source_meta. False when it cannot be read."""
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+        try:
+            rows = con.execute(
+                "SELECT event_id, source_meta FROM calendar_event "
+                "WHERE source_meta IS NOT NULL AND source_meta LIKE '%esponse%'"
+            ).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+    for eid, raw in rows:
+        try:
+            meta = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        status = status_of(meta) if isinstance(meta, dict) else None
+        if status:
+            out[eid] = status
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
     ap.add_argument("--calendars", help="JSON declaring the calendar sources")
     ap.add_argument("--env", help=".env holding the provider credentials")
     args = ap.parse_args()
+
+    if not args.calendars:
+        print(json.dumps({"ok": False, "error": "chybí calendars.json — není s čím synchronizovat"},
+                         ensure_ascii=False))
+        return 1
 
     try:
         from klaus_memory.config import Config
@@ -70,10 +109,6 @@ def main() -> int:
             envstore.load_report(args.env)
 
         config = Config.from_env().with_(db_path=Path(args.db))
-        if not args.calendars:
-            print(json.dumps({"ok": False, "error": "chybí calendars.json — není s čím synchronizovat"},
-                             ensure_ascii=False))
-            return 1
         sources = CalendarSources.from_config(
             json.loads(read_text_any(args.calendars)), timezone=config.timezone
         )
@@ -86,21 +121,27 @@ def main() -> int:
         )
 
         result = svc.calendar_sync()
-        responses: dict[str, str] = {}
-        collect(result, responses)
-        events = None
-        if isinstance(result, dict):
-            for key in ("events", "count", "synced", "total"):
-                if isinstance(result.get(key), int):
-                    events = result[key]
-                    break
-        print(json.dumps({"ok": True, "events": events, "responses": responses},
-                         ensure_ascii=False, default=str))
-        return 0
     except Exception as exc:
         print(json.dumps({"ok": False, "error": str(exc), "kind": type(exc).__name__},
                          ensure_ascii=False))
         return 1
+
+    responses: dict[str, str] = {}
+    collect(result, responses)
+    mirror_ok = from_mirror(args.db, responses)
+
+    events = None
+    if isinstance(result, dict):
+        for key in ("events", "count", "synced", "total"):
+            if isinstance(result.get(key), int):
+                events = result[key]
+                break
+    print(json.dumps({
+        "ok": True,
+        "events": events,
+        "responses": responses if (responses or mirror_ok) else None,
+    }, ensure_ascii=False, default=str))
+    return 0
 
 
 if __name__ == "__main__":

@@ -64,15 +64,31 @@ export function responseOf(eventId, meta, map) {
   return (map && map.get(eventId)) || fromMeta(meta) || null;
 }
 
-function storeResponses(responses) {
+const EVENT_ID_RE = /^ev_[A-Za-z0-9_-]{4,64}$/;
+
+/**
+ * Replace the answers with what this sync saw. `responses` null or not an
+ * object means the tool could not read them at all: the old answers stay
+ * rather than every "?" vanishing on a hiccup. Returns how many were stored,
+ * or null when nothing changed.
+ */
+export function storeResponses(responses) {
+  if (!responses || typeof responses !== 'object' || Array.isArray(responses)) return null;
   const at = now();
-  transact((db) => {
+  return transact((db) => {
     db.prepare('DELETE FROM kacey_event_response').run();
     const ins = db.prepare('INSERT INTO kacey_event_response (event_id, status, synced_at) VALUES (?, ?, ?)');
-    for (const [id, status] of Object.entries(responses || {})) {
-      if (STATUSES.includes(status)) ins.run(id, status, at);
+    let n = 0;
+    for (const [id, status] of Object.entries(responses)) {
+      if (EVENT_ID_RE.test(id) && STATUSES.includes(status)) { ins.run(id, status, at); n++; }
     }
+    return n;
   });
+}
+
+/** Forget an answer — the event was deleted. Never throws. */
+export function dropResponse(id) {
+  try { open().prepare('DELETE FROM kacey_event_response WHERE event_id = ?').run(String(id)); } catch { /* nothing to drop */ }
 }
 
 /* ---- the run ------------------------------------------------------------- */
@@ -119,29 +135,37 @@ function pretend() {
 }
 
 /** The owner's words for a failed sync, like night.js humanError. */
-function humanError(e) {
+export function humanError(e) {
   const s = String(e || '');
-  if (/timed out|timeout|ETIMEDOUT|killed/i.test(s)) return 'Google neodpověděl včas';
-  if (/ENOTFOUND|EAI_AGAIN|network|connection|síť/i.test(s)) return 'bez sítě';
-  if (/auth|token|credential|401|403/i.test(s)) return 'Google chce znovu přihlásit';
+  if (/timed out|timeout|ETIMEDOUT|killed|SIGTERM/i.test(s)) return 'Google neodpověděl včas';
+  if (/ENOTFOUND|EAI_AGAIN|ENETUNREACH|ECONNREFUSED|ECONNRESET|getaddrinfo|urlopen error|network|connection|síť/i.test(s)) return 'bez sítě';
+  if (/invalid_grant|unauthori[sz]ed|auth|token|credential|\b401\b|\b403\b/i.test(s)) return 'Google chce znovu přihlásit';
   if (/calendars\.json/i.test(s)) return 'kalendáře nejsou nastavené';
+  if (/No module named|nelze spustit python|ENOENT/i.test(s)) return 'chybí klaus_memory nebo python';
   return 'kalendář neodpověděl';
 }
 
 /**
  * Sync every calendar now. `by` is 'night' or 'user'. One at a time: a press
  * while the night's sync runs joins it rather than starting a second.
+ * `opts.tool` stands in for the Python process (the tests).
  */
-export function runSync(by = 'user') {
+export function runSync(by = 'user', opts = {}) {
   if (running) return running.promise;
   const started = now();
-  const promise = (PREVIEW ? pretend() : runTool()).then((r) => {
+  const tool = opts.tool || (PREVIEW ? pretend : runTool);
+  const promise = Promise.resolve().then(tool).catch((err) => ({ ok: false, error: err.message })).then((r) => {
     const ok = !!(r && r.ok);
     if (ok && !PREVIEW) {
-      try { storeResponses(r.responses); } catch (err) { log(`answers not stored: ${err.message}`); }
+      try {
+        const n = storeResponses(r.responses);
+        if (n === null) log('the sync read no invitation answers; the previous ones stay');
+        // Not even an "accepted": klaus_memory's sync is not passing responseStatus through.
+        else if (n === 0) log('no invitation answers in this sync (does klaus_memory keep responseStatus?)');
+      } catch (err) { log(`answers not stored: ${err.message}`); }
     }
     let invites = 0;
-    try { invites = countOpen(); } catch { /* the table is new */ }
+    try { invites = countOpen(); } catch (err) { log(`open invitations not counted: ${err.message}`); }
     // After a failure the page says which sync the calendar still shows.
     const prev = kvGet('calendar.sync', null);
     const at = now();
@@ -162,14 +186,30 @@ export function runSync(by = 'user') {
   return promise;
 }
 
-/* Open invitations from today on: "2 pozvánky čekají na odpověď". */
-function countOpen() {
-  if (PREVIEW) return sampleRows(new Date().toISOString().slice(0, 7))
-    .filter((r) => OPEN_ANSWERS.includes(r.response) && r.starts_at >= new Date().toISOString().slice(0, 10)).length;
+/**
+ * Open invitations that have not ended yet, soonest first — what "2 pozvánky
+ * čekají na odpověď" counts and what Kacey reads out. An event deleted in
+ * Google drops out through the join.
+ */
+export function listOpen({ at = new Date(), limit = 50 } = {}) {
+  const from = at.toISOString();
+  if (PREVIEW) {
+    return sampleRows(from.slice(0, 7))
+      .filter((r) => OPEN_ANSWERS.includes(r.response) && (r.ends_at || r.starts_at) >= from)
+      .slice(0, limit)
+      .map((r) => ({ event_id: r.event_id, title: r.title, starts_at: r.starts_at, ends_at: r.ends_at, source: r.source, status: r.response }));
+  }
   return open().prepare(
-    `SELECT COUNT(*) AS n FROM kacey_event_response r JOIN calendar_event e ON e.event_id = r.event_id
-      WHERE r.status IN ('needsAction','tentative') AND e.starts_at >= ?`,
-  ).get(new Date().toISOString().slice(0, 10)).n;
+    `SELECT e.event_id, e.title, e.starts_at, e.ends_at, e.source, r.status
+       FROM kacey_event_response r JOIN calendar_event e ON e.event_id = r.event_id
+      WHERE r.status IN ('needsAction','tentative') AND COALESCE(e.ends_at, e.starts_at) >= ?
+      ORDER BY e.starts_at
+      LIMIT ?`,
+  ).all(from, limit);
+}
+
+function countOpen() {
+  return listOpen({ limit: 1000 }).length;
 }
 
 /* ---- the preview's sample invitations ----------------------------------- */

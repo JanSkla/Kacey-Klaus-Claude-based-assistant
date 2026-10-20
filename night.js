@@ -283,7 +283,10 @@ export function runSummary(r) {
     reasoning: rep.reasoning?.status || null, brief: rep.brief?.status || null,
     // The calendar sync at the run's start (calsync.js): done / failed, and the open invitations.
     calendar_sync: rep.calendar_sync
-      ? { status: rep.calendar_sync.status, invites: rep.calendar_sync.invites || 0, error_cs: humanError(rep.calendar_sync.error) }
+      ? {
+          status: rep.calendar_sync.status, invites: rep.calendar_sync.invites || 0,
+          error_cs: rep.calendar_sync.error_cs || humanError(rep.calendar_sync.error),
+        }
       : null,
     error, error_cs: humanError(error), attempt_list: attempts,
   };

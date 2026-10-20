@@ -426,7 +426,7 @@ async function fetchMonth(m) {
   if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
   payloads[body.month] = body;
   fetchedAt = Date.now();
-  if (body.sync) setSync(body.sync, false);
+  if (body.sync && !(sync && sync.running && sync.running.mine)) setSync(body.sync, false);
   return body;
 }
 
@@ -457,6 +457,8 @@ function invitesWord(n) {
   return n + ' pozvánek čeká na odpověď';
 }
 
+var syncPoll = null;       // while a sync this page did not start runs: asks now and then, in case its end frame is missed
+
 /** A new state arrived. `redraw`: a finished sync this page has not seen yet
     reloads the month, so the "?" follow what was answered in Google. */
 function setSync(s, redraw) {
@@ -465,19 +467,48 @@ function setSync(s, redraw) {
   var fresh = redraw && at && at !== syncSeenAt;
   if (at) syncSeenAt = at;
   if (fresh) refreshCalendar();
+  watchSync();
   renderSync();
+}
+
+/* The night's sync (or another page's) ends with a `calendar_sync` frame, but
+   a socket that dropped meanwhile never brings it: ask every 5 s until done. */
+function watchSync() {
+  var mine = sync && sync.running && sync.running.mine;
+  if (sync && sync.running && !mine) {
+    if (!syncPoll) syncPoll = setInterval(pollSync, 5000);
+  } else if (syncPoll) {
+    clearInterval(syncPoll);
+    syncPoll = null;
+  }
+}
+
+async function pollSync() {
+  try {
+    var res = await fetch('/api/calendar/sync');
+    if (!res.ok) return;
+    var s = await res.json();
+    if (sync && sync.running && sync.running.mine) return;   // this page's own POST answers
+    setSync({ last: s.last, running: s.running }, true);
+  } catch (err) { /* offline: the next tick, or the reconnect, asks again */ }
 }
 
 function renderSync() {
   if (!$('calSync')) return;
   var s = sync || {};
   var last = s.last;
+  var offline = navigator.onLine === false;
   var st, state, meta = [];
   if (s.running) {
     st = 'busy';
     state = 'Synchronizuji…';
     meta.push(s.running.by === 'night' ? 'noční režim' : 'Google · TimeTree');
-    if (last && last.at) meta.push('naposledy ' + whenWord(last.at));
+    if (last && last.at) meta.push({ more: 'naposledy ' + whenWord(last.at) });
+  } else if (offline) {
+    st = 'off';
+    state = 'Jsi offline';
+    meta.push(last && last.last_ok_at ? 'platí stav z ' + whenWord(last.last_ok_at)
+      : last && last.ok ? 'platí stav z ' + whenWord(last.at) : 'synchronizovat půjde po připojení');
   } else if (!last) {
     st = 'never';
     state = 'Zatím nesynchronizováno';
@@ -486,14 +517,17 @@ function renderSync() {
     st = 'err';
     state = 'Synchronizace se nepovedla · ' + whenWord(last.at);
     meta.push(last.error_cs || 'kalendář neodpověděl');
-    if (last.last_ok_at) meta.push('platí stav z ' + whenWord(last.last_ok_at));
+    if (last.last_ok_at) meta.push({ more: 'platí stav z ' + whenWord(last.last_ok_at) });
   } else {
     st = 'ok';
     state = 'Synchronizováno ' + whenWord(last.at);
     meta.push(last.by === 'night' ? 'v noci' : 'ručně');
   }
-  // One small line: the state, then its details after a " · ".
-  var nodes = [' · ' + meta.join(' · ')];
+  /* One small line: the state, then its details, each after a " · ". A
+     `more` detail is dropped on a phone, where the line has to stay short. */
+  var nodes = meta.map(function (m) {
+    return m.more ? el('span.calsync__more', ' · ' + m.more) : ' · ' + m;
+  });
   if (!s.running && last && last.invites) {
     nodes.push(' · ', el('span.calsync__invites', invitesWord(last.invites)));
   }
@@ -501,26 +535,37 @@ function renderSync() {
   $('calSyncState').textContent = state;
   fill($('calSyncMeta'), nodes);
   var btn = $('calSyncBtn');
-  btn.disabled = !!s.running;
-  btn.setAttribute('aria-label', s.running ? 'Synchronizuji…' : 'Synchronizovat kalendáře');
+  btn.disabled = !!s.running || offline;
+  btn.setAttribute('aria-label', s.running ? 'Synchronizuji…' : offline ? 'Offline — synchronizovat teď nejde' : 'Synchronizovat kalendáře');
 }
 
 async function runSync() {
   if (sync && sync.running) return;
-  setSync({ last: sync && sync.last, running: { by: 'user', started_at: new Date().toISOString() } }, false);
+  if (navigator.onLine === false) { renderSync(); say('Jsi offline — synchronizovat půjde, až se připojíš.'); return; }
+  var before = sync && sync.last;
+  setSync({ last: before, running: { by: 'user', started_at: new Date().toISOString(), mine: true } }, false);
   try {
     var res = await fetch('/api/calendar/sync', { method: 'POST' });
-    var out = await res.json();
-    var last = out.last;
-    if (!last) throw new Error(out.error || ('HTTP ' + res.status));
+    var out = null;
+    try { out = await res.json(); } catch (err) { /* a proxy's HTML page: the server is down */ }
+    var last = out && out.last;
+    if (!last) throw new Error(out && out.error ? out.error : 'server kaceybody neodpovídá');
     setSync({ last: last, running: null }, true);
     say(last.ok
       ? 'Kalendář synchronizován' + (last.invites ? ' · ' + invitesWord(last.invites) + '.' : '.')
       : 'Synchronizace se nepovedla — ' + (last.error_cs || 'kalendář neodpověděl') + '.');
   } catch (err) {
-    setSync({ last: sync && sync.last, running: null }, false);
-    say(navigator.onLine === false ? 'Jsi offline — synchronizovat teď nejde.' : 'Synchronizace se nepovedla: ' + err.message);
+    setSync({ last: before, running: null }, false);
+    say(navigator.onLine === false ? 'Jsi offline — synchronizovat půjde, až se připojíš.'
+      : 'Synchronizace se nepovedla — ' + (/fetch|network/i.test(err.message) ? 'server kaceybody neodpovídá' : err.message) + '.');
   }
+}
+
+/* Offline and back: the strip says so at once, and on return asks how the
+   last sync went (a frame sent while away never arrived). */
+function onConnectivity() {
+  renderSync();
+  if (navigator.onLine !== false) pollSync();
 }
 
 /** A range reached into a month nobody has fetched: get it, then redraw. */
@@ -1761,7 +1806,14 @@ export function initCalendar(opts) {
   $('calReloadM').addEventListener('click', function () { refreshCalendar(); say('Kalendář načten znovu.'); });
   $('calReload').addEventListener('click', refreshCalendar);
   $('calSyncBtn').addEventListener('click', runSync);
-  bus.on('calendar_sync', function (msg) { setSync({ last: msg.last, running: msg.running }, true); });
+  bus.on('calendar_sync', function (msg) {
+    // This page's own press is answered by its POST; the frame only adds the end.
+    if (sync && sync.running && sync.running.mine && msg.running) return;
+    setSync({ last: msg.last, running: msg.running }, true);
+  });
+  window.addEventListener('online', onConnectivity);
+  window.addEventListener('offline', onConnectivity);
+  if (navigator.onLine === false) renderSync();
 
   /* The routine on the shown date: add for the day, sick days, back to default. */
   $('routineAdd').addEventListener('click', function () { openAdd(selected); });

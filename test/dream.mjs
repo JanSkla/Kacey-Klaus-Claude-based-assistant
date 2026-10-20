@@ -305,6 +305,35 @@ await test('with a synthesizer, the brief is rendered to one clip per line', asy
   assert.equal(run.report.brief.audio, draft.lines.length - 1);
 });
 
+/* ---- the calendar sync first (calsync.js) ---------------------------------- */
+
+await test('the run syncs the calendar first, and a failed sync does not fail it', async () => {
+  const order = [];
+  const ok = async (by) => { order.push('sync:' + by); return { ok: true, events: 12, invites: 2 }; };
+  const run = await runNight({ date: '2030-02-21', trigger: 'sleep', now: new Date(2030, 1, 21, 0, 40) },
+    { ...deps, syncCalendar: ok, runner: async (a) => { order.push('model'); return runner(a); } });
+  assert.equal(order[0], 'sync:night', 'before anything is planned');
+  assert.deepEqual(run.report.calendar_sync, { status: 'done', events: 12, invites: 2 });
+
+  const failed = async () => ({ ok: false, error: 'urlopen error [Errno -3]', error_cs: 'bez sítě' });
+  const run2 = await runNight({ date: '2030-02-28', trigger: 'sleep', now: new Date(2030, 1, 28, 0, 40) }, { ...deps, syncCalendar: failed });
+  assert.equal(run2.status, 'done');
+  assert.equal(run2.report.calendar_sync.status, 'failed');
+  assert.equal(run2.report.calendar_sync.error_cs, 'bez sítě');
+
+  const thrown = async () => { throw new Error('boom'); };
+  const run3 = await runNight({ date: '2030-03-07', trigger: 'sleep', now: new Date(2030, 2, 7, 0, 40) }, { ...deps, syncCalendar: thrown });
+  assert.equal(run3.status, 'done');
+  assert.equal(run3.report.calendar_sync.status, 'failed');
+});
+
+await test('the summary carries the sync to the Brief timeline', async () => {
+  const { runSummary } = await import('../night.js');
+  const row = nightstore.getRun('2030-02-28');
+  assert.deepEqual(runSummary(row).calendar_sync, { status: 'failed', invites: 0, error_cs: 'bez sítě' });
+  assert.equal(runSummary(nightstore.getRun('2030-02-21')).calendar_sync.invites, 2);
+});
+
 cal.close();
 db.close();
 rmSync(dir, { recursive: true, force: true });

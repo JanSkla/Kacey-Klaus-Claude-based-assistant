@@ -19,6 +19,33 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.5 — 2026-10-20
+
+**Kalendář — unanswered invitations, nightly and manual sync**
+- Each calendar sync stores the owner's answer to every invitation it sees
+  (Google's `responseStatus`: needsAction · tentative · accepted · declined) in
+  the new `kacey_event_response` table ([calsync.js](calsync.js),
+  [tools/calendar_sync.py](tools/calendar_sync.py)); `/api/calendar` sends it
+  as `response` on each event. An unanswered or "Možná" invitation is drawn
+  like an unsure event — dotted, with a "?", meta "nepotvrzeno ·" / "možná ·" —
+  and its editor says to answer in Google; the next sync takes the "?" away.
+  A sync whose answers cannot be read keeps the previous ones.
+- Every calendar is synced at the start of each night run; a failed sync does
+  not fail the run. The Brief timeline shows it ("Kalendář ✓ — synchronizován
+  · 2 pozvánky čekají na odpověď", or the failure in the owner's words).
+- The calendar page has a sync strip: the time and source of the last sync,
+  the open invitations, and a sync button (`GET`/`POST /api/calendar/sync`,
+  `calendar_sync` frames). One sync at a time — a press during the night's sync
+  joins it. Offline the button rests and the strip says which sync still holds;
+  a sync another page started is followed even if its end frame is missed.
+- Kacey: `app_calendar_sync` (sync now, list the open invitations, last sync);
+  the persona tells her to use it instead of klaus_memory's raw `calendar_sync`
+  and that invitations are answered in Google.
+- Note: the answers come from klaus_memory's sync result or its `source_meta`.
+  If its Google backend does not pass `responseStatus` through, no "?" appears
+  until it does; the server log then says "no invitation answers in this sync"
+  after every run.
+
 ## KC 1.0.4 — 2026-10-17
 
 **Galerie — photos with descriptions and search by meaning**

@@ -366,6 +366,7 @@ function routineFor(date) {
  *   deps.persona    (date) => the rendered persona, for the brief's voice
  *   deps.onWrite    (section) => void, so open pages reload
  *   deps.decisions  () => recent proposal decisions (the learning loop, §13)
+ *   deps.syncCalendar (by) => Promise<last sync> — calsync.js runSync, first thing
  */
 export async function runNight({ date, trigger, now = new Date(), force = false }, deps = {}) {
   const runner = deps.runner || makeSdkRunner();
@@ -389,7 +390,10 @@ export async function runNight({ date, trigger, now = new Date(), force = false 
   if (deps.syncCalendar) {
     try {
       const s = await deps.syncCalendar('night');
-      report.calendar_sync = { status: s.ok ? 'done' : 'failed', events: s.events, invites: s.invites, error: s.error || undefined };
+      report.calendar_sync = {
+        status: s.ok ? 'done' : 'failed', events: s.events, invites: s.invites,
+        error: s.error || undefined, error_cs: s.error_cs || undefined,
+      };
     } catch (err) {
       report.calendar_sync = { status: 'failed', error: err.message };
       log(`calendar sync failed: ${err.message}`);
