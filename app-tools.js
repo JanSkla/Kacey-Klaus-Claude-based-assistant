@@ -26,7 +26,7 @@ import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
 import { CATEGORY_KEYS, KINDS } from './public/js/core/routine-cats.js';
 import { MAX_ITEMS, newKey } from './public/js/core/checklist.js';
-import { guessTag, newTagId, tagById, tagByName, tagNameProblem, tagsFrom } from './public/js/core/tasktags.js';
+import { TAG_HINT_MAX, guessTag, newTagId, tagById, tagByName, tagNameProblem, tagsFrom } from './public/js/core/tasktags.js';
 import { logicalDateOf } from './rules.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
@@ -58,7 +58,7 @@ function describeTask(t, tags = tagsFrom(appstate.get().settings)) {
 
 const TAG_HELP =
   'Štítek = k čemu úkol patří: jméno jednoho z vlastníkových štítků (vypíše je app_read, řádek ŠTÍTKY). ' +
-  'Vyber ho sama podle obsahu úkolu. Nový štítek zakládej jen, když o něj pán řekne (app_task_tags).';
+  'Vyber ho sama podle obsahu úkolu; má-li štítek pánův popisek, řiď se jím. Nový štítek zakládej jen, když o něj pán řekne (app_task_tags).';
 
 const DUE_HELP =
   'Termín, místní čas: "YYYY-MM-DD" = někdy ten den, "YYYY-MM-DDTHH:MM" = v ten čas ' +
@@ -159,7 +159,11 @@ const appRead = tool(
     }
     if (section === 'all' || section === 'tasks') {
       const tags = tagsFrom(doc.settings);
-      parts.push('ŠTÍTKY: ' + (tags.map((g) => g.name).join(' · ') || '(žádné — úkoly budou bez štítku)'));
+      /* With the owner's descriptions, one per line: the rule she sorts by. */
+      parts.push(tags.some((g) => g.hint)
+        ? 'ŠTÍTKY (za pomlčkou pánův popisek, co pod štítek patří — drž se ho):\n' +
+          tags.map((g) => `- ${g.name}${g.hint ? ` — ${g.hint}` : ''}`).join('\n')
+        : 'ŠTÍTKY: ' + (tags.map((g) => g.name).join(' · ') || '(žádné — úkoly budou bez štítku)'));
       parts.push('TASKS:\n' + (doc.tasks.length
         ? doc.tasks.map((t) => describeTask(t, tags)).join('\n')
         : '(žádné)'));
@@ -486,15 +490,17 @@ const taskUpdate = tool(
    so a rename moves nothing; a deleted tag's tasks stay, "bez štítku". */
 const taskTags = tool(
   'app_task_tags',
-  'Uprav vlastníkovy štítky úkolů — přidej nový, přejmenuj, smaž, nebo změň pořadí. ' +
-    'Jen když o to pán řekne. Úkoly smazaného štítku zůstanou, bez štítku; přesun úkolu je app_task_update.',
+  'Uprav vlastníkovy štítky úkolů — přidej nový, přejmenuj, smaž, změň pořadí, nebo napiš popisek ' +
+    '(co pod štítek patří, pánovými slovy). Jen když o to pán řekne. Úkoly smazaného štítku zůstanou, ' +
+    'bez štítku; přesun úkolu je app_task_update.',
   {
-    action: z.enum(['add', 'rename', 'remove', 'move']).describe('add = nový, rename = přejmenovat, remove = smazat, move = posunout v pořadí.'),
+    action: z.enum(['add', 'rename', 'remove', 'move', 'describe']).describe('add = nový, rename = přejmenovat, remove = smazat, move = posunout v pořadí, describe = popisek.'),
     name: z.string().describe('add: název nového štítku. Jinak: který štítek (jak ho vypíše app_read).'),
     new_name: z.string().optional().describe('rename: nový název.'),
     position: z.number().int().min(1).optional().describe('move: na kolikáté místo (1 = první).'),
+    hint: z.string().max(TAG_HINT_MAX).optional().describe('add / describe: co pod štítek patří, jak to řekl pán. Prázdný = popisek smazat.'),
   },
-  async ({ action, name, new_name, position }) => {
+  async ({ action, name, new_name, position, hint }) => {
     const doc = appstate.get();
     const tags = tagsFrom(doc.settings);
     const listed = () => tags.map((g) => g.name).join(', ') || '(žádné)';
@@ -504,7 +510,8 @@ const taskTags = tool(
       const clean = String(name || '').trim();
       const problem = tagNameProblem(clean, tags);
       if (problem) return fail(problem + ' Štítky: ' + listed() + '.');
-      next = tags.concat([{ id: newTagId(clean, tags), name: clean }]);
+      const about = String(hint || '').trim();
+      next = tags.concat([{ id: newTagId(clean, tags), name: clean, ...(about ? { hint: about } : {}) }]);
     } else {
       const tag = tagByName(tags, name);
       if (!tag) return fail(`Štítek "${name}" neexistuje. Štítky: ${listed()}.`);
@@ -512,7 +519,17 @@ const taskTags = tool(
         const clean = String(new_name || '').trim();
         const problem = tagNameProblem(clean, tags, tag.id);
         if (problem) return fail(problem + ' Nic se nezměnilo.');
-        next = tags.map((g) => (g.id === tag.id ? { id: g.id, name: clean } : g));
+        next = tags.map((g) => (g.id === tag.id ? { ...g, name: clean } : g));
+      } else if (action === 'describe') {
+        const about = String(hint || '').trim();
+        next = tags.map((g) => {
+          if (g.id !== tag.id) return g;
+          const { hint: _old, ...rest } = g;
+          return about ? { ...rest, hint: about } : rest;
+        });
+        appstate.setSection('settings', { ...doc.settings, taskTags: next });
+        onWrite('settings', doc.settings);
+        return ok(about ? `Popisek štítku ${tag.name}: ${about}` : `Popisek štítku ${tag.name} smazán.`);
       } else if (action === 'remove') {
         const before = doc.tasks.slice();
         const n = doc.tasks.filter((t) => t.tag === tag.id).length;

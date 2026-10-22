@@ -21,7 +21,7 @@ import { $ } from '../core/dom.js';
 import { el, fill } from '../core/el.js';
 import * as store from '../core/store.js';
 import { bucketOf, dueLabel, logicalToday, parseDue, vTime } from '../core/due.js';
-import { guessTag, newTagId, tagById, tagNameProblem, tagsFrom, TAG_NAME_MAX } from '../core/tasktags.js';
+import { guessTag, newTagId, tagById, tagNameProblem, tagsFrom, TAG_NAME_MAX, TAG_HINT_MAX } from '../core/tasktags.js';
 import { go, onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { editRule } from './rules.js';
@@ -547,25 +547,64 @@ function tagGroups(visible) {
 
 function tagGroup(g, items, none) {
   var open = items.filter(function (t) { return !t.done; }).length;
-  var head = g && editingTag === g.id ? tagEditForm(g) : el('h3.subhead.subhead--row', [
+  function edit(field) {
+    return function () { editingTag = g.id; addingTag = false; armedTag = null; renderTasks(); focusTagField(field); };
+  }
+  var editing = g && editingTag === g.id;
+  var head = editing ? tagEditForm(g) : el('h3.subhead.subhead--row', [
     el('span.subhead__name', g ? g.name : 'Bez štítku'),
     el('span.subhead__meta.num', open ? countWord(open) : items.length ? 'vše hotovo' : ''),
-    g ? el('button.link.push', {
-      type: 'button', 'aria-label': 'Upravit štítek ' + g.name,
-      onclick: function () { editingTag = g.id; addingTag = false; armedTag = null; renderTasks(); focusTagField(); }
-    }, 'Upravit') : null
+    g ? el('button.link.push', { type: 'button', 'aria-label': 'Upravit štítek ' + g.name, onclick: edit() }, 'Upravit') : null
   ]);
+  /* What belongs here, in the owner's words — what Kacey sorts by. Without
+     one, a quiet invitation to write it. */
+  var hint = !g || editing ? null : g.hint
+    ? el('button.taghint', { type: 'button', title: 'Upravit popisek', onclick: edit('hint') }, [
+        el('span.taghint__cap', 'PRO KACEY'), el('span.taghint__text', g.hint)
+      ])
+    : el('button.link.link--muted.taghint__add', { type: 'button', onclick: edit('hint') }, '+ Popisek — co sem patří');
   return el('div', { 'data-tag-group': g ? g.id : '' }, [
     head,
+    hint,
     g ? null : el('p.muted-3.tasks__hint', 'Kacey nevěděla, kam patří. Přetáhni je za ⋮⋮ pod štítek.'),
     items.length ? items.sort(byTagOrder).map(function (t) { return taskRow(t, true, true); })
                  : el('p.muted.tasks__drop', none ? 'Prázdné.' : 'Prázdné. Přetáhni sem úkol za ⋮⋮.')
   ]);
 }
 
-function focusTagField() {
-  var f = document.querySelector('#taskGroups .tagedit .input');
-  if (f) { f.focus(); f.select(); }
+function focusTagField(field) {
+  var f = document.querySelector('#taskGroups .tagedit ' + (field === 'hint' ? '.tagedit__hint' : '.input'));
+  if (!f) return;
+  f.focus();
+  if (field === 'hint') f.setSelectionRange(f.value.length, f.value.length); else f.select();
+}
+
+/* The description field, in the edit form and the new-tag cell. */
+var HINT_PLACEHOLDER = 'Vlastními slovy, co sem patří — např. „úklid, nákupy do domácnosti, opravy, nájem a energie“';
+
+function hintField(value) {
+  return el('textarea.input.tagedit__hint', {
+    rows: '3', maxlength: String(TAG_HINT_MAX), placeholder: HINT_PLACEHOLDER, 'aria-label': 'Popisek štítku — co pod něj patří'
+  }, value || '');
+}
+
+function hintOf(area) { return area.value.replace(/\s+/g, ' ').trim(); }
+
+/** A tag with its new name and description; no `hint` key when it is empty. */
+function withHint(g, name, hint) {
+  var out = { id: g.id, name: name };
+  if (hint) out.hint = hint;
+  return out;
+}
+
+/* Escape cancels; Ctrl+Enter in the description saves (Enter is a new line there). */
+function tagFormKeys(form, close) {
+  form.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
+    else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey) && ev.target.classList.contains('tagedit__hint')) {
+      ev.preventDefault(); form.requestSubmit();
+    }
+  });
 }
 
 function saveTags(next) { store.patchSettings({ taskTags: next }); }
@@ -573,8 +612,9 @@ function saveTags(next) { store.patchSettings({ taskTags: next }); }
 /** A name nobody else has, or why not: '' when it is fine. */
 function nameProblem(name, exceptId) { return tagNameProblem(name, tagList(), exceptId); }
 
-/* The group head while its tag is being edited: the name, Uložit, Smazat
-   (twice — the tasks stay, under "Bez štítku"), Zrušit. Escape cancels. */
+/* The group head while its tag is being edited: the name, what belongs under
+   it (for Kacey), Uložit, Smazat (twice — the tasks stay, under "Bez
+   štítku"), Zrušit. Escape cancels. */
 function tagEditForm(g) {
   var input = el('input.input', { type: 'text', value: g.name, maxlength: String(TAG_NAME_MAX), 'aria-label': 'Název štítku' });
   var note = el('p.muted-3.tagedit__note', 'Smazáním se úkoly nesmažou — přejdou do Bez štítku.');
@@ -592,6 +632,7 @@ function tagEditForm(g) {
       deleteTag(g);
     }
   }, 'Smazat');
+  var hint = hintField(g.hint);
   var form = el('form.tagedit', {
     onsubmit: function (ev) {
       ev.preventDefault();
@@ -599,10 +640,14 @@ function tagEditForm(g) {
       var problem = nameProblem(name, g.id);
       if (problem) { note.textContent = problem; note.classList.add('is-err'); input.focus(); return; }
       editingTag = null;
-      saveTags(tagList().map(function (x) { return x.id === g.id ? { id: x.id, name: name } : x; }));
+      var about = hintOf(hint);
+      saveTags(tagList().map(function (x) { return x.id === g.id ? withHint(x, name, about) : x; }));
+      if (about !== (g.hint || '')) say(about ? 'Popisek uložen — Kacey se jím bude řídit.' : 'Popisek smazán.');
     }
   }, [
     input,
+    el('span.tagedit__cap', 'CO SEM PATŘÍ · PRO KACEY'),
+    hint,
     el('div.tagedit__acts', [
       el('button.btn.btn--sm.btn--accent', { type: 'submit' }, 'Uložit'),
       del,
@@ -611,9 +656,7 @@ function tagEditForm(g) {
     el('p.muted-3.tagedit__count', n ? countWord(n) + ' pod tímto štítkem' : 'Zatím pod ním nic není'),
     note
   ]);
-  form.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
-  });
+  tagFormKeys(form, close);
   return form;
 }
 
@@ -639,7 +682,8 @@ function deleteTag(g) {
 /* The last cell: a name and Přidat. The new tag goes to the end. */
 function newTagForm() {
   var input = el('input.input', { type: 'text', maxlength: String(TAG_NAME_MAX), placeholder: 'Název — např. Zdraví', 'aria-label': 'Název nového štítku' });
-  var note = el('p.muted-3.tagedit__note', 'Kacey do něj bude řadit podle názvu. Úkoly sem přetáhneš za ⋮⋮.');
+  var note = el('p.muted-3.tagedit__note', 'Kacey do něj bude řadit podle názvu a popisku. Úkoly sem přetáhneš za ⋮⋮.');
+  var hint = hintField('');
   function close() { addingTag = false; renderTasks(); }
   var form = el('form.tagedit.tagedit--new', {
     onsubmit: function (ev) {
@@ -649,21 +693,21 @@ function newTagForm() {
       if (problem) { note.textContent = problem; note.classList.add('is-err'); input.focus(); return; }
       addingTag = false;
       var tags = tagList();
-      saveTags(tags.concat([{ id: newTagId(name, tags), name: name }]));
+      saveTags(tags.concat([withHint({ id: newTagId(name, tags) }, name, hintOf(hint))]));
       say('Štítek ' + name + ' přidán.');
     }
   }, [
     el('span.tagedit__cap', 'NOVÝ ŠTÍTEK'),
     input,
+    el('span.tagedit__cap', 'CO SEM PATŘÍ · PRO KACEY · NEPOVINNÉ'),
+    hint,
     el('div.tagedit__acts', [
       el('button.btn.btn--sm.btn--accent', { type: 'submit' }, 'Přidat'),
       el('button.btn.btn--sm', { type: 'button', onclick: close }, 'Zrušit')
     ]),
     note
   ]);
-  form.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
-  });
+  tagFormKeys(form, close);
   return form;
 }
 

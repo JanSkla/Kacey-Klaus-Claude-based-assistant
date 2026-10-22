@@ -1118,7 +1118,9 @@ async function writeEvent(id, action, body) {
     });
     var out = await res.json();
     if (!res.ok || out.ok === false) throw new Error(out.error || ('HTTP ' + res.status));
-    closeSheet();
+    /* The card goes on the desktop too: renderLane keeps an open editor
+       across the repaint, so a deleted event's card used to stay behind. */
+    hideCard();
     say(action === 'delete' ? 'Událost smazána.'
       : action === 'tentative' ? (body.tentative ? 'Zatím s otazníkem.' : 'Potvrzeno.')
       : 'Název uložen.');

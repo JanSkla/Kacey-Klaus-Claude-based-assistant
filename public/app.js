@@ -29,6 +29,7 @@
        attachments.js images on the way to Kacey: paste, paperclip, drop
        calendar.js    the month grid, the day lane, and the Today panel
        psheet.js      panels that become bottom sheets on a phone
+       stickies.js    lístečky: sticky notes over every page, desktop only
 
      views/  one module per screen, all of them reading the same store
        main.js        the rail beside the chat
@@ -114,6 +115,7 @@ import { initNightView } from './js/views/nightview.js';
 import { initProposals } from './js/views/proposals.js';
 import { initRules } from './js/views/rules.js';
 import { initSidenav } from './js/ui/sidenav.js';
+import { initStickies } from './js/ui/stickies.js';
 import { initUpgrade } from './js/views/upgrade.js';
 import { initHistory } from './js/ui/history.js';
 import { initClock } from './js/core/clock.js';
@@ -191,6 +193,7 @@ initNightView();
 initProposals();
 initRules();
 initSidenav();
+initStickies();
 if (!EMBED) { initActivity(); initVoicecast(); }
 initMiniPlayer();
 initSheets();

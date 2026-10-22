@@ -1,7 +1,7 @@
 /* =========================================================================
    Task tags — what a task belongs to. Shared by the browser and the server.
 
-   The owner's own list, in settings.taskTags: [{ id, name }]. It starts as
+   The owner's own list, in settings.taskTags: [{ id, name, hint? }]. It starts as
    Práce · Škola · Byt · Až bude volný čas · Rodina and is theirs to rename,
    add to and delete. A task carries one tag's `id` (`task.tag`), so a rename
    moves nothing; a task whose tag is gone shows as "Bez štítku".
@@ -54,6 +54,11 @@ function norm(s) {
 /** The longest name a tag may have. */
 export var TAG_NAME_MAX = 40;
 
+/** The longest description ("hint") a tag may have: what belongs under it, in
+    the owner's words. Kacey reads it in app_read and sorts by it; guessTag()
+    counts its words too. Optional — a tag without one has no `hint` key. */
+export var TAG_HINT_MAX = 300;
+
 /** The tag list from settings, or the starting five while there is none.
     An empty list is the owner's choice (they deleted them all) and stays empty. */
 export function tagsFrom(settings) {
@@ -74,7 +79,8 @@ export function normalizeTags(list) {
     var key = norm(name);
     if (ids[id] || names[key]) return;
     ids[id] = true; names[key] = true;
-    out.push({ id: id, name: name });
+    var hint = String(g.hint == null ? '' : g.hint).replace(/\s+/g, ' ').trim().slice(0, TAG_HINT_MAX);
+    out.push(hint ? { id: id, name: name, hint: hint } : { id: id, name: name });
   });
   return out;
 }
@@ -105,10 +111,12 @@ export function tagByName(tags, word) {
 }
 
 /* How strongly `text` points at `tag`: one point for every word that starts
-   with one of its word beginnings (or contains a two-word one). */
+   with one of its word beginnings (or contains a two-word one). The owner's
+   description adds its longer words, so "nákupy" written under Byt counts. */
 function score(text, tag) {
   var words = WORDS[tag.id] ? WORDS[tag.id].slice() : [];
   norm(tag.name).trim().split(' ').forEach(function (w) { if (w.length >= 3) words.push(w.slice(0, 5)); });
+  norm(tag.hint).trim().split(' ').forEach(function (w) { if (w.length >= 5) words.push(w.slice(0, 5)); });
   var n = 0;
   words.forEach(function (w) {
     var k = w.indexOf(' ') > 0 ? norm(w).slice(0, -1) : ' ' + norm(w).trim();

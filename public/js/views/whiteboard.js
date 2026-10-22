@@ -525,9 +525,18 @@ function startEdit(id, created) {
     field = el('textarea.wbedit.wbedit--text', { 'aria-label': 'Text karty', maxlength: '4000', rows: '1' });
     var t = node.querySelector('.wbitem__text');
     t.replaceWith(field);
+    /* The card follows its text while typing: taller when a line is added,
+       back down when it goes again, never under the size it had before. The
+       field fills the card (flex: 1), so its scrollHeight is measured with
+       the field collapsed — otherwise it was the card's own height, and every
+       keystroke, a deletion too, made the card one grid step taller. */
+    var h0 = it.h;
     field.addEventListener('input', function () {
-      var need = field.scrollHeight + (it.kicker ? 20 : 0) + 24;
-      if (need > it.h) { it.h = Math.ceil(need / GRID) * GRID; node.style.height = it.h + 'px'; renderLinks(); }
+      field.style.flex = 'none'; field.style.height = '0';
+      var need = field.scrollHeight + (it.kicker ? 20 : 0) + 22;
+      field.style.flex = ''; field.style.height = '';
+      var h = Math.max(h0, Math.ceil(need / GRID) * GRID);
+      if (h !== it.h) { it.h = h; node.style.height = it.h + 'px'; renderLinks(); }
     });
   } else if (it.kind === 'rect') {
     field = el('input.wbedit.wbedit--title', { type: 'text', maxlength: '120', 'aria-label': 'Nadpis obdélníku', placeholder: 'Nadpis' });
