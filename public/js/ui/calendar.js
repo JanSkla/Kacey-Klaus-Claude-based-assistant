@@ -1126,7 +1126,10 @@ async function writeEvent(id, action, body) {
       : 'Název uložen.');
     refreshCalendar();
   } catch (err) {
-    say('Nepovedlo se: ' + err.message);
+    // A fetch that never got an answer is a TypeError: offline, or the server is restarting.
+    say(err instanceof TypeError || navigator.onLine === false
+      ? 'Jsi offline — událost teď změnit nejde. Karta zůstává otevřená.'
+      : 'Nepovedlo se: ' + err.message);
   }
 }
 

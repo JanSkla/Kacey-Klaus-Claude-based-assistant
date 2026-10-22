@@ -35,6 +35,7 @@ import * as notifications from './notifications.js';
 import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
 import * as whiteboard from './whiteboard.js';
+import * as stickies from './stickies.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -135,10 +136,10 @@ function describeRoutine(routine) {
 
 const appRead = tool(
   'app_read',
-  'Přečti aktuální stav aplikace: týdenní rutina, úkoly, zápisy v deníku. ' +
+  'Přečti aktuální stav aplikace: týdenní rutina, úkoly, zápisy v deníku, lístečky. ' +
     'Zavolej tohle PŘED úpravou, ať víš, co tam už je.',
   {
-    section: z.enum(['all', 'routine', 'tasks', 'journal'])
+    section: z.enum(['all', 'routine', 'tasks', 'journal', 'stickies'])
       .describe('Která část. "all" vrátí všechno.'),
   },
   async ({ section }) => {
@@ -172,6 +173,11 @@ const appRead = tool(
       parts.push('JOURNAL:\n' + (doc.journal.entries.length
         ? doc.journal.entries.map((e) => `- (${e.id}) ${e.created.slice(0, 16)} "${e.title || 'bez názvu'}"${e.unfinished ? ' [rozepsané]' : ''}`).join('\n')
         : '(žádné)'));
+    }
+    if (section === 'all' || section === 'stickies') {
+      let notes;
+      try { notes = stickies.describe(); } catch (err) { notes = `(nejde načíst: ${err.message})`; }
+      parts.push('LÍSTEČKY (na ploše počítače, přes všechny stránky):\n' + notes);
     }
     return ok(parts.join('\n\n'));
   },
@@ -581,6 +587,40 @@ const journalAdd = tool(
     appstate.setSection('journal', { ...doc.journal, entries: doc.journal.entries.concat([entry]) });
     onWrite('journal', before);
     return ok(`Zápis uložen: "${entry.title}" (${body.split(/\s+/).length} slov).`);
+  },
+);
+
+/* Lístečky (stickies.js): notes the desktop shows over every page. The
+   module broadcasts its own `stickies` frame, so no onWrite here. */
+const sticky = tool(
+  'app_sticky',
+  'Lísteček na ploše počítače — zůstane na očích přes všechny stránky, dokud ho pán nesmaže. ' +
+    'Napiš nový (add), přepiš (edit) nebo smaž (remove). Jen když o lísteček pán řekne; ' +
+    'úkol s termínem patří do úkolů (app_task_add). Na telefonu lístečky vidět nejsou.',
+  {
+    action: z.enum(['add', 'edit', 'remove']).describe('add = nový lísteček, edit = přepsat text, remove = smazat.'),
+    text: z.string().max(stickies.TEXT_MAX).optional().describe('add / edit: text lístečku, krátce, jak to řekl pán.'),
+    which: z.string().optional().describe('edit / remove: id (vypíše app_read, LÍSTEČKY) nebo slova z textu („ten o mámě“).'),
+  },
+  async ({ action, text, which }) => {
+    try {
+      if (action === 'add') {
+        const body = String(text || '').trim();
+        if (!body) return fail('Prázdný lísteček — co na něj napsat?');
+        const n = stickies.create({ text: body, by: 'kacey' });
+        return ok(`Lísteček (${n.id}) je na ploše počítače, vpravo nahoře: „${n.text}“.`);
+      }
+      const n = stickies.find(which);
+      if (!n) return fail(`Nevím, který lísteček. Lístečky:\n${stickies.describe()}`);
+      if (action === 'edit') {
+        const body = String(text || '').trim();
+        if (!body) return fail('Prázdný text — smazat ho je remove.');
+        stickies.update(n.id, { text: body }, { by: 'kacey' });
+        return ok(`Lísteček (${n.id}) přepsán: „${body}“.`);
+      }
+      stickies.remove(n.id, { by: 'kacey' });
+      return ok(`Lísteček „${n.text.replace(/\s+/g, ' ').trim() || 'prázdný'}“ smazán — pán ho do dne vrátí tlačítkem Vrátit.`);
+    } catch (err) { return fail(err.message); }
   },
 );
 
@@ -1157,7 +1197,7 @@ function makeWhiteboardManage(ctx) {
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
-  appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskTags, journalAdd,
+  appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskTags, journalAdd, sticky,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative, calendarSync,
   notificationsRead, morningAdd,
 ];
@@ -1165,7 +1205,7 @@ export const APP_TOOLS = [
 /** Fully-qualified names, for the allow-list in server.js. */
 export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours', 'app_routine_alter',
-  'app_task_add', 'app_task_update', 'app_task_tags', 'app_journal_add',
+  'app_task_add', 'app_task_update', 'app_task_tags', 'app_journal_add', 'app_sticky',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
@@ -1179,7 +1219,8 @@ export function makeAppServer(ctx = {}) {
     version: '1.0.0',
     instructions:
       'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly (každý se štítkem, ' +
-      'štítky samotné upravuje app_task_tags), deník, ' +
+      'štítky samotné upravuje app_task_tags, i s pánovým popiskem, co pod štítek patří), deník, ' +
+      'lístečky na ploše počítače (app_sticky), ' +
       'a pravidla nočního plánování (rules_*, rule_*), podle kterých se v noci samy zakládají úkoly. ' +
       'Nejisté události kalendáře označuje app_calendar_tentative. ' +
       'Synchronizaci kalendářů a pozvánky bez odpovědi obstarává app_calendar_sync. ' +

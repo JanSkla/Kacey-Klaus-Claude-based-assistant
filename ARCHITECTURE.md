@@ -604,6 +604,19 @@ rename, delete, open — the last three ask the page to open the board with an
 `open` frame). Her edit also sends `edited_chat` to her own chat, which draws
 the board under her words.
 
+### Lístečky
+
+[stickies.js](stickies.js) keeps the desktop's sticky notes, one
+`kacey_sticky` row each (text, place, size; x/y NULL until the note is first
+dragged — the page puts it top right). Not in `settings`: a settings save is
+the whole object from one page's copy, and a note typed on one desktop would
+be overwritten by another's stale list. So the page
+([public/js/ui/stickies.js](public/js/ui/stickies.js)) sends only the fields
+that changed (`PATCH /api/stickies/:id`), keeps unsent ones while offline, and
+reloads the list on a `stickies` frame that is not its own echo (`origin`).
+Kacey's `app_sticky` writes through the same module. A deleted note keeps its
+row a day for Vrátit; at most 12.
+
 ### The web
 
 The chat's session has two built-in tools, `WebSearch` and `WebFetch`

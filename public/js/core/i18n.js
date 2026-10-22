@@ -28,6 +28,7 @@ var STR = {
       if (n === 'app_whiteboard_read') return 'Prohlížím whiteboard…';
       if (n === 'app_whiteboard_edit') return 'Kreslím na whiteboard…';
       if (n === 'app_whiteboard_manage') return 'Chystám whiteboard…';
+      if (n === 'app_sticky') return 'Píšu lísteček…';
       if (n === 'WebSearch') return 'Hledám na internetu…';
       if (n === 'WebFetch') return 'Čtu webovou stránku…';
       return n === 'klaus-memory' ? 'Prohledávám paměť…' : 'Používám ' + n + '…';

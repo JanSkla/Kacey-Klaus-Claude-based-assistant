@@ -29,6 +29,7 @@ import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 import { KIND_KEYS } from './public/js/core/routine-cats.js';
 import { DEFAULT_TAGS, normalizeTags } from './public/js/core/tasktags.js';
+import { importFromSettings as importStickies } from './stickies.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
 export const LEGACY_STATE_PATH =
@@ -61,28 +62,12 @@ function normalizeSettings(value) {
     const stored = kvGet('settings', {});
     if (stored && Array.isArray(stored.taskTags)) next.taskTags = stored.taskTags;
   }
-  // The sticky notes (public/js/ui/stickies.js) are kept the same way.
-  if (Array.isArray(next.stickies)) next.stickies = normalizeStickies(next.stickies);
-  else {
-    delete next.stickies;
-    const stored = kvGet('settings', {});
-    if (stored && Array.isArray(stored.stickies)) next.stickies = stored.stickies;
-  }
+  /* The sticky notes have their own table (stickies.js). Notes the draft kept
+     here move across first; a page still holding settings.stickies must not
+     write them back. */
+  importStickies();
+  delete next.stickies;
   return next;
-}
-
-/* Sticky notes as stored: { id, text, x, y, w, h }, at most 12, text cut to 2000. */
-function normalizeStickies(list) {
-  const num = (v, lo, hi, d) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, Math.round(+v))) : d);
-  const seen = new Set();
-  return list.filter((n) => n && typeof n === 'object' && n.id && !seen.has(String(n.id)) && seen.add(String(n.id)))
-    .slice(0, 12)
-    .map((n) => ({
-      id: String(n.id).slice(0, 40),
-      text: String(n.text == null ? '' : n.text).slice(0, 2000),
-      x: num(n.x, 0, 10000, 0), y: num(n.y, 0, 10000, 0),
-      w: num(n.w, 180, 2000, 240), h: num(n.h, 110, 2000, 180),
-    }));
 }
 
 const DEFAULT_PRESETS = [

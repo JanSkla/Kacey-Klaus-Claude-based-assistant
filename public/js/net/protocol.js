@@ -226,6 +226,12 @@ export function onServer(msg) {
       bus.emit('whiteboard', msg);
       break;
 
+    case 'stickies':
+      /* A sticky note made, changed or deleted by Kacey or another page
+         (stickies.js on the server, ui/stickies.js here). */
+      bus.emit('stickies', msg);
+      break;
+
     case 'calendar_sync':
       /* A calendar sync started or ended — the night's, or Synchronizovat on
          any open page (calsync.js on the server, ui/calendar.js here). */

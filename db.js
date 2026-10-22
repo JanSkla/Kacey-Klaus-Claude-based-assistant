@@ -332,6 +332,23 @@ CREATE TABLE IF NOT EXISTS kacey_whiteboard (
   updated_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS kacey_whiteboard_updated_idx ON kacey_whiteboard (updated_at);
+
+/* Lístečky (stickies.js): sticky notes over every page of the desktop. Place
+   and size in px from the window's top left; x/y NULL until the note is first
+   dragged (the page puts it in the top right corner). A deleted note keeps
+   its row for a day, so Vrátit can put it back. */
+CREATE TABLE IF NOT EXISTS kacey_sticky (
+  sticky_id    TEXT PRIMARY KEY,
+  text         TEXT NOT NULL DEFAULT '',
+  x            INTEGER,
+  y            INTEGER,
+  w            INTEGER NOT NULL DEFAULT 240,
+  h            INTEGER NOT NULL DEFAULT 180,
+  origin       TEXT NOT NULL DEFAULT 'user' CHECK (origin IN ('user','kacey')),
+  deleted_at   TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
 `;
 
 export function now() { return new Date().toISOString(); }

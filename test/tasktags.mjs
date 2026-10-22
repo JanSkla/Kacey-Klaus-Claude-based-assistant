@@ -95,6 +95,25 @@ await test('a stored list is cleaned: names trimmed and cut, no blanks, nothing 
   assert.deepEqual(tt.normalizeTags('nope'), D);
 });
 
+await test("a tag's description is kept on one line, cut to its length, and dropped when empty", () => {
+  const out = tt.normalizeTags([
+    { id: 'byt', name: 'Byt', hint: '  úklid,\n nákupy   do domácnosti ' },
+    { id: 'prace', name: 'Práce', hint: '   ' },
+    { id: 'skola', name: 'Škola', hint: 'z'.repeat(400) },
+  ]);
+  assert.equal(out[0].hint, 'úklid, nákupy do domácnosti');
+  assert.ok(!('hint' in out[1]), 'an empty one is no key at all');
+  assert.equal(out[2].hint.length, tt.TAG_HINT_MAX);
+});
+
+await test("the guess reads the owner's description too", () => {
+  const plain = D.concat([{ id: 'zdravi', name: 'Zdraví' }]);
+  const described = D.concat([{ id: 'zdravi', name: 'Zdraví', hint: 'doktor, lékárna, očkování, recepty' }]);
+  assert.equal(tt.guessTag('Vyzvednout léky v lékárně', plain), null);
+  assert.equal(tt.guessTag('Vyzvednout léky v lékárně', described), 'zdravi');
+  assert.equal(tt.guessTag('uklidit koupelnu', described), 'byt', 'the others keep their words');
+});
+
 await test('a new name must be there, short enough, and not taken', () => {
   assert.equal(tt.tagNameProblem('', D), 'Štítek potřebuje název.');
   assert.equal(tt.tagNameProblem('byt', D), 'Takový štítek už je.');
@@ -191,6 +210,31 @@ await test("the night run's task is tagged by its text, against the owner's list
   nightstore.insertGeneratedTask(h, { task_id: 'tr_gift', label: 'Koupit dárek mámě', origin: 'rule', reason: 'Narozeniny' });
   appstate.bumpTasksRev();
   assert.equal(byId().tr_gift.tag, 'rodina');
+});
+
+await test('app_task_tags describe writes and clears a description; a rename keeps it; app_read lists it', async () => {
+  const out = await call('app_task_tags', { action: 'describe', name: 'Rodina', hint: 'máma, táta, babička, dárky a návštěvy' });
+  assert.ok(!out.isError, text(out));
+  assert.equal(tt.tagByName(appstate.get().settings.taskTags, 'Rodina').hint, 'máma, táta, babička, dárky a návštěvy');
+  assert.ok(!(await call('app_task_tags', { action: 'rename', name: 'Rodina', new_name: 'Blízcí' })).isError);
+  const g = tt.tagByName(appstate.get().settings.taskTags, 'Blízcí');
+  assert.equal(g.id, 'rodina');
+  assert.match(g.hint, /babička/);
+  const read = text(await call('app_read', { section: 'tasks' }));
+  assert.match(read, /ŠTÍTKY \(za pomlčkou/);
+  assert.match(read, /- Blízcí — máma, táta/);
+  assert.match(read, /- Práce\n/, 'a tag without one is just its name');
+  assert.ok(!(await call('app_task_tags', { action: 'add', name: 'Hobby', hint: 'kytara, modelaření' })).isError);
+  assert.equal(tt.tagByName(appstate.get().settings.taskTags, 'Hobby').hint, 'kytara, modelaření');
+  assert.match(text(await call('app_task_tags', { action: 'describe', name: 'Blízcí', hint: '' })), /smazán/);
+  assert.ok(!('hint' in tt.tagByName(appstate.get().settings.taskTags, 'Blízcí')));
+  assert.ok((await call('app_task_tags', { action: 'describe', name: 'Nic', hint: 'x' })).isError);
+});
+
+await test("the page's settings save keeps a description and cleans it", () => {
+  const tags = appstate.get().settings.taskTags.map((g) => (g.id === 'prace' ? { ...g, hint: ' porady,\nreporty ' } : g));
+  appstate.setSection('settings', { ...appstate.get().settings, taskTags: tags });
+  assert.equal(tt.tagById(appstate.get().settings.taskTags, 'prace').hint, 'porady, reporty');
 });
 
 await test('with every tag deleted, a new task goes without one', async () => {

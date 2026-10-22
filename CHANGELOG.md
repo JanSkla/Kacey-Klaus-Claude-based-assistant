@@ -19,6 +19,35 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.8 — 2026-10-22
+
+**Opravy a novinky — kalendář, whiteboard, lístečky, štítky**
+- Kalendář: a confirmed Smazat (and Uložit název, Potvrdit / S otazníkem)
+  closes the event card on the desktop too; a change that never reached the
+  server says the owner is offline instead of "Failed to fetch".
+- Whiteboard: a text card follows its text while it is edited — taller for
+  a new line, back down when it goes, never smaller than before the edit. It
+  used to grow a grid step on every key, a deletion too.
+- Lístečky: sticky notes over every page of the desktop (the note button in
+  the header). Dragged by their bar, resized from the corner, they stay where
+  they were put across views, reloads and desktops until deleted with × and
+  the "Smazat" beside it (Vrátit within a day). Their own table
+  `kacey_sticky` ([stickies.js](stickies.js)), routes `/api/stickies`, live
+  `stickies` frames; a page sends only the fields that changed and keeps
+  them while offline. At most 12. Hidden on a phone.
+- Kacey writes them too: `app_sticky` (add, edit, remove — a note found by
+  its words) and LÍSTEČKY in `app_read`; the persona's new "Lístečky"
+  section keeps them apart from tasks.
+- Úkoly · Štítky: every tag can carry the owner's description of what belongs
+  under it (`settings.taskTags[].hint`, 300 characters), written in the tag's
+  editor or the new-tag cell and folded behind "Popisek ▾" in its head.
+  Kacey reads them in `app_read` and sorts by them first, sets them with
+  `app_task_tags` `describe`, and the text guess counts their words.
+- The draft's `settings.stickies` move into the table on first use and are
+  never stored in the settings again.
+- Tests: [test/stickies.mjs](test/stickies.mjs) (new, `npm run test:stickies`),
+  descriptions in [test/tasktags.mjs](test/tasktags.mjs).
+
 ## KC 1.0.7 — 2026-10-20
 
 **Kacey na internetu — she can look things up**

@@ -41,6 +41,7 @@ import * as monitor from './monitor.js';
 import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
 import * as whiteboard from './whiteboard.js';
+import * as stickies from './stickies.js';
 import { webTracker, webOfTranscript, isTurnStart } from './web.js';
 import { addDays, turnClock } from './public/js/core/due.js';
 
@@ -1503,6 +1504,47 @@ app.use('/whiteboard-files', express.static(WHITEBOARD_DIR, {
   setHeaders: (res) => { res.setHeader('Content-Security-Policy', 'sandbox'); res.setHeader('X-Content-Type-Options', 'nosniff'); },
 }));
 
+/* ---------------------------------------------------------------------------
+ * Lístečky (stickies.js): sticky notes over every page of the desktop. The
+ * page writes one note's changed fields at a time; app_sticky writes through
+ * the same module. Every change goes out as a `stickies` frame.
+ * ------------------------------------------------------------------------- */
+
+stickies.onEvent((ev) => broadcast({ type: 'stickies', ...ev }));
+
+const stickyOrigin = (b) => String((b && b.origin) || '').slice(0, 40);
+const stickyError = (res, err, status = 400) => res.status(status).json({ ok: false, error: err?.message || 'Lísteček se nepodařilo uložit.' });
+
+app.get('/api/stickies', (req, res) => {
+  try { res.json({ ok: true, stickies: stickies.list() }); } catch (err) { log(`stickies list failed: ${err?.message || err}`); stickyError(res, { message: 'Lístečky se nepodařilo načíst.' }, 500); }
+});
+
+app.post('/api/stickies', express.json({ limit: '64kb' }), (req, res) => {
+  const b = req.body || {};
+  try { res.json({ ok: true, sticky: stickies.create({ text: b.text, x: b.x, y: b.y, w: b.w, h: b.h, origin: stickyOrigin(b) }) }); } catch (err) { stickyError(res, err); }
+});
+
+app.patch('/api/stickies/:id', express.json({ limit: '64kb' }), (req, res) => {
+  const b = req.body || {};
+  const part = {};
+  for (const k of ['text', 'x', 'y', 'w', 'h']) if (k in b) part[k] = b[k];
+  try {
+    const note = stickies.update(req.params.id, part, { origin: stickyOrigin(b) });
+    if (note) res.json({ ok: true, sticky: note });
+    else res.status(404).json({ ok: false, error: 'Takový lísteček není — možná už je smazaný.' });
+  } catch (err) { stickyError(res, err, 500); }
+});
+
+app.delete('/api/stickies/:id', (req, res) => {
+  const note = stickies.remove(req.params.id, { origin: String(req.query.origin || '').slice(0, 40) });
+  if (note) res.json({ ok: true, sticky: note });
+  else res.status(404).json({ ok: false, error: 'Takový lísteček není — možná už je smazaný.' });
+});
+
+app.post('/api/stickies/:id/restore', express.json({ limit: '4kb' }), (req, res) => {
+  try { res.json({ ok: true, sticky: stickies.restore(req.params.id, { origin: stickyOrigin(req.body) }) }); } catch (err) { stickyError(res, err, 404); }
+});
+
 /**
  * Normalise text for XTTS.
  *
@@ -1958,6 +2000,8 @@ server.listen(PORT, HOST, () => {
       .catch((err) => log(`gallery samples not made: ${err.message}`));
     // And two whiteboards, so the gallery and a full board have something to show.
     try { const n = whiteboard.seedSamples(); if (n) log(`whiteboard: ${n} sample boards for the preview`); } catch (err) { log(`whiteboard samples not made: ${err.message}`); }
+    // And a sticky note, so the layer over every page shows.
+    try { if (stickies.seedSample()) log('stickies: a sample note for the preview'); } catch (err) { log(`sticky sample not made: ${err.message}`); }
     return;
   }
   if (SELFUPDATE) {
