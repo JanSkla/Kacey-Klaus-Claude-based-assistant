@@ -64,6 +64,7 @@ var tagPickId = null;      // the task whose tag chips are open
 var editingTag = null;     // the tag whose name is being edited
 var addingTag = false;     // the "+ Nový štítek" field is open
 var armedTag = null;       // Smazat pressed once: the tag that a second press deletes
+var hintOpen = {};         // tag id -> its description is unfolded under the head
 var dropping = false;      // a drag ended a moment ago: swallow the click it makes
 
 export function tasks() { return store.data.tasks || []; }
@@ -551,18 +552,25 @@ function tagGroup(g, items, none) {
     return function () { editingTag = g.id; addingTag = false; armedTag = null; renderTasks(); focusTagField(field); };
   }
   var editing = g && editingTag === g.id;
+  /* What belongs here, in the owner's words — what Kacey sorts by. Folded
+     away behind "Popisek ▾" in the head so the tasks stay easy to read; a
+     tag without one shows nothing (Upravit writes it). */
+  var hasHint = !!(g && g.hint && !editing);
+  var hintShown = hasHint && !!hintOpen[g.id];
   var head = editing ? tagEditForm(g) : el('h3.subhead.subhead--row', [
     el('span.subhead__name', g ? g.name : 'Bez štítku'),
     el('span.subhead__meta.num', open ? countWord(open) : items.length ? 'vše hotovo' : ''),
-    g ? el('button.link.push', { type: 'button', 'aria-label': 'Upravit štítek ' + g.name, onclick: edit() }, 'Upravit') : null
+    hasHint ? el('button.link.link--muted.taghint__toggle.push', {
+      type: 'button', 'aria-expanded': String(hintShown), title: hintShown ? 'Skrýt popisek' : 'Co sem patří — popisek pro Kacey',
+      onclick: function () { hintOpen[g.id] = !hintOpen[g.id]; renderTasks(); }
+    }, hintShown ? 'Popisek ▴' : 'Popisek ▾') : null,
+    g ? el(hasHint ? 'button.link' : 'button.link.push', { type: 'button', 'aria-label': 'Upravit štítek ' + g.name, onclick: edit() }, 'Upravit') : null
   ]);
-  /* What belongs here, in the owner's words — what Kacey sorts by. Without
-     one, a quiet invitation to write it. */
-  var hint = !g || editing ? null : g.hint
+  var hint = hintShown
     ? el('button.taghint', { type: 'button', title: 'Upravit popisek', onclick: edit('hint') }, [
         el('span.taghint__cap', 'PRO KACEY'), el('span.taghint__text', g.hint)
       ])
-    : el('button.link.link--muted.taghint__add', { type: 'button', onclick: edit('hint') }, '+ Popisek — co sem patří');
+    : null;
   return el('div', { 'data-tag-group': g ? g.id : '' }, [
     head,
     hint,
