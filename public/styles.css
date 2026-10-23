@@ -3464,3 +3464,135 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
 .sticky__text::placeholder { color: var(--ink3); }
 .sticky:focus-within { border-color: var(--line2); outline: 1px solid var(--acc); outline-offset: -1px; }
 @media (max-width: 760px) { .stickies { display: none; } }
+
+/* ==== Úložiště — files between devices (views/storage.js, 2026-10-23) ===================
+   One list, a row per file on the #2e2e2e divider: tick box, a folded-corner file icon
+   with the extension, the name (the download), size, when · from which device, and
+   Stáhnout · two-tap Smazat. Ticked rows wash in --acc-dim; the selection bar takes the
+   search's place. An upload in flight is a row at the top with the 6px .bar. */
+.stcard { position: relative; }
+.stcard.is-dropping { border-color: var(--acc); }
+.stfind { display: flex; align-items: center; gap: 8px; }
+.stfind .input { flex: 1; min-width: 0; font-size: 15px; padding: 10px 12px; }
+.stfind .input::-webkit-search-cancel-button { display: none; }
+.stsel { display: flex; align-items: center; gap: 8px; min-height: 59px; background: var(--acc-dim); }
+.stsel__count { margin-right: 6px; font-size: 14px; font-weight: 600; }
+
+.stcols, .frow {
+  display: grid; grid-template-columns: 20px 28px minmax(0, 1fr) 92px 200px 190px;
+  align-items: center; column-gap: 14px; padding: 0 14px;
+}
+.stcols { min-height: 34px; border-bottom: 1px solid var(--line); font-size: 11px; letter-spacing: .08em; color: var(--ink3); }
+.stcols__name { grid-column: span 2; }
+.stcols__size { text-align: right; }
+.tickbox.is-some { border-color: var(--acc); color: var(--acc); }
+
+.stlist { display: flex; flex-direction: column; }
+.frow { min-height: 56px; padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid #2e2e2e; }
+.frow:hover { background: var(--l2); }
+.frow.is-picked { background: var(--acc-dim); box-shadow: inset 3px 0 0 var(--acc); }
+.frow.is-new { animation: frowNew 2.4s ease-out; }
+@keyframes frowNew { 0%, 30% { box-shadow: inset 3px 0 0 var(--acc); background: var(--acc-dim); } 100% { box-shadow: inset 3px 0 0 transparent; } }
+.frow__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.frow__name {
+  min-width: 0; font-size: 15px; font-weight: 600; color: var(--ink); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+a.frow__name:hover { color: var(--acc); text-decoration: underline; }
+.frow__meta { display: none; font-size: 12px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frow__size { text-align: right; font-size: 13px; color: var(--ink2); }
+.frow__when { font-size: 13px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frow__from { color: var(--ink3); }
+.frow__from::before { content: ' · '; }
+.frow__acts { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.frow__get { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.frow__get svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.frow__del { font-size: 13px; }
+.frow .link--muted:hover { color: var(--err); }
+
+/* A file: a sheet with its corner folded and the extension at its foot. */
+.fileicon {
+  position: relative; display: block; width: 28px; height: 34px; background: var(--l2); border: 1px solid var(--line2);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+.fileicon::after { content: ''; position: absolute; top: -1px; right: -1px; width: 8px; height: 8px; background: var(--line2); }
+.fileicon__ext { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font-size: 9px; font-weight: 600; letter-spacing: .02em; color: var(--ink2); overflow: hidden; }
+.frow.is-picked .fileicon { background: var(--l3); }
+
+/* On its way up: the name in --ink2, the bar under it; waiting dims; failed gets the --err edge. */
+.frow.is-uploading .frow__name { font-weight: 400; color: var(--ink2); }
+.frow.is-uploading .frow__meta { display: block; }
+.frow.is-uploading:hover { background: none; }
+.frow.is-waiting .fileicon, .frow.is-waiting .frow__name { opacity: .6; }
+.frow.is-failed { box-shadow: inset 3px 0 0 var(--err); }
+.frow__progress { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.frow__bar { flex: 0 1 220px; height: 4px; }
+.frow__pct { font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frow__err { color: var(--err); white-space: normal; font-size: 13px; }
+
+.stempty { align-self: stretch; }
+/* The empty Úložiště's mark: a tray with the accent square dropping into it. */
+.galempty__mark--tray { border-top-color: transparent; }
+.galempty__mark--tray::after { top: 4px; left: 50%; width: 12px; height: 12px; margin: 0 0 0 -6px; background: var(--acc); border: 0; border-radius: 0; }
+.stacts .btn--fn svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ststats .big { font-size: 20px; }
+.ststats__say { line-height: 1.7; color: var(--ink2); }
+
+@media (max-width: 1240px) and (min-width: 761px) {
+  /* Narrower desktops: size and date go into the meta line under the name. */
+  .stcols, .frow { grid-template-columns: 20px 28px minmax(0, 1fr) 190px; }
+  .stcols__size, .stcols__when, .frow__size, .frow__when { display: none; }
+  .frow__meta { display: block; }
+}
+
+@media (max-width: 760px) {
+  /* Úložiště: search and order on top, one column of rows, Nahrát soubory docked at the
+     bottom; ticking a row swaps the dock for Stáhnout · Smazat. */
+  .view[data-view="storage"] { gap: 10px; padding-bottom: 0; }
+  .view[data-view="storage"] > section.card { display: contents; }
+  .view[data-view="storage"] > section.card > .card__head { display: none; }
+  .view[data-view="storage"] .stfind { order: 1; flex-direction: column; align-items: stretch; padding: 0; border: 0; }
+  .view[data-view="storage"] .stfind .input { background: var(--l1); font-size: 16px; }
+  .view[data-view="storage"] .stfind .seg__opt { flex: 1 1 0; min-height: 40px; }
+  .view[data-view="storage"] .stcols { order: 2; display: flex; gap: 12px; min-height: 44px; padding: 0 14px; background: var(--l1); border: 1px solid var(--line); font-size: 13px; letter-spacing: 0; color: var(--ink2); }
+  .view[data-view="storage"] .stcols > span:not(.stcols__all) { display: none; }
+  .stcols__all { flex: 1; align-self: stretch; display: flex; align-items: center; cursor: pointer; }
+  .view[data-view="storage"] .stcols[hidden] { display: none; }
+  .view[data-view="storage"] .stlist { order: 3; flex: 0 0 auto; overflow: visible; background: var(--l1); border: 1px solid var(--line); border-top: 0; margin-top: -10px; }
+  .view[data-view="storage"] .stcols[hidden] + .stlist { margin-top: 0; border-top: 1px solid var(--line); }
+  .view[data-view="storage"] .galdrop { display: none; }
+  .view[data-view="storage"] > .col--rail { order: 4; position: sticky; bottom: 0; z-index: 5; margin: auto -12px 0; }
+  .view[data-view="storage"][data-picking] > .col--rail { display: none; }
+  .view[data-view="storage"] .ststats { display: none; }
+  .view[data-view="storage"] .stacts { border-width: 1px 0 0; border-color: var(--line2); }
+  .view[data-view="storage"] .stacts .card__title--bar { display: none; }
+  .view[data-view="storage"] .stacts .fnlist { padding: 10px 12px; }
+  .view[data-view="storage"] .stacts .btn--fn { justify-content: center; min-height: 52px; }
+
+  .view[data-view="storage"] .stsel {
+    order: 4; position: sticky; bottom: 0; z-index: 5; margin: auto -12px 0; flex-wrap: wrap; gap: 8px;
+    padding: 10px 12px; background: var(--l1); border: 0; border-top: 1px solid var(--acc);
+  }
+  .view[data-view="storage"] .stsel[hidden] { display: none; }
+  .stsel__count { flex: 1 1 auto; order: 0; }
+  .stsel__clear { min-height: 44px; order: 1; }
+  .stsel .btn { flex: 1 1 40%; min-height: 52px; font-size: 14px; order: 2; }
+
+  .stcols, .frow { grid-template-columns: 24px 28px minmax(0, 1fr) 44px; column-gap: 12px; }
+  .frow { min-height: 64px; padding: 8px 6px 8px 14px; }
+  .frow:hover { background: none; }
+  .frow.is-picked:hover { background: var(--acc-dim); }
+  .frow__size, .frow__when, .frow__del, .frow__getlabel { display: none; }
+  .frow__meta { display: block; }
+  .frow__name { font-size: 15px; }
+  .frow__tick, #stAll { position: relative; width: 24px; height: 24px; font-size: 14px; }
+  .frow__tick::before, #stAll::before { content: ''; position: absolute; inset: -10px; }
+  .frow__acts { gap: 0; }
+  .frow__get { width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; background: none; border-color: transparent; color: var(--acc); }
+  .frow__get svg { width: 22px; height: 22px; }
+  .frow.is-uploading .frow__acts { justify-content: flex-start; }
+  .frow.is-uploading { grid-template-columns: 24px 28px minmax(0, 1fr); }
+  .frow.is-uploading .frow__acts { grid-column: 3; gap: 18px; }
+  .frow.is-uploading .frow__acts .link { min-height: 36px; }
+  .frow__bar { flex: 1 1 auto; }
+}

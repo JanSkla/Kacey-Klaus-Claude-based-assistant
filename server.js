@@ -42,6 +42,7 @@ import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
 import * as whiteboard from './whiteboard.js';
 import * as stickies from './stickies.js';
+import * as storage from './storage.js';
 import { webTracker, webOfTranscript, isTurnStart } from './web.js';
 import { addDays, turnClock } from './public/js/core/due.js';
 
@@ -1505,6 +1506,58 @@ app.use('/whiteboard-files', express.static(WHITEBOARD_DIR, {
 }));
 
 /* ---------------------------------------------------------------------------
+ * Úložiště (storage.js): any file up from one device, down on another. The
+ * upload is the raw body (the page sends the File itself, so it streams to
+ * disk); the name and the real type come in headers, because the body is
+ * always sent as octet-stream. Every change goes out as a `storage` frame.
+ * ------------------------------------------------------------------------- */
+
+storage.onEvent((ev) => broadcast({ type: 'storage', ...ev }));
+
+const storageError = (res, err, status = 400) => res.status(status).json({ ok: false, error: err?.message || 'Úložiště teď neodpovídá.' });
+const headerText = (v) => { try { return decodeURIComponent(String(v || '')); } catch { return String(v || ''); } };
+
+app.get('/api/storage', (req, res) => {
+  try { res.json({ ok: true, ...storage.list() }); } catch (err) { log(`storage list failed: ${err?.message || err}`); storageError(res, { message: 'Úložiště se nepodařilo načíst.' }, 500); }
+});
+
+app.post('/api/storage', async (req, res) => {
+  const expected = req.headers['content-length'] != null ? Number(req.headers['content-length']) : null;
+  try {
+    const file = await storage.receive(req, {
+      name: headerText(req.headers['x-file-name']), type: headerText(req.headers['x-file-type']),
+      device: String(req.headers['x-device'] || ''), expected: Number.isFinite(expected) ? expected : null,
+      origin: String(req.headers['x-origin'] || '').slice(0, 40),
+    });
+    res.json({ ok: true, file });
+  } catch (err) {
+    if (!res.headersSent) storageError(res, err, /4 GB/.test(err.message) ? 413 : 400);
+  }
+});
+
+app.post('/api/storage/delete', express.json({ limit: '64kb' }), (req, res) => {
+  const gone = storage.remove(req.body?.ids, { origin: String(req.body?.origin || '').slice(0, 40) });
+  if (gone.length) res.json({ ok: true, files: gone });
+  else storageError(res, { message: 'Takový soubor není — možná už je smazaný.' }, 404);
+});
+
+app.post('/api/storage/restore', express.json({ limit: '64kb' }), (req, res) => {
+  try { res.json({ ok: true, files: storage.restore(req.body?.ids, { origin: String(req.body?.origin || '').slice(0, 40) }) }); } catch (err) { storageError(res, err, 404); }
+});
+
+/* Always a download, never shown on Kacey's origin: whatever the file is, it
+   is saved under its own name, sandboxed if a browser opens it anyway. */
+app.get('/api/storage/:id/download', (req, res) => {
+  const f = storage.get(req.params.id);
+  if (!f) { res.status(404).type('text/plain; charset=utf-8').send('Takový soubor v úložišti není — možná je smazaný.'); return; }
+  res.setHeader('Content-Security-Policy', 'sandbox');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.download(storage.pathOf(f.id), f.name, { headers: { 'Content-Type': f.type || 'application/octet-stream', 'Cache-Control': 'no-store' } }, (err) => {
+    if (err && !res.headersSent) res.status(404).type('text/plain; charset=utf-8').send('Soubor na disku chybí.');
+  });
+});
+
+/* ---------------------------------------------------------------------------
  * Lístečky (stickies.js): sticky notes over every page of the desktop. The
  * page writes one note's changed fields at a time; app_sticky writes through
  * the same module. Every change goes out as a `stickies` frame.
@@ -2002,6 +2055,8 @@ server.listen(PORT, HOST, () => {
     try { const n = whiteboard.seedSamples(); if (n) log(`whiteboard: ${n} sample boards for the preview`); } catch (err) { log(`whiteboard samples not made: ${err.message}`); }
     // And a sticky note, so the layer over every page shows.
     try { if (stickies.seedSample()) log('stickies: a sample note for the preview'); } catch (err) { log(`sticky sample not made: ${err.message}`); }
+    // And a few files in the Úložiště.
+    try { const n = storage.seedSamples(); if (n) log(`storage: ${n} sample files for the preview`); } catch (err) { log(`storage samples not made: ${err.message}`); }
     return;
   }
   if (SELFUPDATE) {

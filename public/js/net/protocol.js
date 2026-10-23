@@ -232,6 +232,12 @@ export function onServer(msg) {
       bus.emit('stickies', msg);
       break;
 
+    case 'storage':
+      /* A file uploaded, deleted or put back in the Úložiště — usually from
+         the other device (storage.js on the server, views/storage.js here). */
+      bus.emit('storage', msg);
+      break;
+
     case 'calendar_sync':
       /* A calendar sync started or ended — the night's, or Synchronizovat on
          any open page (calsync.js on the server, ui/calendar.js here). */

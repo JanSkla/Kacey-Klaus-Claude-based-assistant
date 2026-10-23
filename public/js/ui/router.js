@@ -13,12 +13,12 @@ import { $ } from '../core/dom.js';
 import { clear as clearToast } from './toast.js';
 import { closeSheet } from './psheet.js';
 
-var VIEWS = ['main', 'tasks', 'journal', 'library', 'gallery', 'boards', 'board', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus',
+var VIEWS = ['main', 'tasks', 'journal', 'library', 'gallery', 'boards', 'board', 'storage', 'calendar', 'brief', 'timer', 'lights', 'controller', 'task', 'focus',
   'morning', 'proposals', 'rules', 'upgrade'];
 
 var LABELS = {
   main: 'main', tasks: 'úkoly', journal: 'deník', library: 'knihovna deníku', gallery: 'galerie',
-  boards: 'whiteboardy', board: 'whiteboard',
+  boards: 'whiteboardy', board: 'whiteboard', storage: 'úložiště',
   calendar: 'kalendář', brief: 'ranní brief', timer: 'časovače', lights: 'světla',
   controller: 'controller', task: 'úkol probíhá', focus: 'focus',
   morning: 'ráno', proposals: 'návrhy', rules: 'pravidla', upgrade: 'porovnání verzí'
@@ -28,7 +28,7 @@ var LABELS = {
    right; a phone has room for one word, so it is the view's name. */
 var TITLES = {
   main: 'Kacey', tasks: 'Úkoly', journal: 'Deník', library: 'Knihovna deníku', gallery: 'Galerie',
-  boards: 'Whiteboardy', board: 'Whiteboard',
+  boards: 'Whiteboardy', board: 'Whiteboard', storage: 'Úložiště',
   calendar: 'Kalendář', brief: 'Ranní brief', timer: 'Časovače', lights: 'Světla',
   controller: 'Controller', task: 'Úkol', focus: 'Focus',
   morning: 'Ráno', proposals: 'Návrhy', rules: 'Pravidla', upgrade: 'Porovnání'

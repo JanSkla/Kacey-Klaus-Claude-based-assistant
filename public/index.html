@@ -171,6 +171,7 @@
     <p class="sidenav__head">DALŠÍ</p>
     <button type="button" class="sidenav__item" data-go="gallery">Galerie<span class="sidenav__badge" id="navBadgeGallery"></span></button>
     <button type="button" class="sidenav__item" data-go="boards">Whiteboardy<span class="sidenav__badge" id="navBadgeBoards"></span></button>
+    <button type="button" class="sidenav__item" data-go="storage">Úložiště<span class="sidenav__badge" id="navBadgeStorage"></span></button>
     <button type="button" class="sidenav__item" data-go="library">Knihovna deníku</button>
     <button type="button" class="sidenav__item" data-go="timer">Časovače</button>
     <button type="button" class="sidenav__item" data-go="brief">Ranní brief</button>
@@ -542,6 +543,65 @@
       <p class="rule" id="galStatIndex">Hledám podle významu, ne jen podle slov.</p>
       <p class="label">Z CHATU</p>
       <p class="muted-3 galstats__say">„ulož mi tuto fotku“<br />„najdi fotku z hor“</p>
+    </section>
+  </div>
+</section>
+
+<!-- ================= ÚLOŽIŠTĚ =================
+     Any file up from one device, down on another (views/storage.js). Kept
+     until deleted. Drop files on the list, or Nahrát soubory. -->
+<section class="view view--wide" data-view="storage" hidden>
+  <section class="card stcard" id="stCard">
+    <div class="card__head">
+      <h2 class="card__title card__title--lg">Úložiště</h2>
+      <span class="muted-3 num" id="stCount">—</span>
+    </div>
+    <div class="card__sub stfind" id="stFind">
+      <input class="input" id="stQuery" type="search" autocomplete="off" enterkeyhint="search"
+             placeholder="Najít soubor podle jména…" aria-label="Najít soubor" />
+      <span class="seg" role="group" aria-label="Řadit soubory">
+        <button type="button" class="seg__opt" data-st-sort="new" aria-pressed="true">Nejnovější</button>
+        <button type="button" class="seg__opt" data-st-sort="name" aria-pressed="false">Název</button>
+        <button type="button" class="seg__opt" data-st-sort="size" aria-pressed="false">Velikost</button>
+      </span>
+    </div>
+    <!-- Shown while anything is ticked: what is picked and what can be done with all of it at once. -->
+    <div class="card__sub stsel" id="stSel" hidden>
+      <span class="stsel__count num" id="stSelCount" aria-live="polite"></span>
+      <button type="button" class="btn btn--sm" id="stSelDownload">Stáhnout</button>
+      <button type="button" class="btn btn--sm btn--dangerghost" id="stSelDelete">Smazat</button>
+      <button type="button" class="link link--muted stsel__clear push" id="stSelClear">Zrušit výběr</button>
+    </div>
+    <div class="stcols" id="stCols">
+      <button type="button" class="tickbox" id="stAll" aria-pressed="false" aria-label="Vybrat všechny soubory"></button>
+      <span class="stcols__name" aria-hidden="true">NÁZEV</span>
+      <span class="stcols__size" aria-hidden="true">VELIKOST</span>
+      <span class="stcols__when" aria-hidden="true">NAHRÁNO</span>
+      <span class="stcols__all phone-only">Vybrat vše</span>
+    </div>
+    <div class="card__body card__body--scroll stlist" id="stList"></div>
+    <div class="galdrop" id="stDrop" hidden><p>Pusť soubory sem — stáhneš si je na kterémkoli zařízení.</p></div>
+  </section>
+
+  <div class="col col--rail">
+    <section class="card stacts">
+      <h2 class="card__title card__title--bar">Akce</h2>
+      <div class="fnlist">
+        <button type="button" class="btn btn--accent btn--fn" id="stUpload">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v5h16v-5"/></svg>
+          Nahrát soubory
+        </button>
+        <p class="galacts__hint desk-only">nebo je přetáhni do seznamu</p>
+      </div>
+      <input type="file" id="stFile" multiple hidden />
+    </section>
+    <section class="card card--pad ststats">
+      <p class="label">V ÚLOŽIŠTI</p>
+      <p class="big num" id="stStatCount">—</p>
+      <p class="muted num" id="stStatMeta">—</p>
+      <p class="rule">Soubory tu zůstanou, dokud je nesmažeš.</p>
+      <p class="label">NA DRUHÉM ZAŘÍZENÍ</p>
+      <p class="muted-3 ststats__say">Otevři Kacey na telefonu nebo na počítači, Úložiště najdeš v menu. Co nahraješ tady, je tam hned.</p>
     </section>
   </div>
 </section>
@@ -1383,6 +1443,7 @@
     <div class="morelist">
       <button type="button" class="morelist__row" data-go="gallery" data-tab="gallery">Galerie <span class="morelist__meta" id="moreGalleryMeta"></span></button>
       <button type="button" class="morelist__row" data-go="boards" data-tab="boards">Whiteboardy <span class="morelist__meta" id="moreBoardsMeta"></span></button>
+      <button type="button" class="morelist__row" data-go="storage" data-tab="storage">Úložiště <span class="morelist__meta" id="moreStorageMeta"></span></button>
       <button type="button" class="morelist__row" data-go="brief" data-tab="brief">Ranní brief</button>
       <button type="button" class="morelist__row" data-go="morning" data-tab="morning">Ráno <span class="morelist__meta" id="moreMorningMeta">checklist</span></button>
       <button type="button" class="morelist__row" data-go="rules" data-tab="rules">Pravidla <span class="morelist__meta" id="moreRulesMeta"></span></button>

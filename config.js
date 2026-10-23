@@ -394,6 +394,9 @@ export const BRIEF_AUDIO_DIR = process.env.KACEY_BRIEF_AUDIO_DIR || path.join(HE
 export const GALLERY_DIR = process.env.KACEY_GALLERY_DIR || path.join(HERE, 'data', 'gallery');
 /* Images and documents dropped on a whiteboard (whiteboard.js). */
 export const WHITEBOARD_DIR = process.env.KACEY_WHITEBOARD_DIR || path.join(HERE, 'data', 'whiteboard');
+/* Úložiště (storage.js): any file, uploaded from any device, kept until it is
+   deleted. The files sit here under their own ids; names live in the database. */
+export const STORAGE_DIR = process.env.KACEY_STORAGE_DIR || path.join(HERE, 'data', 'storage');
 /* Embeddings for the gallery's search (vectors.js). Unset: a built-in hashed
    vector that needs nothing installed. Set to an Ollama-compatible
    /api/embed URL (e.g. http://127.0.0.1:11434) to use a real embedding model. */

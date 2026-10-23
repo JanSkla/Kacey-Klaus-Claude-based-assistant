@@ -349,6 +349,20 @@ CREATE TABLE IF NOT EXISTS kacey_sticky (
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
 );
+
+/* Úložiště (storage.js): files moved between the owner's devices. The bytes
+   sit in STORAGE_DIR under file_id; this row is the name it came with. A
+   deleted file keeps its row and bytes for a day, so Vrátit can put it back. */
+CREATE TABLE IF NOT EXISTS kacey_file (
+  file_id      TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  media_type   TEXT NOT NULL DEFAULT '',
+  bytes        INTEGER NOT NULL DEFAULT 0,
+  device       TEXT NOT NULL DEFAULT 'desktop' CHECK (device IN ('desktop','phone','kacey')),
+  deleted_at   TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS kacey_file_created_idx ON kacey_file (created_at);
 `;
 
 export function now() { return new Date().toISOString(); }
