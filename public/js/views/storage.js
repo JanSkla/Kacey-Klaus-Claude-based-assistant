@@ -7,10 +7,13 @@
    as the File itself, so the server streams it to disk and the row shows the
    real progress. One upload at a time, the rest wait in line.
 
-   The name is the download; on a computer each row also has Stáhnout and a
-   two-tap Smazat. The tick boxes pick several: Stáhnout and Smazat then work
-   on all of them (a phone deletes this way only). Deleting toasts with
-   Vrátit — the server keeps a deleted file for a day.
+   A picture, video, sound, PDF or text opens in the náhled (core/filekind.js
+   says which): its name, or Zobrazit, shows it as it is, ‹ › step through the
+   others that open. Any other name is the download; on a computer each row
+   also has Stáhnout and a two-tap Smazat. The tick boxes pick several:
+   Stáhnout and Smazat then work on all of them (a phone deletes this way
+   only). Deleting toasts with Vrátit — the server keeps a deleted file for a
+   day.
 
    A `storage` frame says a file came or went on the other device; the list
    follows, and a file from the other device toasts.
@@ -22,6 +25,7 @@ import * as bus from '../core/bus.js';
 import { onEnter, currentView, go } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { isOnline } from '../net/protocol.js';
+import { viewOf } from '../core/filekind.js';
 
 var SORT_KEY = 'kacey.storage.sort';
 var ORIGIN = 'p' + Math.random().toString(36).slice(2, 10);
@@ -35,6 +39,11 @@ var armed = null, armTimer = 0;      // a row's id, or 'sel' for the selection b
 var queue = [];                      // uploads: { key, file, name, size, state, sent, error, xhr }
 var uploading = false;
 var fresh = {};                      // ids that just arrived from the other device
+var shownNow = [];                   // the list as drawn: the náhled's ‹ › follow it
+var viewing = null;                  // the id open in the náhled
+var viewArmed = false, viewTimer = 0;
+var TEXT_BYTES = 1024 * 1024;        // a text shows its first megabyte
+var TABLE_ROWS = 1000;
 
 /* ---- words -------------------------------------------------------------------- */
 
@@ -77,6 +86,7 @@ function device() {
 /* Relative on purpose: a plain link is not rewritten by the comparison's shim, but
    its <base href="/preview/"> does move a relative one onto the preview's server. */
 function downloadUrl(f) { return 'api/storage/' + encodeURIComponent(f.id) + '/download'; }
+function viewUrl(f) { return 'api/storage/' + encodeURIComponent(f.id) + '/view'; }
 
 /* ---- loading ------------------------------------------------------------------ */
 
@@ -91,6 +101,7 @@ function load() {
       var have = {};
       files.forEach(function (f) { have[f.id] = true; });
       Object.keys(picked).forEach(function (id) { if (!have[id]) delete picked[id]; });
+      if (viewing && !have[viewing]) closeView();
       loaded = true; failed = false;
       render();
     })
@@ -303,7 +314,11 @@ function downIcon() {
 function fileRow(f) {
   var on = !!picked[f.id];
   var from = FROM[f.device] || '';
-  var link = el('a.frow__name', { href: downloadUrl(f), download: f.name, title: 'Stáhnout ' + f.name }, f.name);
+  var shows = !!viewOf(f.name);
+  var open = function () { openView(f.id); };
+  var link = shows
+    ? el('button.frow__name.frow__open', { type: 'button', title: 'Zobrazit ' + f.name, onclick: open }, f.name)
+    : el('a.frow__name', { href: downloadUrl(f), download: f.name, title: 'Stáhnout ' + f.name }, f.name);
   return el('div.frow' + (on ? '.is-picked' : '') + (fresh[f.id] ? '.is-new' : ''), [
     el('button.tickbox.frow__tick', {
       type: 'button', 'aria-pressed': String(on), 'aria-label': (on ? 'Odebrat z výběru ' : 'Vybrat ') + f.name,
@@ -317,6 +332,7 @@ function fileRow(f) {
     el('span.frow__size.num', size(f.bytes)),
     el('span.frow__when.num', [when(f.created_at), from ? el('span.frow__from', from) : null]),
     el('span.frow__acts', [
+      shows && armed !== f.id ? el('button.link.frow__view', { type: 'button', onclick: open, 'aria-label': 'Zobrazit ' + f.name }, 'Zobrazit') : null,
       el('a.btn.btn--sm.frow__get', { href: downloadUrl(f), download: f.name, 'aria-label': 'Stáhnout ' + f.name }, [
         downIcon(),
         el('span.frow__getlabel', 'Stáhnout')
@@ -377,6 +393,8 @@ function render() {
   var list = $('stList');
   var want = fold(find.trim());
   var shown = loaded ? sorted(want ? files.filter(function (f) { return fold(f.name).indexOf(want) !== -1; }) : files) : [];
+  shownNow = shown;
+  if (viewing) paintView(false);
   paintSelection(shown);
   $('stCols').hidden = !loaded || !files.length;
   if (!loaded) {
@@ -423,6 +441,8 @@ function onFrame(msg) {
     }
     render();
   } else if (msg.event === 'removed' && !mine) {
+    var open = viewing && (msg.ids || []).indexOf(viewing) !== -1 ? byId(viewing) : null;
+    if (open) { closeView(); say('Soubor „' + open.name + '“ byl smazán na druhém zařízení.'); }
     files = files.filter(function (f) { return (msg.ids || []).indexOf(f.id) === -1; });
     (msg.ids || []).forEach(function (id) { delete picked[id]; });
     totals.total_bytes = files.reduce(function (s, f) { return s + f.bytes; }, 0);
@@ -430,6 +450,186 @@ function onFrame(msg) {
   } else if (msg.event === 'restored' && !mine) {
     load();
   }
+}
+
+/* ---- the náhled ---------------------------------------------------------------------------
+   One file shown as it is, in a sheet: a picture or a video contained on --bg, a sound
+   with its player, a PDF in the browser's own viewer (a phone opens it in a tab), a
+   text in its first megabyte, a CSV as a table. ‹ › and ←/→ go through the files in the
+   list that open, in its order; Escape closes. */
+
+function byId(id) { return files.find(function (f) { return f.id === id; }); }
+function openable() { return shownNow.filter(function (f) { return viewOf(f.name); }); }
+
+function openView(id) {
+  viewing = id;
+  viewDisarm();
+  paintView(true);
+  $('stView').hidden = false;
+  $('stViewClose').focus();
+}
+
+function closeView() {
+  $('stView').hidden = true;
+  viewing = null;
+  viewDisarm();
+  fill($('stViewStage'), null);       // a video or a sound stops with the sheet
+}
+
+function stepView(d) {
+  var list = openable();
+  var i = list.findIndex(function (f) { return f.id === viewing; });
+  if (i < 0 || list.length < 2) return;
+  viewing = list[(i + d + list.length) % list.length].id;
+  viewDisarm();
+  paintView(true);
+}
+
+function viewDisarm() { viewArmed = false; clearTimeout(viewTimer); }
+
+function paintViewDelete() {
+  var del = $('stViewDelete');
+  del.textContent = viewArmed ? 'Opravdu smazat?' : 'Smazat';
+  del.classList.toggle('btn--dangerfill', viewArmed);
+  del.classList.toggle('btn--dangerghost', !viewArmed);
+}
+
+/** The head and foot; the content itself only when `full` (a repaint of the list must not restart a video). */
+function paintView(full) {
+  var f = byId(viewing), v = f && viewOf(f.name);
+  if (!v) { closeView(); return; }
+  var list = openable();
+  var i = list.findIndex(function (x) { return x.id === f.id; });
+  fill($('stViewIcon'), fileIcon(f.name));
+  $('stViewName').textContent = f.name;
+  $('stViewName').title = f.name;
+  $('stViewPos').textContent = list.length > 1 && i >= 0 ? (i + 1) + ' / ' + list.length : '';
+  $('stPrev').disabled = $('stNext').disabled = list.length < 2 || i < 0;
+  $('stViewMeta').textContent = [v.ext.toUpperCase(), size(f.bytes), when(f.created_at), FROM[f.device]].filter(Boolean).join(' · ');
+  $('stViewDownload').href = downloadUrl(f);
+  $('stViewDownload').setAttribute('download', f.name);
+  paintViewDelete();
+  if (full) stage(f, v);
+}
+
+function viewFail(f, title, text, canDownload) {
+  return el('div.galempty.fview__fail', [
+    el('span.galempty__mark.galempty__mark--err', { 'aria-hidden': 'true' }),
+    el('h3', title),
+    el('p', text),
+    canDownload ? el('a.btn', { href: downloadUrl(f), download: f.name }, 'Stáhnout') : null
+  ]);
+}
+
+function stage(f, v) {
+  var host = $('stViewStage');
+  host.setAttribute('data-kind', v.kind);
+  if (!isOnline()) { fill(host, viewFail(f, 'Jsi offline.', 'Soubor je na kaceybody — ukážu ho, až se spojení vrátí.')); return; }
+  var cannot = function () {
+    if (viewing !== f.id) return;
+    fill(host, viewFail(f, 'Tenhle soubor ukázat neumím.', 'Prohlížeč jeho obsah nepřečetl — stáhni si ho a otevři v aplikaci, která ho zná.', true));
+  };
+  if (v.kind === 'image') {
+    fill(host, el('div.fview__media', el('img', { src: viewUrl(f), alt: f.name, onerror: cannot })));
+  } else if (v.kind === 'video') {
+    fill(host, el('div.fview__media', el('video', { src: viewUrl(f), controls: true, playsinline: true, preload: 'metadata', onerror: cannot })));
+  } else if (v.kind === 'audio') {
+    fill(host, el('div.fview__media.fview__audio', [
+      el('p.label', 'ZVUK · ' + v.ext.toUpperCase()),
+      el('p.fview__audioname', f.name),
+      el('audio', { src: viewUrl(f), controls: true, preload: 'metadata', onerror: cannot })
+    ]));
+  } else if (v.kind === 'pdf') {
+    // A phone has no PDF viewer in a page: the PDF opens in a tab of its own.
+    fill(host, device() === 'phone'
+      ? el('div.galempty.fview__fail', [
+          el('h3', 'PDF se otevře v prohlížeči.'),
+          el('p', 'Telefon ho neumí ukázat přímo tady — otevře ho na nové kartě.'),
+          el('a.btn.btn--accent', { href: viewUrl(f), target: '_blank', rel: 'noopener' }, 'Otevřít PDF')])
+      : el('iframe.fview__frame', { src: viewUrl(f), title: f.name }));
+  } else {
+    showText(f, v, host);
+  }
+}
+
+/* UTF-8, or the Czech Windows code page an older Excel still saves in. A cut-off
+   megabyte may end inside a character: up to three bytes are let go. */
+function decode(bytes, cut) {
+  for (var k = 0; k <= (cut ? 3 : 0); k++) {
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, bytes.length - k)); } catch (e) { /* try shorter */ }
+  }
+  try { return new TextDecoder('windows-1250').decode(bytes); } catch (e) { return new TextDecoder('utf-8').decode(bytes); }
+}
+
+function parseTable(text, sep, max) {
+  var rows = [], row = [], cell = '', q = false;
+  for (var i = 0; i < text.length && rows.length <= max; i++) {
+    var c = text[i];
+    if (q) {
+      if (c !== '"') cell += c;
+      else if (text[i + 1] === '"') { cell += '"'; i++; }
+      else q = false;
+    } else if (c === '"' && cell === '') q = true;
+    else if (c === sep) { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell.replace(/\r$/, '')); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell.replace(/\r$/, '')); rows.push(row); }
+  return rows;
+}
+
+function tableOf(text, ext) {
+  var first = text.split('\n', 1)[0];
+  var count = function (ch) { return first.split(ch).length - 1; };
+  var sep = ext === 'tsv' ? '\t' : [';', '\t', ','].reduce(function (best, ch) { return count(ch) > count(best) ? ch : best; }, ',');
+  return parseTable(text, sep, TABLE_ROWS + 1);
+}
+
+function showText(f, v, host) {
+  if (!f.bytes) { fill(host, el('p.empty.fview__empty', 'Soubor je prázdný.')); return; }
+  fill(host, el('p.empty.fview__empty', 'Načítám obsah…'));
+  var id = f.id;
+  fetch('/' + viewUrl(f), { headers: { Range: 'bytes=0-' + (TEXT_BYTES - 1) }, cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error(); return r.arrayBuffer(); })
+    .then(function (buf) {
+      if (viewing !== id) return;
+      var bytes = new Uint8Array(buf);
+      var cut = f.bytes > bytes.length;
+      // A nul byte early on: whatever the name says, this is not text.
+      if (bytes.subarray(0, 8192).indexOf(0) !== -1) {
+        fill(host, viewFail(f, 'Tohle není čitelný text.', 'Soubor se jmenuje jako text, ale uvnitř je něco jiného — stáhni si ho.', true));
+        return;
+      }
+      var text = decode(bytes, cut).replace(/^﻿/, '');
+      var note = cut ? 'Ukazuji prvních ' + size(bytes.length) + ' z ' + size(f.bytes) + ' — celý soubor si stáhni.' : '';
+      if (v.kind === 'table') {
+        var rows = tableOf(text, v.ext);
+        if (cut && rows.length <= TABLE_ROWS) rows.pop();      // the last row was cut in half
+        if (rows.length > TABLE_ROWS) { rows = rows.slice(0, TABLE_ROWS); note = 'Ukazuji prvních ' + TABLE_ROWS.toLocaleString('cs-CZ') + ' řádků — celý soubor si stáhni.'; }
+        var cols = rows.reduce(function (n, r) { return Math.max(n, r.length); }, 0);
+        var cellOf = function (tag, s) { return el(tag + (/^\s*[-+]?[\d\s]+([.,]\d+)?\s*$/.test(s || '') ? '.is-num' : ''), { title: s && s.length > 40 ? s : null }, s || ''); };
+        var padded = function (r) { var out = r.slice(); while (out.length < cols) out.push(''); return out; };
+        fill(host, [
+          note ? el('p.fview__note', note) : null,
+          el('div.fview__tablewrap', el('table.fview__table', [
+            el('thead', el('tr', padded(rows[0] || []).map(function (s) { return el('th', s); }))),
+            el('tbody', rows.slice(1).map(function (r) { return el('tr', padded(r).map(function (s) { return cellOf('td', s); })); }))
+          ]))
+        ]);
+        return;
+      }
+      if (v.ext === 'json' && !cut) { try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* shown as it is */ } }
+      fill(host, [
+        note ? el('p.fview__note', note) : null,
+        text.trim() ? el('pre.fview__text', text) : el('p.empty.fview__empty', 'Soubor je prázdný.')
+      ]);
+    })
+    .catch(function () {
+      if (viewing !== id) return;
+      fill(host, isOnline()
+        ? viewFail(f, 'Obsah se nepodařilo načíst.', 'Zkus soubor otevřít znovu, nebo si ho stáhni.', true)
+        : viewFail(f, 'Jsi offline.', 'Soubor je na kaceybody — ukážu ho, až se spojení vrátí.'));
+    });
 }
 
 /* ---- wiring ---------------------------------------------------------------------------- */
@@ -465,8 +665,31 @@ export function initStorage() {
   $('stSelDelete').addEventListener('click', function () { if (armed === 'sel') remove(pickedFiles()); else arm('sel'); });
   $('stSelClear').addEventListener('click', clearPick);
   document.addEventListener('keydown', function (ev) {
+    if (!$('stView').hidden) {
+      // A player's own arrows seek; everywhere else they step through the files.
+      var media = ev.target && /^(VIDEO|AUDIO)$/.test(ev.target.tagName);
+      if (ev.key === 'Escape') { ev.stopPropagation(); closeView(); }
+      else if (ev.key === 'ArrowLeft' && !media) stepView(-1);
+      else if (ev.key === 'ArrowRight' && !media) stepView(1);
+      return;
+    }
     if (ev.key === 'Escape' && currentView() === 'storage' && pickedFiles().length) { ev.stopPropagation(); clearPick(); }
   }, true);
+
+  // The náhled.
+  $('stViewClose').addEventListener('click', closeView);
+  $('stPrev').addEventListener('click', function () { stepView(-1); });
+  $('stNext').addEventListener('click', function () { stepView(1); });
+  $('stView').addEventListener('click', function (ev) { if (ev.target === $('stView')) closeView(); });
+  $('stViewDelete').addEventListener('click', function () {
+    var f = byId(viewing);
+    if (!f) return;
+    if (viewArmed) { closeView(); remove([f]); return; }
+    viewArmed = true;
+    clearTimeout(viewTimer);
+    viewTimer = setTimeout(function () { viewArmed = false; paintViewDelete(); }, 4000);
+    paintViewDelete();
+  });
 
   // Files dragged anywhere over the list card.
   var card = $('stCard'), depth = 0;

@@ -1557,6 +1557,23 @@ app.get('/api/storage/:id/download', (req, res) => {
   });
 });
 
+/* The náhled: a file the page can show (public/js/core/filekind.js), inline,
+   under the type its extension gives — text always as plain text. Sandboxed
+   like the download, except a PDF (checked to be one), which a browser will
+   not draw sandboxed. Ranges work, so a video seeks and a long text comes in
+   its first megabyte. */
+app.get('/api/storage/:id/view', (req, res) => {
+  const v = storage.viewable(req.params.id);
+  if (!v) { res.status(404).type('text/plain; charset=utf-8').send('Tenhle soubor se zobrazit nedá — stáhni si ho.'); return; }
+  if (v.kind !== 'pdf') res.setHeader('Content-Security-Policy', 'sandbox');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.sendFile(path.resolve(storage.pathOf(v.file.id)), {
+    headers: { 'Content-Type': v.type, 'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(v.file.name)}`, 'Cache-Control': 'no-store' },
+  }, (err) => {
+    if (err && !res.headersSent) res.status(404).type('text/plain; charset=utf-8').send('Soubor na disku chybí.');
+  });
+});
+
 /* ---------------------------------------------------------------------------
  * Lístečky (stickies.js): sticky notes over every page of the desktop. The
  * page writes one note's changed fields at a time; app_sticky writes through

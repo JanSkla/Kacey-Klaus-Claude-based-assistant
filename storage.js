@@ -4,7 +4,8 @@
  * Any file goes up from the computer or the phone (the Úložiště screen,
  * public/js/views/storage.js) and comes down on any other. Nothing is read,
  * described or converted: the bytes stay as they came, under the name they
- * came with, until the owner deletes them. Files do not expire.
+ * came with, until the owner deletes them. Files do not expire. A picture,
+ * video, sound, PDF or text can also be opened in the page (viewable()).
  *
  * The bytes sit in STORAGE_DIR under the file's id (no extension, so nothing
  * there is ever served as what its name says); the name, type, size and the
@@ -17,11 +18,12 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { createWriteStream, existsSync, mkdirSync, renameSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
+import { closeSync, createWriteStream, existsSync, mkdirSync, openSync, readSync, renameSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { open, now } from './db.js';
 import { STORAGE_DIR } from './config.js';
+import { viewOf } from './public/js/core/filekind.js';
 
 /** One file at most this big. The disk is the real limit; this keeps a mistake from filling it. */
 export const MAX_FILE_BYTES = 4 * 1024 ** 3;
@@ -54,6 +56,29 @@ function row(id) {
 }
 
 export function get(id) { return shape(row(id)); }
+
+function startsWith(file, magic) {
+  let fd = null;
+  try {
+    fd = openSync(file, 'r');
+    const buf = Buffer.alloc(magic.length);
+    return readSync(fd, buf, 0, magic.length, 0) === magic.length && buf.toString('latin1') === magic;
+  } catch { return false; } finally { if (fd != null) closeSync(fd); }
+}
+
+/**
+ * The file as the náhled may show it — { file, kind, type, ext }, or null when
+ * its name is not a kind it shows (public/js/core/filekind.js). A PDF must
+ * also start like one: it is the only kind served without the sandbox, as a
+ * browser will not draw a PDF in a sandboxed page.
+ */
+export function viewable(id) {
+  const f = get(id);
+  const v = f && viewOf(f.name);
+  if (!v) return null;
+  if (v.kind === 'pdf' && !startsWith(pathOf(f.id), '%PDF-')) return null;
+  return { file: f, ...v };
+}
 
 /* Deleted more than a day ago: the bytes go for good. */
 function purge() {

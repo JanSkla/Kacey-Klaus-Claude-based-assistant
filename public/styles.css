@@ -3479,7 +3479,7 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
 .stsel__count { margin-right: 6px; font-size: 14px; font-weight: 600; }
 
 .stcols, .frow {
-  display: grid; grid-template-columns: 20px 28px minmax(0, 1fr) 92px 200px 190px;
+  display: grid; grid-template-columns: 20px 28px minmax(0, 1fr) 92px 200px 260px;
   align-items: center; column-gap: 14px; padding: 0 14px;
 }
 .stcols { min-height: 34px; border-bottom: 1px solid var(--line); font-size: 11px; letter-spacing: .08em; color: var(--ink3); }
@@ -3499,6 +3499,10 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 a.frow__name:hover { color: var(--acc); text-decoration: underline; }
+/* A name that opens the náhled is a button, drawn like the link. */
+button.frow__name { display: block; max-width: 100%; padding: 0; background: none; border: 0; font-family: inherit; text-align: left; cursor: pointer; }
+button.frow__name:hover { color: var(--acc); text-decoration: underline; }
+.frow__view { font-size: 13px; }
 .frow__meta { display: none; font-size: 12px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .frow__size { text-align: right; font-size: 13px; color: var(--ink2); }
 .frow__when { font-size: 13px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3540,7 +3544,7 @@ a.frow__name:hover { color: var(--acc); text-decoration: underline; }
 
 @media (max-width: 1240px) and (min-width: 761px) {
   /* Narrower desktops: size and date go into the meta line under the name. */
-  .stcols, .frow { grid-template-columns: 20px 28px minmax(0, 1fr) 190px; }
+  .stcols, .frow { grid-template-columns: 20px 28px minmax(0, 1fr) 260px; }
   .stcols__size, .stcols__when, .frow__size, .frow__when { display: none; }
   .frow__meta { display: block; }
 }
@@ -3582,7 +3586,10 @@ a.frow__name:hover { color: var(--acc); text-decoration: underline; }
   .frow { min-height: 64px; padding: 8px 6px 8px 14px; }
   .frow:hover { background: none; }
   .frow.is-picked:hover { background: var(--acc-dim); }
-  .frow__size, .frow__when, .frow__del, .frow__getlabel { display: none; }
+  .frow__size, .frow__when, .frow__del, .frow__getlabel, .frow__view { display: none; }
+  /* A name that opens: the whole name-and-meta block is the tap. */
+  .frow__main { position: relative; }
+  .frow__open::after { content: ''; position: absolute; inset: -8px 0; }
   .frow__meta { display: block; }
   .frow__name { font-size: 15px; }
   .frow__tick, #stAll { position: relative; width: 24px; height: 24px; font-size: 14px; }
@@ -3595,4 +3602,54 @@ a.frow__name:hover { color: var(--acc); text-decoration: underline; }
   .frow.is-uploading .frow__acts { grid-column: 3; gap: 18px; }
   .frow.is-uploading .frow__acts .link { min-height: 36px; }
   .frow__bar { flex: 1 1 auto; }
+}
+
+/* ==== Úložiště — the náhled: one file shown as it is (views/storage.js, revize 2) =========
+   A .sheet__box--xwide like the gallery's photo: the file's icon and name in the head with
+   ‹ ›, the content on --bg, the meta line, Stáhnout and a two-tap Smazat in the foot. */
+.fview { height: min(860px, 100%); }
+.fview .sheet__head { gap: 12px; }
+.fview__icon { flex: none; display: flex; }
+.fview__title { min-width: 0; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fview__pos { flex: none; font-size: 13px; }
+.fview__stage { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+.fview__media { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; }
+.fview__media img, .fview__media video { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.fview__audio { flex-direction: column; gap: 6px; padding: 40px 20px; }
+.fview__audio .label { margin: 0; }
+.fview__audioname { max-width: 100%; margin: 0 0 18px; font-size: 20px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.fview__audio audio { width: min(520px, 100%); }
+.fview__frame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--bg); }
+.fview__note { flex: none; margin: 0; padding: 8px 20px; background: var(--l2); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink2); }
+.fview__text {
+  flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 16px 20px;
+  font: 13px/1.6 var(--mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4;
+}
+.fview__tablewrap { flex: 1; min-height: 0; overflow: auto; }
+.fview__table { border-collapse: collapse; font-size: 13px; }
+.fview__table th, .fview__table td {
+  max-width: 360px; padding: 7px 14px; border-bottom: 1px solid #2e2e2e; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fview__table th { position: sticky; top: 0; background: var(--l2); border-bottom-color: var(--line2); font-size: 12px; font-weight: 600; color: var(--ink2); }
+.fview__table td { color: var(--ink); }
+.fview__table td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.fview__table tbody tr:hover td { background: var(--l1); }
+.fview__empty { margin: auto; }
+.fview__fail { align-self: center; margin: auto; }
+.fview__meta { min-width: 0; font-size: 13px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fview__foot a.btn { text-decoration: none; }
+
+@media (max-width: 760px) {
+  .fview { height: calc(100% - 70px); }
+  .fview .sheet__head { gap: 8px; }
+  .fview .sheet__head .btn--step { width: 44px; min-height: 44px; }
+  .fview__icon, .fview__pos { display: none; }
+  .fview__media { padding: 0; }
+  .fview__note { padding: 8px 16px; }
+  .fview__text { padding: 12px 16px; }
+  .fview__table th, .fview__table td { max-width: 220px; padding: 10px 12px; }
+  .fview__foot { flex-wrap: wrap; }
+  .fview__meta { flex-basis: 100%; }
+  .fview__foot .btn { flex: 1 1 0; margin-left: 0; }
 }

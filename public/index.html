@@ -1456,6 +1456,31 @@
 </div>
 
 <!-- ============================================================
+     ÚLOŽIŠTĚ — one file opened: a picture, video, sound, PDF or
+     text, shown as it is (views/storage.js).
+     ============================================================ -->
+<div class="sheet" id="stView" hidden>
+  <div class="sheet__box sheet__box--xwide fview" role="dialog" aria-modal="true" aria-labelledby="stViewName">
+    <div class="sheet__head">
+      <span class="fview__icon" id="stViewIcon"></span>
+      <h2 class="sheet__title fview__title" id="stViewName">—</h2>
+      <span class="card__meta num fview__pos" id="stViewPos"></span>
+      <span class="row push">
+        <button type="button" class="btn btn--step" id="stPrev" aria-label="Předchozí soubor">‹</button>
+        <button type="button" class="btn btn--step" id="stNext" aria-label="Další soubor">›</button>
+      </span>
+      <button type="button" class="sheet__close" id="stViewClose" aria-label="Zavřít">×</button>
+    </div>
+    <div class="fview__stage" id="stViewStage"></div>
+    <div class="sheet__foot fview__foot">
+      <span class="fview__meta num" id="stViewMeta"></span>
+      <a class="btn push" id="stViewDownload" download>Stáhnout</a>
+      <button type="button" class="btn btn--dangerghost" id="stViewDelete">Smazat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
      GALLERY — one photo, and the camera (views/gallery.js).
      ============================================================ -->
 <div class="sheet" id="galSheet" hidden>
