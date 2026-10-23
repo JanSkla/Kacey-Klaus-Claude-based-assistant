@@ -1,6 +1,6 @@
 {
   "name": "kacey",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "private": true,
   "description": "Kacey - voice-first personal assistant backend (Claude Agent SDK + klaus_memory MCP)",
   "type": "module",

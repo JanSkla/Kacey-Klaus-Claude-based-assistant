@@ -36,6 +36,7 @@ import * as routineDays from './routine-days.js';
 import * as gallery from './gallery.js';
 import * as whiteboard from './whiteboard.js';
 import * as stickies from './stickies.js';
+import * as storage from './storage.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -970,7 +971,7 @@ const morningAdd = tool(
 let onUpgrade = null;
 export function setUpgradeHandler(fn) { onUpgrade = typeof fn === 'function' ? fn : null; }
 
-const VIEW_NAMES = ['main', 'tasks', 'calendar', 'journal', 'library', 'gallery', 'boards', 'board', 'brief', 'timer', 'controller', 'rules', 'morning', 'lights'];
+const VIEW_NAMES = ['main', 'tasks', 'calendar', 'journal', 'library', 'gallery', 'boards', 'board', 'storage','brief', 'timer', 'controller', 'rules', 'morning', 'lights'];
 
 function makeUpgradeRequest(ctx) {
   return tool(
@@ -1194,6 +1195,93 @@ function makeWhiteboardManage(ctx) {
   );
 }
 
+/* ---- Úložiště ------------------------------------------------------------- */
+
+/* Files between the owner's devices (storage.js). Needs the session: a photo
+   to save comes from the chat (`ctx.images()`), and open shows the screen on
+   the page that asked (`ctx.send`). What she writes appears on every open
+   Úložiště through the module's own `storage` frame. */
+
+const IMAGE_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+
+function stamp(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}`;
+}
+
+function makeStorage(ctx) {
+  return tool(
+    'app_storage',
+    'Pánovo Úložiště — soubory, které si posílá mezi počítačem a telefonem (zůstanou, dokud je nesmaže). ' +
+      'list = co tam je (query = slova z názvu), write = ulož text jako soubor („pošli mi ten seznam na telefon“), ' +
+      'save_image = ulož fotku z chatu jako soubor (ne do Galerie), delete / restore = smaž / vrať smazané (do dne), ' +
+      'open = otevři pánovi obrazovku Úložiště (s files[0] rovnou ten soubor). Obsah nahraných souborů nečteš.',
+    {
+      action: z.enum(['list', 'write', 'save_image', 'delete', 'restore', 'open']),
+      query: z.string().max(120).optional().describe('list: slova z názvu. Prázdné = všechny, nejnovější první.'),
+      name: z.string().max(200).optional().describe('write / save_image: název souboru i s příponou („Nákupní seznam.txt“).'),
+      text: z.string().max(200000).optional().describe('write: obsah souboru.'),
+      image: z.number().int().min(1).max(4).optional().describe('save_image: kolikátý obrázek z poslední zprávy s obrázky (od 1).'),
+      files: z.array(z.string().max(200)).max(50).optional().describe('delete / restore / open: id (vypíše list) nebo slova z názvu.'),
+    },
+    async ({ action, query: q, name, text, image = 1, files = [] }) => {
+      try {
+        if (action === 'list') {
+          const all = storage.list().files;
+          if (!all.length) return ok('Úložiště je prázdné.');
+          const want = String(q || '').trim();
+          const hits = want ? all.filter((f) => matchesWords(f.name, want)) : all;
+          if (!hits.length) return ok(`Žádný soubor se tak nejmenuje (v úložišti je ${all.length}).`);
+          const shown = hits.slice(0, 40);
+          return ok(`${hits.length} z ${all.length} souborů, nejnovější první:\n${storage.describe(shown)}` +
+            (hits.length > shown.length ? `\n… a ${hits.length - shown.length} dalších.` : ''));
+        }
+        if (action === 'write') {
+          const body = String(text ?? '');
+          if (!body.trim()) return fail('Prázdný soubor — co do něj napsat? (text)');
+          let fname = String(name || '').trim() || `Od Kacey ${stamp()}`;
+          if (!/\.[a-z0-9]{1,8}$/i.test(fname)) fname += '.txt';
+          const f = storage.write({ name: fname, type: /\.(md|markdown)$/i.test(fname) ? 'text/markdown' : 'text/plain', data: body });
+          return ok(`Uloženo do Úložiště: „${f.name}“ (${f.id}). Pán si ho stáhne na kterémkoli zařízení.`);
+        }
+        if (action === 'save_image') {
+          const img = (ctx?.images?.() || [])[image - 1];
+          if (!img) return fail('V téhle konverzaci žádnou fotku nemám — popros pána, ať ji pošle, nebo ať ji nahraje rovnou do Úložiště.');
+          const ext = IMAGE_EXT[img.media_type] || 'jpg';
+          let fname = String(name || '').trim() || `Fotka z chatu ${stamp()}`;
+          if (!/\.[a-z0-9]{1,8}$/i.test(fname)) fname += '.' + ext;
+          const f = storage.write({ name: fname, type: img.media_type, data: Buffer.from(img.data, 'base64') });
+          return ok(`Fotka je v Úložišti jako „${f.name}“ (${f.id}).`);
+        }
+        if (action === 'open') {
+          const f = files.length ? storage.find(files[0]) : null;
+          if (files.length && !f) return fail(`Soubor „${files[0]}“ v úložišti není. Seznam vrátí list.`);
+          ctx?.send?.({ type: 'storage', event: 'open', id: f?.id || null });
+          return ok(f ? `Otevřela jsem pánovi „${f.name}“.` : 'Úložiště je pánovi otevřené.');
+        }
+        if (!files.length) return fail('Které soubory? (files: id nebo slova z názvu)');
+        const lookup = action === 'delete' ? storage.find : storage.findDeleted;
+        const found = [], missing = [];
+        for (const ref of files) {
+          const f = lookup(ref);
+          if (f && !found.some((x) => x.id === f.id)) found.push(f); else if (!f) missing.push(ref);
+        }
+        if (!found.length) return fail(`Nic takového ${action === 'delete' ? 'v úložišti není' : 'se do dne nesmazalo'}: ${missing.join(', ')}.`);
+        const done = action === 'delete' ? storage.remove(found.map((f) => f.id)) : storage.restore(found.map((f) => f.id));
+        const names = done.map((f) => `„${f.name}“`).join(', ');
+        const head = action === 'delete' ? `Smazáno: ${names}. Pán je do dne vrátí tlačítkem Vrátit (nebo restore).` : `Zpátky v úložišti: ${names}.`;
+        return ok(head + (missing.length ? `\nNenašla jsem: ${missing.join(', ')}.` : ''));
+      } catch (err) { return fail(err.message); }
+    },
+  );
+}
+
+function matchesWords(fileName, words) {
+  const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const n = fold(fileName);
+  return fold(words).split(/[^a-z0-9]+/).filter((w) => w.length > 1).every((w) => n.includes(w));
+}
+
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
@@ -1209,7 +1297,7 @@ export const APP_TOOL_NAMES = [
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
-  'app_whiteboard_read', 'app_whiteboard_edit', 'app_whiteboard_manage',
+  'app_whiteboard_read', 'app_whiteboard_edit', 'app_whiteboard_manage', 'app_storage',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 /** `ctx.sessionId()` names the chat that asks for an improvement (the history marks it). */
@@ -1236,9 +1324,16 @@ export function makeAppServer(ctx = {}) {
       'Whiteboardy (volné plochy na třídění myšlenek: karty s textem, barevné obdélníky jako oblasti, obrázky, ' +
       'dokumenty a šipky) čte app_whiteboard_read, mění app_whiteboard_edit a spravuje app_whiteboard_manage. ' +
       'Když pán chce něco ujasnit nebo rozvrhnout („pomoz mi ujasnit si povinnosti“), sesbírej podklady z aplikace ' +
-      '(app_read, kalendář, deník) a rozlož je na whiteboard.',
-    tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx), ...makeWhiteboardTools(ctx)],
+      '(app_read, kalendář, deník) a rozlož je na whiteboard. ' +
+      'Soubory mezi pánovým počítačem a telefonem (Úložiště) spravuje app_storage: co tam je, text nebo fotku ' +
+      'z chatu uložit jako soubor, smazat, vrátit, otevřít.',
+    tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx), ...makeWhiteboardTools(ctx), ...makeStorageTools(ctx)],
   });
+}
+
+/** The Úložiště tool for one session (tests call it directly). */
+export function makeStorageTools(ctx = {}) {
+  return [makeStorage(ctx)];
 }
 
 /** The three whiteboard tools for one session (tests call them directly). */

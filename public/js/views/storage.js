@@ -242,7 +242,10 @@ function next() {
       done((j && j.error) || 'Soubor se nepodařilo uložit.');
     }
   };
-  xhr.onerror = function () { done(isOnline() ? 'Spojení se přerušilo.' : 'Jsi offline.'); };
+  xhr.onerror = function () {
+    u.offline = !isOnline();
+    done(u.offline ? 'Jsi offline — nahraje se samo, až se připojím.' : 'Spojení se přerušilo.');
+  };
   xhr.onabort = function () { done('cancel'); };
   xhr.send(u.file);
 }
@@ -427,6 +430,14 @@ function render() {
 /* ---- the other device ---------------------------------------------------------------- */
 
 function onFrame(msg) {
+  // Kacey's app_storage open: the screen, and the file in the náhled if it opens.
+  if (msg.event === 'open') {
+    go('storage');
+    if (!msg.id) return;
+    var show = function () { var f = byId(msg.id); if (f && viewOf(f.name)) openView(f.id); };
+    if (byId(msg.id)) show(); else load().then(show);
+    return;
+  }
   if (!loaded) return;
   var mine = msg.origin === ORIGIN;
   if (msg.event === 'added' && msg.file) {
@@ -705,11 +716,26 @@ export function initStorage() {
   // Leaving mid-upload would lose it: the browser asks first.
   window.addEventListener('beforeunload', function (ev) { if (uploading) { ev.preventDefault(); ev.returnValue = ''; } });
 
+  // Offline, a download link would only fail in the browser's own bar: say why instead.
+  var offlineGet = function (ev) {
+    var a = ev.target.closest && ev.target.closest('a[download]');
+    if (!a || isOnline()) return;
+    ev.preventDefault();
+    say('Jsi offline — stáhnout půjde, až se připojím.');
+  };
+  $('stList').addEventListener('click', offlineGet);
+  $('stView').addEventListener('click', offlineGet);
+
   bus.on('storage', onFrame);
   var away = false;
   bus.on('conn', function (st) {
-    if (st === 'offline') away = true;
-    else if (st === 'online' && (away || failed)) { away = false; load(); }
+    if (st === 'offline') { away = true; return; }
+    if (st !== 'online') return;
+    if (away || failed) { away = false; load(); }
+    // What failed only because the connection went goes up again by itself.
+    var again = queue.filter(function (u) { return u.state === 'failed' && !u.final && u.offline; });
+    again.forEach(function (u) { u.state = 'wait'; u.error = ''; u.sent = 0; u.offline = false; });
+    if (again.length) { render(); next(); }
   });
   onEnter('storage', load);
   // The counts in the sidebar and in Víc, before anyone opens the screen.

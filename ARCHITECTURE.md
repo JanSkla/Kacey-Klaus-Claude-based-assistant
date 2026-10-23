@@ -617,6 +617,28 @@ reloads the list on a `stickies` frame that is not its own echo (`origin`).
 Kacey's `app_sticky` writes through the same module. A deleted note keeps its
 row a day for Vrátit; at most 12.
 
+### Úložiště
+
+[storage.js](storage.js) moves files between the owner's devices. The bytes
+sit in `STORAGE_DIR` (config.js, `data/storage`) under the file's id, with no
+extension, so nothing there is ever served as what its name says; the name,
+type, size and the device it came from are a `kacey_file` row. Files never
+expire. An upload is the raw request body (`POST /api/storage`, the name and
+type in `X-File-*` headers), streamed to a `.part` and renamed only when every
+byte came, so a cut connection leaves nothing in the list; 4 GB a file, and
+the listeners' `requestTimeout` is off so a long upload is not cut. A
+download is always an attachment, sandboxed; `/view` serves only the kinds
+[public/js/core/filekind.js](public/js/core/filekind.js) lists (shared with
+the page), under the type the extension gives, text always plain, and a PDF
+unsandboxed only when it starts with `%PDF-`. A delete keeps the row and
+bytes a day for Vrátit; `list()` purges older ones and stale `.part`s. Every
+change goes out as a `storage` frame (`added` / `removed` / `restored`, with
+the page's `origin`, so it ignores its own echo); the page
+([views/storage.js](public/js/views/storage.js)) uploads one file at a time
+with real progress and reloads after reconnecting. Kacey's `app_storage`
+lists, writes a text or a chat photo as a file (`device: kacey`), deletes,
+restores, and opens the screen (an `open` frame to her own chat's page).
+
 ### The web
 
 The chat's session has two built-in tools, `WebSearch` and `WebFetch`

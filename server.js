@@ -1864,6 +1864,10 @@ const server = createServer(app);
    only from this machine, so it exposes nothing HOST did not already. */
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1', '0.0.0.0', '::'];
 const loopback = LOCAL_HOSTS.includes(HOST) ? null : createServer(app);
+/* Node cuts any request still arriving after 5 minutes; a 2 GB video up from
+   the phone into the Úložiště takes longer. Only the owner's devices reach
+   these listeners, so the whole upload gets as long as it needs. */
+for (const s of [server, loopback]) if (s) s.requestTimeout = 0;
 /* ---------------------------------------------------------------------------
  * Attachments.
  *

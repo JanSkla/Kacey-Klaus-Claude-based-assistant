@@ -15,10 +15,12 @@
  *
  * Every change is reported through onEvent(); server.js broadcasts it as a
  * `storage` frame, so a list open on the other device fills in at once.
+ * Kacey reaches it through app_storage (app-tools.js): list, write a text or
+ * a photo from the chat, delete, restore, open.
  */
 
 import { randomBytes } from 'node:crypto';
-import { closeSync, createWriteStream, existsSync, mkdirSync, openSync, readSync, renameSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
+import { closeSync, createWriteStream, existsSync, mkdirSync, openSync, readdirSync, readSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { open, now } from './db.js';
@@ -80,12 +82,20 @@ export function viewable(id) {
   return { file: f, ...v };
 }
 
-/* Deleted more than a day ago: the bytes go for good. */
-function purge() {
+/* Deleted more than a day ago: the bytes go for good. So does a .part a
+   server stopped mid-upload left behind. */
+export function purge() {
   const before = new Date(Date.now() - KEEP_DELETED_MS).toISOString();
   const gone = open().prepare('SELECT file_id FROM kacey_file WHERE deleted_at IS NOT NULL AND deleted_at < ?').all(before);
   for (const g of gone) { try { rmSync(pathOf(g.file_id), { force: true }); } catch { /* already gone */ } }
   if (gone.length) open().prepare('DELETE FROM kacey_file WHERE deleted_at IS NOT NULL AND deleted_at < ?').run(before);
+  try {
+    for (const n of readdirSync(STORAGE_DIR)) {
+      if (!n.endsWith('.part')) continue;
+      const p = path.join(STORAGE_DIR, n);
+      if (Date.now() - statSync(p).mtimeMs > KEEP_DELETED_MS) rmSync(p, { force: true });
+    }
+  } catch { /* no folder yet */ }
 }
 
 /** How much the disk under STORAGE_DIR has left, in bytes (null when it cannot say). */
@@ -174,6 +184,71 @@ export function restore(ids, { origin = '' } = {}) {
   if (!back.length) throw new Error('Ty soubory už vrátit nejde.');
   emit({ event: 'restored', files: back, origin });
   return back;
+}
+
+/**
+ * A file made whole in memory — what Kacey writes (app_storage: a text, a
+ * photo from the chat). Same row, same `added` event as an upload.
+ */
+export function write({ name, type = '', data, device = 'kacey', origin = '' } = {}) {
+  const buf = Buffer.isBuffer(data) ? data : Buffer.from(String(data ?? ''), 'utf8');
+  if (buf.length > MAX_FILE_BYTES) throw new Error('Soubor je větší než 4 GB.');
+  ensureDir();
+  const id = fileId();
+  const part = pathOf(id) + '.part';
+  try {
+    writeFileSync(part, buf);
+    renameSync(part, pathOf(id));
+    open().prepare('INSERT INTO kacey_file (file_id, name, media_type, bytes, device, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(id, cleanName(name), String(type || '').slice(0, 120), buf.length, DEVICES.has(device) ? device : 'kacey', now());
+  } catch (err) {
+    try { rmSync(part, { force: true }); rmSync(pathOf(id), { force: true }); } catch { /* nothing to clean */ }
+    throw new Error(err.code === 'ENOSPC' ? 'Na disku došlo místo.' : 'Soubor se nepodařilo uložit.');
+  }
+  const file = get(id);
+  emit({ event: 'added', file, origin });
+  return file;
+}
+
+function fold(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+/* By id, by the exact name, or by words of the name ("tu fakturu z října") —
+   the newest that has them all. */
+function match(rows, ref) {
+  const want = String(ref || '').trim();
+  if (!want) return null;
+  const byId = rows.find((r) => r.file_id === want);
+  if (byId) return byId;
+  const exact = rows.find((r) => fold(r.name) === fold(want));
+  if (exact) return exact;
+  const words = fold(want).split(/[^a-z0-9]+/).filter((w) => w.length > 1);
+  if (!words.length) return null;
+  return rows.find((r) => { const n = fold(r.name); return words.every((w) => n.includes(w)); }) || null;
+}
+
+/** One file in the list by id or by its name's words, or null. */
+export function find(ref) {
+  return shape(match(open().prepare('SELECT * FROM kacey_file WHERE deleted_at IS NULL ORDER BY created_at DESC, file_id DESC').all(), ref));
+}
+
+/** One file deleted within the day (Vrátit), by id or name, or null. */
+export function findDeleted(ref) {
+  return shape(match(open().prepare('SELECT * FROM kacey_file WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, file_id DESC').all(), ref));
+}
+
+const FROM = { desktop: 'z počítače', phone: 'z telefonu', kacey: 'od Kacey' };
+
+function sizeText(b) {
+  if (b < 1024) return `${b} B`;
+  const units = ['kB', 'MB', 'GB', 'TB'];
+  let v = b, u = -1;
+  do { v /= 1024; u++; } while (v >= 1024 && u < units.length - 1);
+  return `${(v >= 100 || u === 0 ? Math.round(v) : v.toFixed(1)).toString().replace('.', ',')} ${units[u]}`;
+}
+
+/** One line per file for Kacey: id, name, size, when and from where. */
+export function describe(files) {
+  return files.map((f) => `- (${f.id}) „${f.name}“ · ${sizeText(f.bytes)} · ${f.created_at.slice(0, 16).replace('T', ' ')} · ${FROM[f.device] || f.device}`).join('\n');
 }
 
 /** The self-update preview: a few small files, so the list has something to show.

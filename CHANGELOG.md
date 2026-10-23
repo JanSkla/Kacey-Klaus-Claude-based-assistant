@@ -19,6 +19,34 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.9 — 2026-10-23
+
+**Úložiště — rychlé sdílení souborů mezi zařízeními**
+- A new screen, Úložiště (sidebar DALŠÍ and the phone's Víc, with the file
+  count): any file up from the computer (Nahrát soubory, or dropped on the
+  list) or the phone, down on any device. Kept until deleted — nothing
+  expires. Name, size, when and from which device; search, Nejnovější ·
+  Název · Velikost (remembered per device); tick several to download or
+  delete them at once; Smazat always with Vrátit within a day.
+- Uploads stream to disk ([storage.js](storage.js), `POST /api/storage`, the
+  raw file with its name in headers) one at a time with real progress; a cut
+  or short upload leaves nothing behind, 4 GB a file, the free disk is shown.
+  The listeners no longer cut a request after Node's default 5 minutes, so a
+  long upload from the phone finishes.
+  Table `kacey_file`, files in `STORAGE_DIR` (`data/storage`), live `storage`
+  frames so the other device's list fills in at once and toasts the new file.
+- A picture, video, sound, PDF, text or CSV opens in a náhled (formats in
+  [public/js/core/filekind.js](public/js/core/filekind.js), shared with the
+  server's sandboxed `/view` route); anything else is a download.
+- Offline: the list says so with Zkusit znovu, uploads, deletes and downloads
+  explain why they wait, and an upload cut by a lost connection goes up again
+  by itself once it is back.
+- Kacey reaches it by voice: `app_storage` lists the files, writes a text or
+  a photo from the chat as a file ("pošli mi ten seznam na telefon"),
+  deletes, restores and opens the screen or a file; the persona's new
+  "Úložiště" section. Deleted files and stale `.part`s are purged after a day.
+- Tests: [test/storage.mjs](test/storage.mjs) (`npm run test:storage`).
+
 ## KC 1.0.8 — 2026-10-22
 
 **Opravy a novinky — kalendář, whiteboard, lístečky, štítky**
