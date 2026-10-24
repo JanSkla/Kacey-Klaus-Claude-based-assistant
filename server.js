@@ -1605,6 +1605,10 @@ app.patch('/api/stickies/:id', express.json({ limit: '64kb' }), (req, res) => {
   } catch (err) { stickyError(res, err, 500); }
 });
 
+app.delete('/api/stickies', (req, res) => {
+  try { res.json({ ok: true, stickies: stickies.removeAll({ origin: String(req.query.origin || '').slice(0, 40) }) }); } catch (err) { stickyError(res, { message: 'Lístečky se nepodařilo smazat.' }, 500); }
+});
+
 app.delete('/api/stickies/:id', (req, res) => {
   const note = stickies.remove(req.params.id, { origin: String(req.query.origin || '').slice(0, 40) });
   if (note) res.json({ ok: true, sticky: note });

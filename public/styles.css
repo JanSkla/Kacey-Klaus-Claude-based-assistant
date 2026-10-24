@@ -3449,8 +3449,26 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
 .sticky__bar { flex: none; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 2px 0 12px; cursor: grab; user-select: none; touch-action: none; }
 .sticky.is-dragging .sticky__bar { cursor: grabbing; }
 .sticky__kicker { flex: 1; font-size: 11px; letter-spacing: .06em; color: var(--c); }
-.sticky__confirm { min-height: 26px; padding: 2px 10px; font-size: 12px; }
-.sticky__confirm[hidden] { display: none; }
+/* × asks in a strip under the bar: the .confirm look, small enough for a 180px note. */
+.sticky__ask {
+  flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 0 6px 6px; padding: 8px 8px 8px 10px;
+  background: var(--l2); border-left: 4px solid var(--err); border-bottom: 1px solid var(--err); cursor: default;
+}
+.sticky__ask b { flex: 1; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.sticky__askbtns { display: flex; gap: 6px; margin-left: auto; }
+.sticky__askbtns .btn { min-height: 26px; padding: 2px 10px; font-size: 12px; }
+.sticky.is-asking { border-color: var(--err); border-top-color: var(--c); }
+.sticky.is-asking .sticky__text { opacity: .5; }
+/* Smazat všechny lístečky: the header bin and its question dropping below it (like .mini__drop). */
+.stickyall { position: relative; display: flex; }
+.stickyall__btn:hover, .stickyall__btn[aria-expanded="true"] { color: var(--err); }
+.stickyall__btn[aria-expanded="true"] { border-color: var(--err); }
+.stickyall__drop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 360px;
+  border: 1px solid var(--line2); border-left: 4px solid var(--err); border-bottom-color: var(--err);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .5); gap: 12px;
+}
+.stickyall__drop > span { flex: 1 0 100%; }
 .sticky__x {
   width: 28px; height: 28px; flex: none; display: grid; place-items: center; padding: 0; cursor: pointer;
   background: none; border: 1px solid transparent; color: var(--ink3); font: inherit; font-size: 18px; line-height: 1;

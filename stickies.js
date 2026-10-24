@@ -126,6 +126,16 @@ export function remove(id, { by = 'user', origin = '' } = {}) {
   return note;
 }
 
+/** Smazat všechny lístečky: every open note at once (each kept a day for Vrátit).
+    The notes as they were; one `cleared` frame. */
+export function removeAll({ by = 'user', origin = '' } = {}) {
+  const notes = list();
+  if (!notes.length) return [];
+  open().prepare('UPDATE kacey_sticky SET deleted_at = ? WHERE deleted_at IS NULL').run(now());
+  emit({ event: 'cleared', ids: notes.map((n) => n.id), by, origin });
+  return notes;
+}
+
 /** Vrátit: a note deleted within the day comes back where it was. */
 export function restore(id, { by = 'user', origin = '' } = {}) {
   const r = open().prepare('SELECT * FROM kacey_sticky WHERE sticky_id = ? AND deleted_at IS NOT NULL').get(String(id || ''));

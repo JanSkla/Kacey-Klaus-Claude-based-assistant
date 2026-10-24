@@ -4,9 +4,10 @@
    The header's note button makes one. It floats over whatever view is on
    screen (a fixed layer outside the views), goes where it is dragged by its
    bar, is resized from its corner, and stays put — across views, reloads and
-   desktops — until the owner deletes it: × in the corner, then the
-   "Smazat" that appears beside it. An empty note goes on the first ×.
-   Kacey writes them too (app_sticky).
+   desktops — until the owner deletes it: × in the corner asks "Smazat
+   lísteček?" in a strip under the bar (Nechat · Smazat), every note, until
+   answered. The header's bin, there while any note is, deletes them all —
+   after its own question. Kacey writes them too (app_sticky).
 
    Stored on the server, one row per note (stickies.js, /api/stickies). This
    page sends only the fields that changed — the text debounced, a place or
@@ -156,6 +157,79 @@ function gone(id) {
   paint();
 }
 
+/* ---- Smazat všechny lístečky --------------------------------------------- */
+
+function count(n) { return n === 1 ? '1 lísteček' : n < 5 ? n + ' lístečky' : n + ' lístečků'; }
+
+function askAll(open) {
+  var drop = $('stickyAllDrop'), btn = $('stickyAllBtn');
+  if (!drop) return;
+  if (open && !notes.length) open = false;
+  drop.hidden = !open;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    $('stickyAllTitle').textContent = notes.length === 1 ? 'Smazat lísteček?' : 'Smazat všechny lístečky?';
+    $('stickyAllSub').textContent = count(notes.length) + ' zmizí ze všech stránek i z ostatních počítačů. Hned potom je půjde vrátit.';
+    $('stickyAllGo').textContent = notes.length === 1 ? 'Smazat' : 'Smazat všechny';
+    $('stickyAllKeep').focus();
+  }
+}
+
+/** The header button follows the notes: there while there is any. */
+function paintAll() {
+  var wrap = $('stickyAll');
+  if (!wrap) return;
+  wrap.hidden = !notes.length;
+  if (!notes.length) askAll(false);
+  else if (!$('stickyAllDrop').hidden) askAll(true);
+}
+
+function removeAll() {
+  if (!online) { askAll(false); say('Jsi offline — smazat půjde, až se připojím.'); return; }
+  var go = $('stickyAllGo');
+  go.disabled = true;
+  // What is still on its way out goes first, so Vrátit brings back the last text.
+  Promise.all(Object.keys(dirty).map(function (id) { return flush(id); })).then(function () {
+    return api('?origin=' + ORIGIN, { method: 'DELETE' });
+  }).then(function (out) {
+    var list = out.stickies || [];
+    notes = [];
+    dirty = {};
+    askAll(false);
+    paint();
+    if (list.length) offerBackAll(list);
+  }).catch(function (err) {
+    say(isNetwork(err) ? 'Jsi offline — smazat půjde, až se připojím.' : 'Smazat se nepovedlo — ' + err.message);
+  }).then(function () { go.disabled = false; });
+}
+
+function offerBackAll(list) {
+  say(list.length === 1 ? 'Lísteček smazán.' : 'Smazáno ' + count(list.length) + '.', {
+    label: 'Vrátit',
+    run: function () {
+      Promise.all(list.map(function (n) {
+        return api('/' + encodeURIComponent(n.id) + '/restore', json('POST', {}))
+          .then(function (out) { if (!noteOf(out.sticky.id)) notes.push(out.sticky); });
+      })).then(function () { paint(); }).catch(function (err) {
+        paint();
+        say(isNetwork(err) ? 'Jsi offline — vrátit půjde, až se připojím.' : err.message);
+      });
+    }
+  });
+}
+
+function initAll() {
+  var btn = $('stickyAllBtn');
+  if (!btn) return;
+  btn.addEventListener('click', function () { askAll($('stickyAllDrop').hidden); });
+  $('stickyAllKeep').addEventListener('click', function () { askAll(false); btn.focus(); });
+  $('stickyAllGo').addEventListener('click', removeAll);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('stickyAllDrop').hidden) askAll(false); });
+  document.addEventListener('pointerdown', function (ev) {
+    if (!$('stickyAllDrop').hidden && !ev.target.closest('#stickyAll')) askAll(false);
+  });
+}
+
 function offerBack(note, msg) {
   say(msg, {
     label: 'Vrátit',
@@ -184,10 +258,18 @@ function place(box, n, k) {
 }
 
 function disarm(rec) {
-  clearTimeout(rec.timer);
-  rec.confirm.hidden = true;
+  rec.ask.hidden = true;
+  rec.box.classList.remove('is-asking');
   rec.x.setAttribute('aria-expanded', 'false');
   rec.x.title = 'Smazat lísteček';
+}
+
+function arm(rec) {
+  rec.ask.hidden = false;
+  rec.box.classList.add('is-asking');
+  rec.x.setAttribute('aria-expanded', 'true');
+  rec.x.title = 'Nechat';
+  rec.keep.focus();
 }
 
 function build(n) {
@@ -201,28 +283,26 @@ function build(n) {
   text.addEventListener('input', function () { change(id, { text: text.value }, 600); });
   text.addEventListener('blur', function () { if (dirty[id]) flush(id); });
 
-  var confirm = el('button.btn.btn--sm.btn--dangerfill.sticky__confirm', {
-    type: 'button', hidden: true,
-    onclick: function () { remove(id); }
-  }, 'Smazat');
+  /* × asks first, always — the strip stays until the owner answers. */
+  var keep = el('button.btn.btn--sm', { type: 'button', onclick: function () { disarm(rec); text.focus(); } }, 'Nechat');
+  var ask = el('div.sticky__ask', { role: 'alertdialog', 'aria-label': 'Smazat lísteček?', hidden: true }, [
+    el('b', 'Smazat lísteček?'),
+    el('span.sticky__askbtns', [
+      keep,
+      el('button.btn.btn--sm.btn--dangerfill', { type: 'button', onclick: function () { remove(id); } }, 'Smazat')
+    ])
+  ]);
+  ask.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); disarm(rec); text.focus(); } });
   var x = el('button.sticky__x', {
     type: 'button', 'aria-label': 'Smazat lísteček', title: 'Smazat lísteček', 'aria-expanded': 'false',
-    onclick: function () {
-      if (!text.value.trim()) { remove(id); return; }
-      if (!confirm.hidden) { disarm(rec); return; }
-      confirm.hidden = false;
-      x.setAttribute('aria-expanded', 'true');
-      x.title = 'Nechat';
-      rec.timer = setTimeout(function () { disarm(rec); }, 5000);
-    }
+    onclick: function () { if (ask.hidden) arm(rec); else disarm(rec); }
   }, '×');
 
   var bar = el('div.sticky__bar', [
     el('span.sticky__kicker', 'LÍSTEČEK'),
-    confirm,
     x
   ]);
-  var box = el('div.sticky', { role: 'note', 'data-id': id }, [bar, text]);
+  var box = el('div.sticky', { role: 'note', 'data-id': id }, [bar, ask, text]);
 
   // The one touched comes to the top (moved only when it is not already: moving blurs the text).
   box.addEventListener('pointerdown', function () { if (layer.lastChild !== box) layer.appendChild(box); }, true);
@@ -262,7 +342,7 @@ function build(n) {
     }, 300);
   }).observe(box);
 
-  rec.box = box; rec.text = text; rec.x = x; rec.confirm = confirm;
+  rec.box = box; rec.text = text; rec.x = x; rec.ask = ask; rec.keep = keep;
   return rec;
 }
 
@@ -280,8 +360,9 @@ function paint() {
     if (document.activeElement !== rec.text && rec.text.value !== (n.text || '')) rec.text.value = n.text || '';
   });
   Object.keys(nodes).forEach(function (id) {
-    if (!seen[id]) { clearTimeout(nodes[id].timer); nodes[id].box.remove(); delete nodes[id]; }
+    if (!seen[id]) { nodes[id].box.remove(); delete nodes[id]; }
   });
+  paintAll();
 }
 
 /* ---- frames and the connection ------------------------------------------- */
@@ -310,6 +391,7 @@ export function initStickies() {
   document.body.appendChild(layer);
   var btn = $('stickyBtn');
   if (btn) btn.addEventListener('click', create);
+  initAll();
   bus.on('stickies', onFrame);
   bus.on('conn', onConn);
   window.addEventListener('online', function () { flushAll(); });
