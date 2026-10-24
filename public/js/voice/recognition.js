@@ -10,7 +10,7 @@
    dictation wins — it stops the barge-in listener before taking the device.
    ========================================================================= */
 
-import { state, KIOSK } from '../core/state.js';
+import { state } from '../core/state.js';
 import { t } from '../core/i18n.js';
 import * as dom from '../core/dom.js';
 import { syncOrb } from '../ui/orb.js';
@@ -19,37 +19,42 @@ import { cancelSpeech, primeTTS } from './tts.js';
 import { stopBarge } from './barge.js';
 import { submit } from '../net/protocol.js';
 import { castTranscript } from './voicecast.js';
-import { ServerRecognition, serverSttAvailable, serverSttKnown } from './server-stt.js';
+import { ServerRecognition, serverSttKnown, onSttStatus, refreshSttStatus, micReachable } from './server-stt.js';
 
 /* Whether the browser has the API at all — read by the wake word, the barge-in
    listener and the mic button, none of which can work without it. */
 export var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
-/* Dictation's engine: the browser's own, or — where there is none (the bedside
-   kiosk's Epiphany) or on the kiosk, or when asked with ?stt=server — the
-   server's Whisper (server-stt.js), which has the same shape. Only dictation
-   uses it: the wake word and barge-in need a continuous native engine and keep
-   asking for SR / nativeAvailable(). */
-var PREFER_SERVER = KIOSK || /(?:^|[?&])stt=server(?:&|$)/.test(location.search);
+/* Dictation's engine: Whisper large v3 (or turbo) on Kacey's own machine
+   (server-stt.js, the same shape as a SpeechRecognition) whenever it is ready —
+   the audio never leaves home and Czech comes out better than from the
+   browser. The browser's own engine only while Whisper is down or loading a
+   model, or when asked with ?stt=native. Only dictation uses Whisper: the wake
+   word and barge-in need a continuous native engine and keep asking for SR /
+   nativeAvailable().
+
+   A browser that has the API is not one where it works: Chromium on Linux has
+   webkitSpeechRecognition and answers every utterance with 'network' (it has
+   no Google key). One such failure and this page stops offering it. */
+var PREFER_NATIVE = /(?:^|[?&])stt=native(?:&|$)/.test(location.search);
+var nativeBroken = false;
 function engine() {
-  if (serverSttKnown() && (PREFER_SERVER || !SR)) return ServerRecognition;
-  return SR;
+  if (serverSttKnown() && (!PREFER_NATIVE || !SR || nativeBroken)) return ServerRecognition;
+  return nativeBroken ? null : SR;
 }
-/* Whether Whisper is there is only known after one request; when it is, the
-   mic becomes usable on a page that had no engine at load. */
-function askServerStt(tries) {
-  serverSttAvailable().then(function (ok) {
-    // Not there yet (starting, or slow): ask again for the next ten minutes.
-    if (!ok) { if (tries < 20) setTimeout(function () { askServerStt(tries + 1); }, 30000); return; }
-    if (!dom.micBtn) return;
-    if (!SR) {
+/* The mic follows Whisper's state: usable on a page that had no engine at load
+   once Whisper is ready, and re-labelled when it goes away. */
+onSttStatus(function () {
+  if (!dom.micBtn || recBlocked || !micReachable()) return;
+  if (engine()) {
+    if (dom.micBtn.hasAttribute('data-unavailable')) {
       dom.micBtn.disabled = false;
       dom.micBtn.removeAttribute('data-unavailable');
     }
-    if (!recBlocked) dom.micNote.textContent = t().micHint;
-  });
-}
-askServerStt(0);
+    if (!state.listening) dom.micNote.textContent = t().micHint;
+  }
+});
+refreshSttStatus();
 
 var rec = null;
 var recBlocked = false;    // permission denied / hardware missing -> stop offering it
@@ -159,7 +164,30 @@ function buildRecognition() {
       case 'network':
         state.micDesired = false;
         state.resumeVoiceLoop = false;
-        showAlert(t().errNet);
+        // The browser's engine that cannot reach its service: Whisper from now on.
+        if (r._engine === SR && serverSttKnown()) {
+          nativeBroken = true;
+          flashHint(t().errNativeFallback, false, 5000);
+        } else {
+          showAlert(t().errNet);
+        }
+        break;
+      case 'stt-loading':
+        state.micDesired = false;
+        state.resumeVoiceLoop = false;
+        flashHint(t().errSttLoading, false, 5000);
+        break;
+      case 'no-audio':
+        // A dead input, not a refused one: say so, and leave the button usable.
+        state.micDesired = false;
+        state.resumeVoiceLoop = false;
+        showAlert(t().errNoAudio);
+        break;
+      case 'insecure':
+        recBlocked = true;
+        state.micDesired = false;
+        showAlert(t().errInsecure);
+        disableMic(t().errInsecure);
         break;
       case 'language-not-supported':
         state.micDesired = false;

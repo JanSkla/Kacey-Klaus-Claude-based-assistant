@@ -582,7 +582,27 @@ body[data-view="morning"] .sidenav, body[data-view="proposals"] .sidenav { displ
 .composer__input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--ink); font: inherit; font-size: 16px; padding: 12px 0; }
 .composer__input.is-interim { color: var(--ink3); font-style: italic; }
 .composer .btn { height: 44px; padding: 0 20px; font-size: 14px; }
-.miczone { display: flex; }
+.miczone { display: flex; gap: var(--gap); }
+
+/* Whisper large v3 / turbo, beside the talk button (ui/stt-picker.js): a status
+   line over a two-option .seg, the composer's height and frame. */
+.sttpick {
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  height: 56px; padding: 0 10px; background: var(--l1); border: 1px solid var(--line2);
+}
+.sttpick__head { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; white-space: nowrap; }
+.sttpick__dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--ink3); }
+.sttpick__label { letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+.sttpick__state { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink2); }
+.sttpick__seg .seg__opt { flex: 1 1 0; padding: 2px 10px; font-size: 13px; white-space: nowrap; }
+.sttpick__seg .seg__opt:disabled { cursor: wait; opacity: .45; }
+.sttpick__seg .seg__opt[aria-pressed="true"]:disabled { opacity: 1; background: var(--acc-dim); border-color: var(--acc); color: var(--acc); }
+.sttpick[data-st="ok"] .sttpick__dot { background: var(--ok); }
+.sttpick[data-st="busy"] .sttpick__dot { background: var(--acc); animation: pulseDot 1.4s infinite; }
+.sttpick[data-st="busy"] .sttpick__state { color: var(--acc); }
+.sttpick[data-st="err"] .sttpick__dot { background: var(--err); }
+.sttpick[data-st="err"] .sttpick__state { color: var(--err); }
+.is-embed .sttpick .seg__opt { cursor: default; }
 
 /* =======================================================================
    LISTS — agenda, tasks, journal cards
@@ -1768,8 +1788,18 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .composer__clip { width: 44px; height: 44px; flex-basis: 44px; }
   .composer__input { font-size: 16px; padding: 10px 4px; }
   .composer .btn { height: 44px; padding: 0 14px; }
-  .miczone { display: block; }
+  .miczone { display: flex; gap: 8px; }
   .btn--talk { display: flex; width: 100%; height: auto; min-height: 52px; font-size: 15px; }
+  .miczone .btn--talk { flex: 1 1 auto; width: auto; min-width: 0; }
+  /* The talk button keeps the row; the picker folds to its two options, full
+     height for the thumb, and the state rides as a dot in the chosen one. */
+  .sttpick { flex: 0 0 auto; height: auto; padding: 0; background: none; border: 0; }
+  .sttpick__head { display: none; }
+  .sttpick__seg { flex: 1; }
+  .sttpick__seg .seg__opt { display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 0 10px; font-size: 14px; }
+  .sttpick__seg .seg__opt[aria-pressed="true"]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--on-acc); }
+  .sttpick[data-st="busy"] .seg__opt[aria-pressed="true"]::before { background: var(--acc); animation: pulseDot 1.4s infinite; }
+  .sttpick[data-st="err"] .seg__opt[aria-pressed="true"]::before { background: var(--err); }
 
   /* =====================================================================
      CALENDAR — the month folds into its name; a week strip stands in

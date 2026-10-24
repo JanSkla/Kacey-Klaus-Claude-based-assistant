@@ -17,6 +17,8 @@ Thumbs.db
 # the XTTS python environment (~5 GB) and its audition WAVs — see README
 .venv-xtts/
 voicelab/samples/
+# the Whisper sidecar's chosen model (large-v3 / turbo), written at runtime
+voicelab/stt_state.json
 
 # Kacey's own records now live in klaus_memory's SQLite file (see db.js).
 # data/ remains ignored: it holds the pre-SQLite app-state.json on machines

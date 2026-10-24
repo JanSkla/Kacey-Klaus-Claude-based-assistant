@@ -22,18 +22,64 @@ var END_SILENCE_MS = 1200;      // this much quiet after speech -> the utterance
 var MAX_MS = 20000;             // a request, not a dictation session
 var MIN_SPEECH_MS = 250;        // shorter than this is a cough, not a word
 
-/** Is the server's Whisper there? A yes is cached; a no is not — the sidecar
-    may simply be starting, or slow to answer on a machine that is swapping,
-    and a page that remembered "no" would never dictate until reloaded. */
-var healthy = null;
-export function serverSttAvailable() {
-  if (healthy === true) return Promise.resolve(true);
+var NO_FRAMES_MS = 2500;        // the mic opened but no audio arrived -> the context is dead
+
+/* ---- the sidecar's state -----------------------------------------------
+   Whisper large v3 or its turbo variant; the sidecar holds one at a time and
+   takes a minute to load the other, and during that minute it cannot
+   transcribe. So the state is re-read rather than remembered: every few
+   seconds while a model loads, once a minute otherwise. A page that cached
+   "yes" sent the next utterance into a sidecar that was restarting. */
+
+export var STT_MODELS = ['large-v3', 'turbo'];
+var status = { ok: false, known: false, model: null, choice: null, loading: false, error: '', last: null };
+var listeners = [];
+var pollTimer = 0;
+
+export function sttStatus() { return status; }
+export function onSttStatus(fn) { listeners.push(fn); fn(status); }
+
+function publish(next) {
+  status = Object.assign({}, status, next, { known: true });
+  listeners.forEach(function (fn) { try { fn(status); } catch (e) { console.error('[kacey] stt status listener failed', e); } });
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(refreshSttStatus, status.loading ? 2500 : 60000);
+}
+
+export function refreshSttStatus() {
   return fetch('/api/stt/health', { cache: 'no-store' })
     .then(function (r) { return r.json(); })
-    .then(function (j) { healthy = !!(j && j.ok); return healthy; })
-    .catch(function () { healthy = false; return false; });
+    .then(function (j) {
+      publish({
+        ok: !!(j && j.ok), loading: !!(j && j.loading), error: (j && j.error) || '',
+        model: (j && j.model) || null, choice: (j && (j.choice || j.model)) || null
+      });
+      return status.ok;
+    })
+    .catch(function () { publish({ ok: false, loading: false }); return false; });
 }
-export function serverSttKnown() { return healthy === true; }
+
+/** Ask the sidecar for the other model. Resolves once it has started loading. */
+export function setSttModel(name) {
+  if (STT_MODELS.indexOf(name) === -1) return Promise.reject(new Error('unknown model'));
+  publish({ choice: name, loading: true, ok: false, error: '' });
+  return fetch('/api/stt/model', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name })
+  })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
+    .then(function () { return refreshSttStatus(); })
+    .catch(function (err) { refreshSttStatus(); throw err; });
+}
+
+/** Is the server's Whisper there and ready? Asks now. */
+export function serverSttAvailable() { return refreshSttStatus(); }
+export function serverSttKnown() { return status.ok; }
+
+/** The microphone needs a secure page (https or localhost) — without one the
+    API is simply missing, and that must read as a reason, not a broken mic. */
+export function micReachable() {
+  return !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
 
 function encodeWav(samples, rate) {
   var buf = new ArrayBuffer(44 + samples.length * 2);
@@ -87,6 +133,7 @@ ServerRecognition.prototype._release = function () {
   this._s = null;
   if (!s) return;
   clearTimeout(s.timer);
+  clearInterval(s.watch);
   try { s.proc.disconnect(); } catch (e) {}
   try { s.src.disconnect(); } catch (e) {}
   try { s.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
@@ -95,22 +142,52 @@ ServerRecognition.prototype._release = function () {
 
 ServerRecognition.prototype.start = function () {
   if (this._busy) { var err = new Error('already started'); err.name = 'InvalidStateError'; throw err; }
-  this._busy = true;
   var self = this;
+  if (!micReachable()) {
+    // Async, like every other failure: the caller has to finish start() first.
+    setTimeout(function () { self._emit('error', { error: 'insecure' }); self._emit('end'); }, 0);
+    return;
+  }
+  this._busy = true;
+  /* The audio context is made HERE, inside the tap, and resumed at once. Made
+     after getUserMedia resolved — outside the user gesture — it started
+     suspended in Chrome and Safari: the processor never ran, nothing was
+     recorded, and the no-speech check (which ran inside the processor) never
+     fired either. The button sat on "Poslouchám" for 20 s and then said it
+     heard nothing. That was the dead microphone. */
+  var Ctx = window.AudioContext || window.webkitAudioContext;
+  var ctx;
+  try { ctx = new Ctx(); } catch (e) { ctx = null; }
+  if (ctx && ctx.resume) ctx.resume().catch(function () {});
+  var gen = this._gen;
   navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
     .then(function (stream) {
-      var Ctx = window.AudioContext || window.webkitAudioContext;
-      var ctx = new Ctx();
+      if (gen !== self._gen || !self._busy) {      // aborted while the permission prompt was up
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        if (ctx) ctx.close().catch(function () {});
+        return;
+      }
+      if (!ctx) ctx = new Ctx();
+      if (ctx.state === 'suspended') ctx.resume().catch(function () {});
       var src = ctx.createMediaStreamSource(stream);
       // ScriptProcessor rather than an AudioWorklet: deprecated, but present in
       // every engine this has to run in, WebKitGTK included, and one file.
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var s = self._s = {
         stream: stream, ctx: ctx, src: src, proc: proc, chunks: [], started: Date.now(),
-        floor: null, speechAt: 0, lastLoud: 0, timer: 0, finished: false
+        floor: null, speechAt: 0, lastLoud: 0, timer: 0, watch: 0, frames: 0, finished: false
       };
+      /* The clock, not the audio, decides "nothing was said" and "the mic is
+         dead": both have to fire precisely when no audio arrives. */
+      s.watch = setInterval(function () {
+        if (!self._s || s.finished) return;
+        var now = Date.now();
+        if (!s.frames && now - s.started > NO_FRAMES_MS) { self._fail('no-audio'); return; }
+        if (!s.speechAt && now - s.started > NO_SPEECH_MS) self._fail('no-speech');
+      }, 250);
       proc.onaudioprocess = function (e) {
         if (!self._s || s.finished) return;
+        s.frames++;
         var data = e.inputBuffer.getChannelData(0);
         s.chunks.push(new Float32Array(data));
         var sum = 0;
@@ -125,7 +202,6 @@ ServerRecognition.prototype.start = function () {
           s.lastLoud = now;
         }
         if (s.speechAt && now - s.lastLoud > END_SILENCE_MS) self._finish();
-        else if (!s.speechAt && now - s.started > NO_SPEECH_MS) self._fail('no-speech');
       };
       src.connect(proc);
       proc.connect(ctx.destination);         // WebKit only runs the processor when it is connected
@@ -134,6 +210,8 @@ ServerRecognition.prototype.start = function () {
       self._emit('audiostart');
     })
     .catch(function (err) {
+      if (ctx) ctx.close().catch(function () {});
+      if (gen !== self._gen) return;
       self._busy = false;
       var code = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError') ? 'not-allowed' : 'audio-capture';
       self._emit('error', { error: code });
@@ -164,9 +242,18 @@ ServerRecognition.prototype._finish = function () {
 
   var wav = encodeWav(downsample(chunks, rate), TARGET_RATE);
   var gen = this._gen;
+  var sent = Date.now();
   fetch('/api/stt?lang=' + encodeURIComponent(this.lang || 'cs-CZ'), { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav })
-    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
+    .then(function (r) {
+      return r.json().then(function (j) {
+        if (r.status === 503) { var e = new Error('loading'); e.code = 'stt-loading'; throw e; }
+        if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+        return j;
+      });
+    })
     .then(function (j) {
+      // How long the last sentence took, for the Přepis řeči card.
+      publish({ last: { seconds: (Date.now() - sent) / 1000, model: (j && j.model) || status.model } });
       if (gen !== self._gen) return;           // aborted while Whisper was working
       var text = String((j && j.text) || '').trim();
       if (!text) { self._emit('error', { error: 'no-speech' }); return; }
@@ -175,7 +262,10 @@ ServerRecognition.prototype._finish = function () {
       result.isFinal = true;
       self._emit('result', { resultIndex: 0, results: [result] });
     })
-    .catch(function () { if (gen === self._gen) self._emit('error', { error: 'network' }); })
+    .catch(function (err) {
+      if (err && err.code === 'stt-loading') refreshSttStatus();
+      if (gen === self._gen) self._emit('error', { error: (err && err.code) || 'network' });
+    })
     .then(function () { if (gen !== self._gen) return; self._busy = false; self._emit('end'); });
 };
 

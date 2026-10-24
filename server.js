@@ -1773,13 +1773,44 @@ app.post('/api/voice/stop', (_req, res) => {
  * Whisper sidecar transcribes it on this machine — the audio never leaves it.
  * ------------------------------------------------------------------------- */
 
+/* Whisper large v3, or its turbo variant: the sidecar holds one and the page
+ * switches. A preview shares the running app's sidecar, so it only pretends to
+ * switch — a draft must never change the model the live app dictates with. */
+const STT_MODELS = ['large-v3', 'turbo'];
+const sttPreview = { choice: 'large-v3', until: 0 };
+
 app.get('/api/stt/health', async (_req, res) => {
+  let out;
   try {
     // Generous: on a machine that is swapping the sidecar answers late, not never.
     const r = await fetch(`${STT_URL}/health`, { signal: AbortSignal.timeout(10000) });
-    res.json(await r.json());
+    out = await r.json();
   } catch {
-    res.json({ ok: false });
+    out = { ok: false };
+  }
+  if (PREVIEW) {
+    const loading = Date.now() < sttPreview.until;
+    out = { ...out, ok: !!out.ok && !loading, model: sttPreview.choice, choice: sttPreview.choice, loading, preview: true };
+  }
+  res.json(out);
+});
+
+app.post('/api/stt/model', express.json(), async (req, res) => {
+  const name = String(req.body?.model || '');
+  if (!STT_MODELS.includes(name)) return res.status(400).json({ error: 'neznámý model' });
+  if (PREVIEW) {
+    if (name !== sttPreview.choice) Object.assign(sttPreview, { choice: name, until: Date.now() + 6000 });
+    return res.status(202).json({ choice: name, loading: Date.now() < sttPreview.until });
+  }
+  try {
+    const r = await fetch(`${STT_URL}/model?name=${encodeURIComponent(name)}`, { method: 'POST', signal: AbortSignal.timeout(10000) });
+    const out = await r.json();
+    if (!r.ok) throw new Error(out.error || `STT ${r.status}`);
+    log(`stt: switching to ${name}`);
+    res.status(202).json(out);
+  } catch (err) {
+    log(`stt switch failed: ${err.message}`);
+    res.status(502).json({ error: `Přepis řeči se nepřepnul (${err.message})` });
   }
 });
 
@@ -1793,8 +1824,10 @@ app.post('/api/stt', express.raw({ type: ['audio/*', 'application/octet-stream']
       body: req.body, signal: AbortSignal.timeout(60000),
     });
     const out = await r.json();
+    // Loading the other model: the page says so and tries the browser's engine.
+    if (r.status === 503) return res.status(503).json({ error: 'Přepis řeči načítá model', loading: true });
     if (!r.ok) throw new Error(out.error || `STT ${r.status}`);
-    log(`stt: ${out.audio_seconds}s -> ${JSON.stringify(out.text).slice(0, 80)} in ${Date.now() - started} ms`);
+    log(`stt: ${out.model || ''} ${out.audio_seconds}s -> ${JSON.stringify(out.text).slice(0, 80)} in ${Date.now() - started} ms`);
     res.json(out);
   } catch (err) {
     log(`stt failed: ${err.message}`);

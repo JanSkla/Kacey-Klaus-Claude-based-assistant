@@ -267,6 +267,18 @@
         <button type="button" class="btn btn--talk" id="mic" aria-pressed="false" aria-label="Start talking">
           <span class="dot" aria-hidden="true"></span><span id="micLabel">Mluvit</span>
         </button>
+        <!-- Who turns speech into text: Whisper large v3 or turbo on kaceybody (ui/stt-picker.js). -->
+        <div class="sttpick" id="sttPick" role="group" aria-labelledby="sttPickLabel" data-st="off">
+          <span class="sttpick__head">
+            <span class="sttpick__dot" aria-hidden="true"></span>
+            <span class="sttpick__label" id="sttPickLabel">Whisper</span>
+            <span class="sttpick__state" id="sttPickState" aria-live="polite">—</span>
+          </span>
+          <span class="seg sttpick__seg">
+            <button type="button" class="seg__opt" data-stt-model="large-v3" aria-pressed="false" title="Nejpřesnější, hlavně v češtině — přepis trvá déle">large v3</button>
+            <button type="button" class="seg__opt" data-stt-model="turbo" aria-pressed="false" title="Skoro stejně přesný a několikrát rychlejší">turbo</button>
+          </span>
+        </div>
         <p class="miczone__note sr-only" id="micNote"></p>
       </div>
     </div>

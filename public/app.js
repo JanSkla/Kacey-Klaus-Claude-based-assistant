@@ -86,6 +86,7 @@ import { superviseWake, applyWakeUI, toggleWake, restoreWakePref } from './js/vo
 import { initVoiceWake, openVoicePanel } from './js/voice/wake-panel.js';
 import { initTheme } from './js/ui/theme.js';
 import { initVoicePicker } from './js/ui/voice-picker.js';
+import { initSttPicker } from './js/ui/stt-picker.js';
 import {
   submit, interrupt, startTransport, stopTransport, resumeTransport, askAside
 } from './js/net/protocol.js';
@@ -163,6 +164,7 @@ if (EMBED) { state.muted = true; document.documentElement.classList.add('is-embe
    ======================================================================= */
 
 initVoicePicker();
+initSttPicker();
 initAttachments();
 initVoiceWake();
 initTheme();           // restores the hue, wires the presets, paints once
