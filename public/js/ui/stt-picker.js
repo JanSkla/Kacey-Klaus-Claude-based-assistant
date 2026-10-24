@@ -1,15 +1,16 @@
 /* =========================================================================
-   Přepis řeči — Whisper large v3 or turbo, beside the talk button.
+   Přepis řeči — Whisper large v3 or turbo, a row in Controller → Hlas.
+   Not beside the talk button: the mic stays one button on the home screen.
 
    The sidecar on kaceybody holds one of the two; switching drops it and loads
    the other, which takes a minute, and meanwhile dictation falls back to the
    browser's engine (recognition.js engine()). This only shows the state the
    sidecar reports (server-stt.js polls it) and asks for the other model.
 
-     ok    green dot  "připraveno" / "věta za 2,4 s"
-     busy  accent, pulsing  "načítám turbo…", both options held
-     off   grey  "nedostupný" — Whisper is not running
-     err   red   the chosen model would not load (it fell back to large v3)
+     ok    --ok  "připraveno" / "věta za 2,4 s"
+     busy  --acc, pulsing  "načítám turbo…", both options held
+     off   --ink2  "nedostupný" — Whisper is not running
+     err   --err  the chosen model would not load (it fell back to large v3)
    ========================================================================= */
 
 import { onSttStatus, setSttModel, STT_MODELS } from '../voice/server-stt.js';
@@ -18,7 +19,7 @@ import { flashHint, showAlert } from './log.js';
 import { say } from './toast.js';
 
 var NAMES = { 'large-v3': 'large v3', turbo: 'turbo' };
-var box, stateEl, opts;
+var box, stateEl, metaEl, opts;
 var wasLoading = false;
 var asked = null;            // the model this page asked for, to confirm it once loaded
 
@@ -48,7 +49,7 @@ function render(s) {
   }
   box.dataset.st = st;
   stateEl.textContent = text;
-  box.title = title;
+  metaEl.textContent = title;
   opts.forEach(function (b) {
     var name = b.getAttribute('data-stt-model');
     b.setAttribute('aria-pressed', String(name === held));
@@ -81,6 +82,7 @@ export function initSttPicker() {
   box = document.getElementById('sttPick');
   if (!box) return;
   stateEl = document.getElementById('sttPickState');
+  metaEl = document.getElementById('sttPickMeta');
   opts = Array.prototype.slice.call(box.querySelectorAll('[data-stt-model]'));
   opts.forEach(function (b) {
     b.addEventListener('click', function () {

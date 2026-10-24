@@ -582,27 +582,7 @@ body[data-view="morning"] .sidenav, body[data-view="proposals"] .sidenav { displ
 .composer__input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--ink); font: inherit; font-size: 16px; padding: 12px 0; }
 .composer__input.is-interim { color: var(--ink3); font-style: italic; }
 .composer .btn { height: 44px; padding: 0 20px; font-size: 14px; }
-.miczone { display: flex; gap: var(--gap); }
-
-/* Whisper large v3 / turbo, beside the talk button (ui/stt-picker.js): a status
-   line over a two-option .seg, the composer's height and frame. */
-.sttpick {
-  display: flex; flex-direction: column; justify-content: center; gap: 4px;
-  height: 56px; padding: 0 10px; background: var(--l1); border: 1px solid var(--line2);
-}
-.sttpick__head { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; white-space: nowrap; }
-.sttpick__dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--ink3); }
-.sttpick__label { letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
-.sttpick__state { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink2); }
-.sttpick__seg .seg__opt { flex: 1 1 0; padding: 2px 10px; font-size: 13px; white-space: nowrap; }
-.sttpick__seg .seg__opt:disabled { cursor: wait; opacity: .45; }
-.sttpick__seg .seg__opt[aria-pressed="true"]:disabled { opacity: 1; background: var(--acc-dim); border-color: var(--acc); color: var(--acc); }
-.sttpick[data-st="ok"] .sttpick__dot { background: var(--ok); }
-.sttpick[data-st="busy"] .sttpick__dot { background: var(--acc); animation: pulseDot 1.4s infinite; }
-.sttpick[data-st="busy"] .sttpick__state { color: var(--acc); }
-.sttpick[data-st="err"] .sttpick__dot { background: var(--err); }
-.sttpick[data-st="err"] .sttpick__state { color: var(--err); }
-.is-embed .sttpick .seg__opt { cursor: default; }
+.miczone { display: flex; }
 
 /* =======================================================================
    LISTS — agenda, tasks, journal cards
@@ -1118,6 +1098,17 @@ button.rblock:hover { filter: brightness(1.3); }
 .srow__state.is-acc { color: var(--acc); }
 .srow__last { margin: 10px 0 0; font-size: 13px; color: var(--ink3); }
 .srow__note { margin: 10px 0 0; max-width: 60ch; font-size: 14px; line-height: 1.6; color: var(--ink2); }
+
+/* Přepis řeči: Whisper large v3 / turbo (ui/stt-picker.js) — an .srow with a
+   two-option .seg where the switch would be; the state says how it is going. */
+.sttpick__seg { flex: 0 0 auto; }
+.sttpick__seg .seg__opt { white-space: nowrap; }
+.sttpick__seg .seg__opt:disabled { cursor: wait; opacity: .45; }
+.sttpick__seg .seg__opt[aria-pressed="true"]:disabled { opacity: 1; background: var(--acc-dim); border-color: var(--acc); color: var(--acc); }
+.sttpick[data-st="ok"] .sttpick__state { color: var(--ok); }
+.sttpick[data-st="busy"] .sttpick__state { color: var(--acc); animation: pulseDot 1.4s infinite; }
+.sttpick[data-st="err"] .sttpick__state { color: var(--err); }
+.is-embed .sttpick .seg__opt { cursor: default; }
 
 .meter { display: flex; align-items: flex-end; gap: 3px; height: 28px; margin-top: 12px; }
 .meter__bar { flex: 1; height: 7%; min-height: 2px; background: var(--line2); transition: height 60ms linear; }
@@ -1788,18 +1779,12 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .composer__clip { width: 44px; height: 44px; flex-basis: 44px; }
   .composer__input { font-size: 16px; padding: 10px 4px; }
   .composer .btn { height: 44px; padding: 0 14px; }
-  .miczone { display: flex; gap: 8px; }
+  .miczone { display: block; }
   .btn--talk { display: flex; width: 100%; height: auto; min-height: 52px; font-size: 15px; }
-  .miczone .btn--talk { flex: 1 1 auto; width: auto; min-width: 0; }
-  /* The talk button keeps the row; the picker folds to its two options, full
-     height for the thumb, and the state rides as a dot in the chosen one. */
-  .sttpick { flex: 0 0 auto; height: auto; padding: 0; background: none; border: 0; }
-  .sttpick__head { display: none; }
-  .sttpick__seg { flex: 1; }
-  .sttpick__seg .seg__opt { display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 0 10px; font-size: 14px; }
-  .sttpick__seg .seg__opt[aria-pressed="true"]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--on-acc); }
-  .sttpick[data-st="busy"] .seg__opt[aria-pressed="true"]::before { background: var(--acc); animation: pulseDot 1.4s infinite; }
-  .sttpick[data-st="err"] .seg__opt[aria-pressed="true"]::before { background: var(--err); }
+  /* Přepis řeči: the two options drop under the text, full width for the thumb. */
+  .sttpick { flex-wrap: wrap; }
+  .sttpick__seg { display: flex; flex: 1 1 100%; }
+  .sttpick__seg .seg__opt { flex: 1 1 0; min-height: 44px; }
 
   /* =====================================================================
      CALENDAR — the month folds into its name; a week strip stands in
