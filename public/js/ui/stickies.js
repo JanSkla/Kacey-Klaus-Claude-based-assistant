@@ -6,8 +6,8 @@
    bar, is resized from its corner, and stays put — across views, reloads and
    desktops — until the owner deletes it: × in the corner asks "Smazat
    lísteček?" in a strip under the bar (Nechat · Smazat), every note, until
-   answered. The header's bin, there while any note is, deletes them all —
-   after its own question. Kacey writes them too (app_sticky).
+   answered. The header's bin, left of the note button and dimmed while there
+   is no note, deletes them all — after its own question. Kacey writes them too (app_sticky).
 
    Stored on the server, one row per note (stickies.js, /api/stickies). This
    page sends only the fields that changed — the text debounced, a place or
@@ -175,11 +175,12 @@ function askAll(open) {
   }
 }
 
-/** The header button follows the notes: there while there is any. */
+/** The header bin stays put (nothing beside it moves) and follows the notes: dimmed while there is none. */
 function paintAll() {
-  var wrap = $('stickyAll');
-  if (!wrap) return;
-  wrap.hidden = !notes.length;
+  var btn = $('stickyAllBtn');
+  if (!btn) return;
+  btn.disabled = !notes.length;
+  btn.title = notes.length ? 'Smazat všechny lístečky' : 'Žádné lístečky ke smazání';
   if (!notes.length) askAll(false);
   else if (!$('stickyAllDrop').hidden) askAll(true);
 }

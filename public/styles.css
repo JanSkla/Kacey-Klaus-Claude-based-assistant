@@ -3461,7 +3461,8 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
 .sticky.is-asking .sticky__text { opacity: .5; }
 /* Smazat všechny lístečky: the header bin and its question dropping below it (like .mini__drop). */
 .stickyall { position: relative; display: flex; }
-.stickyall__btn:hover, .stickyall__btn[aria-expanded="true"] { color: var(--err); }
+.stickyall__btn:hover:not(:disabled), .stickyall__btn[aria-expanded="true"] { color: var(--err); }
+.stickyall__btn:disabled { opacity: .45; cursor: default; background: var(--l2); color: var(--ink2); }
 .stickyall__btn[aria-expanded="true"] { border-color: var(--err); }
 .stickyall__drop {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 360px;
