@@ -33,6 +33,7 @@ export var state = {
   conn: 'connecting',      // connecting | online | offline
   streaming: false,        // a reply is in flight
   listening: false,        // recognition is actually running
+  transcribing: false,     // the utterance is over and Whisper is writing it down
   micDesired: false,       // the user wants the mic on
   resumeVoiceLoop: false,  // last turn came from voice -> re-open the mic after TTS
   ttsPending: 0,           // utterances queued/being spoken

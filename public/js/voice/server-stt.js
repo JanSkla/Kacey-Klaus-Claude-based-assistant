@@ -24,6 +24,16 @@ var MIN_SPEECH_MS = 250;        // shorter than this is a cough, not a word
 
 var NO_FRAMES_MS = 2500;        // the mic opened but no audio arrived -> the context is dead
 
+/* Loudness, as the RMS of one buffer. The gate that says "speech" sits a few
+   times above the room but never above GATE_MAX: a fixed 0.012 floor, or a
+   floor taken as the loudest of the first 300 ms, was above a quiet laptop mic
+   or above anyone who started talking at once — the gate never opened, the
+   recording was thrown away and the page said "Nic jsem neslyšela". */
+var GATE_MIN = 0.005;
+var GATE_MAX = 0.02;
+var SEND_PEAK = 0.003;          // anything this loud goes to Whisper, gate or not: its VAD decides
+var SILENT_PEAK = 0.0003;       // never louder than this -> a muted or wrong input, not a quiet room
+
 /* ---- the sidecar's state -----------------------------------------------
    Whisper large v3 or its turbo variant; the sidecar holds one at a time and
    takes a minute to load the other, and during that minute it cannot
@@ -118,7 +128,8 @@ export function ServerRecognition() {
   this.continuous = false;
   this.interimResults = false;
   this.maxAlternatives = 1;
-  this.onstart = this.onaudiostart = this.onspeechstart = this.onresult = this.onerror = this.onend = null;
+  this.onstart = this.onaudiostart = this.onspeechstart = this.onspeechend = this.onresult = this.onerror = this.onend = null;
+  this.onlevel = null;           // not in Web Speech: the mic's live loudness 0–1, for the orb
   this._busy = false;
   this._gen = 0;                 // bumped by abort(): a transcript arriving later is dropped
 }
@@ -138,6 +149,7 @@ ServerRecognition.prototype._release = function () {
   try { s.src.disconnect(); } catch (e) {}
   try { s.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
   try { s.ctx.close(); } catch (e) {}
+  this._emit('level', { level: 0 });
 };
 
 ServerRecognition.prototype.start = function () {
@@ -160,8 +172,11 @@ ServerRecognition.prototype.start = function () {
   try { ctx = new Ctx(); } catch (e) { ctx = null; }
   if (ctx && ctx.resume) ctx.resume().catch(function () {});
   var gen = this._gen;
-  navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+  var held = null;
+  // autoGainControl on: a laptop's built-in mic on Linux comes in very quiet.
+  navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
     .then(function (stream) {
+      held = stream;
       if (gen !== self._gen || !self._busy) {      // aborted while the permission prompt was up
         stream.getTracks().forEach(function (t) { t.stop(); });
         if (ctx) ctx.close().catch(function () {});
@@ -169,21 +184,38 @@ ServerRecognition.prototype.start = function () {
       }
       if (!ctx) ctx = new Ctx();
       if (ctx.state === 'suspended') ctx.resume().catch(function () {});
-      var src = ctx.createMediaStreamSource(stream);
+      var src;
+      try {
+        src = ctx.createMediaStreamSource(stream);
+      } catch (e) {
+        // Firefox will not join a mic and a context running at different
+        // rates: make the context again at the mic's rate.
+        var track = stream.getAudioTracks()[0];
+        var rate = track && track.getSettings ? track.getSettings().sampleRate : 0;
+        ctx.close().catch(function () {});
+        ctx = rate ? new Ctx({ sampleRate: rate }) : new Ctx();
+        if (ctx.state === 'suspended') ctx.resume().catch(function () {});
+        src = ctx.createMediaStreamSource(stream);
+      }
       // ScriptProcessor rather than an AudioWorklet: deprecated, but present in
       // every engine this has to run in, WebKitGTK included, and one file.
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var s = self._s = {
         stream: stream, ctx: ctx, src: src, proc: proc, chunks: [], started: Date.now(),
-        floor: null, speechAt: 0, lastLoud: 0, timer: 0, watch: 0, frames: 0, finished: false
+        floor: null, peak: 0, speechAt: 0, lastLoud: 0, timer: 0, watch: 0, frames: 0, finished: false
       };
       /* The clock, not the audio, decides "nothing was said" and "the mic is
-         dead": both have to fire precisely when no audio arrives. */
+         dead": both have to fire precisely when no audio arrives. After the
+         no-speech wait, anything that was louder than silence still goes to
+         Whisper — a quiet voice is not no voice. */
       s.watch = setInterval(function () {
         if (!self._s || s.finished) return;
         var now = Date.now();
         if (!s.frames && now - s.started > NO_FRAMES_MS) { self._fail('no-audio'); return; }
-        if (!s.speechAt && now - s.started > NO_SPEECH_MS) self._fail('no-speech');
+        if (!s.speechAt && now - s.started > NO_SPEECH_MS) {
+          if (s.peak >= SEND_PEAK) self._finish();
+          else self._fail(s.peak < SILENT_PEAK ? 'no-audio' : 'no-speech');
+        }
       }, 250);
       proc.onaudioprocess = function (e) {
         if (!self._s || s.finished) return;
@@ -194,9 +226,13 @@ ServerRecognition.prototype.start = function () {
         for (var i = 0; i < data.length; i++) sum += data[i] * data[i];
         var rms = Math.sqrt(sum / data.length);
         var now = Date.now();
-        // The first ~300 ms set the room's noise floor; speech is well above it.
-        if (now - s.started < 300) { s.floor = s.floor === null ? rms : Math.max(s.floor, rms); return; }
-        var gate = Math.max(0.012, (s.floor || 0) * 3);
+        if (rms > s.peak) s.peak = rms;
+        // What the orb shows: the mic itself, so a dead one is seen at once.
+        self._emit('level', { level: Math.min(1, Math.sqrt(rms) * 3.2) });
+        // The first ~300 ms set the room's noise floor — its quietest buffer,
+        // so someone who starts talking at once does not raise it.
+        if (now - s.started < 300) { s.floor = s.floor === null ? rms : Math.min(s.floor, rms); return; }
+        var gate = Math.min(GATE_MAX, Math.max(GATE_MIN, (s.floor || 0) * 3));
         if (rms > gate) {
           if (!s.speechAt) { s.speechAt = now; self._emit('speechstart'); }
           s.lastLoud = now;
@@ -210,7 +246,12 @@ ServerRecognition.prototype.start = function () {
       self._emit('audiostart');
     })
     .catch(function (err) {
-      if (ctx) ctx.close().catch(function () {});
+      // Failed after the mic opened (the context would not take it): let go of it.
+      if (self._s) self._release();
+      else {
+        if (held) held.getTracks().forEach(function (t) { t.stop(); });
+        if (ctx) ctx.close().catch(function () {});
+      }
       if (gen !== self._gen) return;
       self._busy = false;
       var code = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError') ? 'not-allowed' : 'audio-capture';
@@ -233,12 +274,20 @@ ServerRecognition.prototype._finish = function () {
   var s = this._s;
   if (!s || s.finished) return;
   s.finished = true;
-  var spoke = s.speechAt && (s.lastLoud - s.speechAt >= MIN_SPEECH_MS);
+  // A word the gate missed is still worth sending; only silence is not.
+  var spoke = (s.speechAt && (s.lastLoud - s.speechAt >= MIN_SPEECH_MS)) || s.peak >= SEND_PEAK;
   var rate = s.ctx.sampleRate;
   var chunks = s.chunks;
+  var dead = s.peak < SILENT_PEAK;
   this._release();
   var self = this;
-  if (!spoke) { this._busy = false; this._emit('error', { error: 'no-speech' }); this._emit('end'); return; }
+  if (!spoke) {
+    this._busy = false;
+    this._emit('error', { error: dead ? 'no-audio' : 'no-speech' });
+    this._emit('end');
+    return;
+  }
+  this._emit('speechend');                    // listening is over; Whisper is writing it down
 
   var wav = encodeWav(downsample(chunks, rate), TARGET_RATE);
   var gen = this._gen;

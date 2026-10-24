@@ -47,6 +47,16 @@ export function syncOrb() {
    reduced — so the idle page costs nothing. */
 var rafId = 0;
 
+/* While Whisper records, the orb shows the microphone itself rather than the
+   pseudo-noise: a mic that hears nothing leaves it still, and that is the one
+   thing the owner needs to see. The browser's own engine gives no level, so
+   there the envelope stays. */
+var micLevel = 0;
+var micAt = 0;
+var shown = 0;
+
+export function setMicLevel(v) { micLevel = v; micAt = Date.now(); }
+
 function ampActive() {
   return !dom.reduceMotion.matches &&
     !document.hidden &&
@@ -64,6 +74,13 @@ function ampTick(ts) {
     0.06 * Math.sin(s * (19.7 * fast + 3.1) + 0.4);
   if (v < 0) v = 0; else if (v > 1) v = 1;
   if (current === 'listening') v *= 0.55;
+  if (current === 'listening' && !state.transcribing && Date.now() - micAt < 600) {
+    // Up fast, down slow: a word reads as one swell, not a flicker.
+    shown += (micLevel - shown) * (micLevel > shown ? 0.5 : 0.12);
+    v = shown;
+  } else {
+    shown = 0;
+  }
   dom.orbAmp.style.setProperty('--amp', v.toFixed(3));
   // The HUD activity meter reads the same envelope the orb does — one source
   // of truth, so the bars can never disagree with what the orb is showing.

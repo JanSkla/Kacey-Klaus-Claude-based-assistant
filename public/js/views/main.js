@@ -82,6 +82,7 @@ function paintRail() {
   $('stateBig').title = words[1];
 
   $('listeningStrip').hidden = !state.listening;
+  $('listeningStrip').toggleAttribute('data-busy', !!state.transcribing);
   $('micLabel').textContent = state.listening ? 'Stop' : 'Mluvit';
   $('mic').setAttribute('aria-pressed', String(state.listening));
 

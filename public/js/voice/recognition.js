@@ -13,7 +13,7 @@
 import { state } from '../core/state.js';
 import { t } from '../core/i18n.js';
 import * as dom from '../core/dom.js';
-import { syncOrb } from '../ui/orb.js';
+import { syncOrb, setMicLevel } from '../ui/orb.js';
 import { showAlert, flashHint } from '../ui/log.js';
 import { cancelSpeech, primeTTS } from './tts.js';
 import { stopBarge } from './barge.js';
@@ -100,6 +100,14 @@ function buildRecognition() {
 
   r.onaudiostart = function () { cancelSpeech(); };      // user talks -> we shut up
   r.onspeechstart = function () { cancelSpeech(); };
+  // Whisper only: the orb follows the mic, and once the utterance is sent the
+  // strip says it is being written down — on the CPU that takes seconds.
+  r.onlevel = function (ev) { setMicLevel(ev.level || 0); };
+  r.onspeechend = function () {
+    if (r._engine !== ServerRecognition) return;
+    state.transcribing = true;
+    syncOrb();
+  };
 
   r.onresult = function (ev) {
     var finalText = '', interim = '';
@@ -237,6 +245,7 @@ export function clearStaleComposer() {
 
 function resetMicUI() {
   state.listening = false;
+  state.transcribing = false;
   dom.micBtn.setAttribute('aria-pressed', 'false');
   dom.micBtn.setAttribute('aria-label', t().micStart);
   if (!recBlocked && engine()) dom.micNote.textContent = t().micHint;

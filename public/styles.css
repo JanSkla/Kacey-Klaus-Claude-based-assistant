@@ -546,6 +546,10 @@ body[data-view="morning"] .sidenav, body[data-view="proposals"] .sidenav { displ
 .status__hint.is-busy { color: var(--acc); }
 .status__alert { margin: 0; padding: 10px 24px; font-size: 14px; color: var(--err); border-top: 1px solid var(--err); background: var(--l2); }
 .listening { margin: 0; padding: 10px 24px; font-size: 14px; color: var(--acc); border-top: 1px solid var(--line); background: var(--acc-dim); }
+/* Whisper has the utterance: the strip says so (pulsing) instead of "Poslouchám". */
+.listening__busy { display: none; animation: pulseDot 1.4s ease-in-out infinite; }
+.listening[data-busy] .listening__hear { display: none; }
+.listening[data-busy] .listening__busy { display: inline; }
 
 /* attachments ------------------------------------------------------------ */
 .attachstrip {
