@@ -615,7 +615,12 @@ be overwritten by another's stale list. So the page
 that changed (`PATCH /api/stickies/:id`), keeps unsent ones while offline, and
 reloads the list on a `stickies` frame that is not its own echo (`origin`).
 Kacey's `app_sticky` writes through the same module. A deleted note keeps its
-row a day for Vrátit; at most 12.
+row a day for Vrátit; at most 12. Smazat všechny (`DELETE /api/stickies`)
+stamps every open note with one `deleted_at` and sends one `cleared` frame;
+its Vrátit (`POST /api/stickies/restore`, `ids`) brings back as many as fit in
+one transaction and one `restored` frame. That shared timestamp is also what
+Kacey's `restore` uses to find "the last delete". Her `clear` refuses without
+`sure: true`, which the persona sets only after the owner says yes.
 
 ### Úložiště
 

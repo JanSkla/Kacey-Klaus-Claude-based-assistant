@@ -1,6 +1,7 @@
 // Lístečky — stickies.js (sticky notes in the database: make, change, delete,
-// Vrátit, the limit, finding one by its words), the draft's settings.stickies
-// moved into the table (appstate.js), and Kacey's app_sticky / app_read.
+// Smazat všechny and its Vrátit, the limit, finding one by its words), the
+// draft's settings.stickies moved into the table (appstate.js), and Kacey's
+// app_sticky (clear only after a yes) / app_read.
 // Throwaway database.
 // Run: node test/stickies.mjs
 
@@ -115,6 +116,51 @@ await test('at most twelve: the thirteenth is refused, and so is a Vrátit over 
   assert.throws(() => st.restore(first.id), /nevejde/);
 });
 
+await test('Smazat všechny: every note goes in one frame, and Vrátit brings the batch back where it was', () => {
+  clear();
+  events.length = 0;
+  assert.deepEqual(st.removeAll(), [], 'nothing to delete, no frame');
+  assert.equal(events.length, 0);
+  const a = st.create({ text: 'První', x: 10, y: 20 });
+  const b = st.create({ text: 'Druhý', by: 'kacey' });
+  events.length = 0;
+  const order = st.list().map((n) => n.id);
+  const gone = st.removeAll({ origin: 'p1' });
+  assert.deepEqual(gone.map((n) => n.id), order);
+  assert.equal(st.list().length, 0);
+  assert.deepEqual(events, [{ event: 'cleared', ids: order, by: 'user', origin: 'p1' }]);
+  const back = st.restoreMany([b.id, a.id, a.id, 'nope'], { origin: 'p1' });
+  assert.deepEqual(back.map((n) => n.id), order, 'in the list order, once each');
+  assert.deepEqual([st.get(a.id).x, st.get(a.id).y], [10, 20], 'where it was');
+  assert.deepEqual(events.at(-1), { event: 'restored', ids: order, by: 'user', origin: 'p1' });
+  assert.throws(() => st.restoreMany([a.id]), /vrátit nejde/, 'not twice');
+  assert.throws(() => st.restoreMany([]), /vrátit nejde/);
+});
+
+await test('Vrátit after Smazat všechny brings back only as many as fit', () => {
+  clear();
+  for (let i = 0; i < 3; i++) st.create({ text: 'Starý ' + i });
+  const ids = st.removeAll().map((n) => n.id);
+  for (let i = 0; i < st.MAX - 1; i++) st.create({ text: 'Nový ' + i });
+  const back = st.restoreMany(ids);
+  assert.deepEqual(back.map((n) => n.id), [ids[0]], 'the first in the list order');
+  assert.equal(st.list().length, st.MAX);
+  assert.throws(() => st.restoreMany(ids), /nevejde/);
+});
+
+await test('restoreLast brings back the last delete: one note, or the whole cleared batch', () => {
+  clear();
+  assert.throws(() => st.restoreLast(), /Žádný smazaný/);
+  const a = st.create({ text: 'A' });
+  st.create({ text: 'B' });
+  st.create({ text: 'C' });
+  st.remove(a.id);
+  db.open().prepare('UPDATE kacey_sticky SET deleted_at = ? WHERE sticky_id = ?').run(new Date(Date.now() - 60000).toISOString(), a.id);
+  st.removeAll();
+  assert.deepEqual(st.restoreLast().map((n) => n.text).sort(), ['B', 'C'], 'the batch, not the older single one');
+  assert.deepEqual(st.restoreLast().map((n) => n.text), ['A']);
+});
+
 await test('a note is found by its id or its words; an unclear reference finds nothing', () => {
   clear();
   const mum = st.create({ text: 'Zavolat mámě' });
@@ -164,6 +210,37 @@ await test('app_sticky is allowed, and adds, rewrites and deletes a note', async
   assert.match(text(removed), /Vrátit/);
   assert.deepEqual(st.list().map((x) => x.id), [n.id]);
   assert.deepEqual([events.at(-1).event, events.at(-1).by], ['deleted', 'kacey']);
+});
+
+await test('app_sticky clear asks first, deletes only with sure, and restore brings them back', async () => {
+  clear();
+  assert.match(text(await call('app_sticky', { action: 'clear', sure: true })), /žádné lístečky nejsou/);
+  st.create({ text: 'Zavolat mámě' });
+  st.create({ text: 'PIN k Wi-Fi' });
+  st.create({ text: 'Koupit mléko' });
+  events.length = 0;
+  const asked = await call('app_sticky', { action: 'clear' });
+  assert.ok(!asked.isError);
+  assert.match(text(asked), /Nic jsem nesmazala/);
+  assert.match(text(asked), /„Smazat všechny 3 lístečky\?“/);
+  assert.match(text(asked), /Zavolat mámě/, 'she sees what would go');
+  assert.equal(st.list().length, 3, 'nothing deleted without a yes');
+  assert.equal(events.length, 0);
+
+  const done = await call('app_sticky', { action: 'clear', sure: true });
+  assert.ok(!done.isError, text(done));
+  assert.match(text(done), /Smazáno 3 lístečky/);
+  assert.equal(st.list().length, 0);
+  assert.deepEqual([events.at(-1).event, events.at(-1).by, events.at(-1).ids.length], ['cleared', 'kacey', 3]);
+
+  const back = await call('app_sticky', { action: 'restore' });
+  assert.ok(!back.isError, text(back));
+  assert.match(text(back), /Vráceno 3 lístečky/);
+  assert.equal(st.list().length, 3);
+  assert.deepEqual([events.at(-1).event, events.at(-1).by], ['restored', 'kacey']);
+
+  for (let i = 0; i < 2; i++) st.create({ text: 'další ' + i });
+  assert.match(text(await call('app_sticky', { action: 'clear' })), /„Smazat všech 5 lístečků\?“/);
 });
 
 await test('app_sticky says when there is no room', async () => {

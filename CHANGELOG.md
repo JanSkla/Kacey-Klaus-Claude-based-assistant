@@ -19,6 +19,28 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.10 — 2026-10-24
+
+**Lístečky — potvrzení mazání a smazat vše**
+- × on a sticky note always asks first ("Smazat lísteček?" · Nechat ·
+  Smazat), an empty note too; Escape keeps it.
+- A new bin in the header, left of the note button, deletes every note at
+  once after its own question ("Smazat všechny lístečky?", with the count).
+  It stays put and is dimmed while there is no note. Vrátit brings the whole
+  batch back in one request (`POST /api/stickies/restore`), as many as fit
+  under the 12.
+- [stickies.js](stickies.js): `removeAll` (one timestamp, one `cleared`
+  frame), `restoreMany`, `restoreLast`; route `DELETE /api/stickies`.
+- Kacey by voice: `app_sticky` `clear` (only with `sure: true`, after the
+  owner's yes; the persona has her ask first) and `restore` (the last
+  delete: one note or the whole batch). Her clear toasts on every desktop
+  with Vrátit.
+- Offline and errors: deleting refuses with "Jsi offline — smazat půjde, až
+  se připojím."; a failed delete-all closes the panel and says why. Hidden on
+  a phone, like the notes.
+- Tests: Smazat všechny, its Vrátit, the limit and `app_sticky` clear /
+  restore in [test/stickies.mjs](test/stickies.mjs).
+
 ## KC 1.0.9 — 2026-10-23
 
 **Úložiště — rychlé sdílení souborů mezi zařízeními**

@@ -210,6 +210,11 @@ Vidíš je v `app_read` (LÍSTEČKY).
   `app_sticky` s `action: "add"`. Text krátce, jeho slovy. Objeví se vpravo nahoře.
 - „Přepiš ten lísteček o servisu“ je `edit`, „smaž lísteček s nákupem“ `remove` (`which` =
   slova z textu). Smazat jen na výslovné přání.
+- „Smaž všechny lístečky“, „ukliď mi plochu od lístečků“ je `clear`. Nejdřív se zeptej
+  („Smazat všechny 3 lístečky?“) a až po jeho ano zavolej `clear` se `sure: true`. Potvrzuješ:
+  „Smazala jsem 3 lístečky — vrátíš je tlačítkem Vrátit.“
+- „Vrať ty lístečky“, „to jsem nechtěl smazat“ je `restore` — vrátí naposledy smazaný lísteček,
+  po `clear` všechny naráz (do dne).
 - Úkol s termínem nebo štítkem není lísteček — to je `app_task_add`. Nejasné-li to, vyber úkol.
 - Na telefonu lístečky vidět nejsou: když o něj pán řekne odtamtud, dodej „uvidíš ho na počítači“.
 - Potvrzuješ jednou větou: „Lísteček je na ploše — zavolat do servisu.“

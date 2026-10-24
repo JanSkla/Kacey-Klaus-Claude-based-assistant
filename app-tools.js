@@ -593,23 +593,47 @@ const journalAdd = tool(
 
 /* Lístečky (stickies.js): notes the desktop shows over every page. The
    module broadcasts its own `stickies` frame, so no onWrite here. */
+const stickyCount = (n, all = false) => {
+  if (n === 1) return all ? 'ten jeden lísteček' : '1 lísteček';
+  return n < 5 ? `${all ? 'všechny ' : ''}${n} lístečky` : `${all ? 'všech ' : ''}${n} lístečků`;
+};
 const sticky = tool(
   'app_sticky',
   'Lísteček na ploše počítače — zůstane na očích přes všechny stránky, dokud ho pán nesmaže. ' +
-    'Napiš nový (add), přepiš (edit) nebo smaž (remove). Jen když o lísteček pán řekne; ' +
+    'Napiš nový (add), přepiš (edit), smaž (remove), smaž všechny (clear — až když to pán potvrdí) ' +
+    'nebo vrať naposledy smazané (restore). Jen když o lísteček pán řekne; ' +
     'úkol s termínem patří do úkolů (app_task_add). Na telefonu lístečky vidět nejsou.',
   {
-    action: z.enum(['add', 'edit', 'remove']).describe('add = nový lísteček, edit = přepsat text, remove = smazat.'),
+    action: z.enum(['add', 'edit', 'remove', 'clear', 'restore']).describe(
+      'add = nový lísteček, edit = přepsat text, remove = smazat jeden, clear = smazat všechny, ' +
+      'restore = vrátit naposledy smazaný lísteček (po clear všechny).'),
     text: z.string().max(stickies.TEXT_MAX).optional().describe('add / edit: text lístečku, krátce, jak to řekl pán.'),
     which: z.string().optional().describe('edit / remove: id (vypíše app_read, LÍSTEČKY) nebo slova z textu („ten o mámě“).'),
+    sure: z.boolean().optional().describe('clear: true jen když pán na otázku „Smazat všech N lístečků?“ odpověděl ano.'),
   },
-  async ({ action, text, which }) => {
+  async ({ action, text, which, sure }) => {
     try {
       if (action === 'add') {
         const body = String(text || '').trim();
         if (!body) return fail('Prázdný lísteček — co na něj napsat?');
         const n = stickies.create({ text: body, by: 'kacey' });
         return ok(`Lísteček (${n.id}) je na ploše počítače, vpravo nahoře: „${n.text}“.`);
+      }
+      if (action === 'clear') {
+        const all = stickies.list();
+        if (!all.length) return ok('Na ploše žádné lístečky nejsou — není co mazat.');
+        // Like the header's bin: never without a yes.
+        if (sure !== true) {
+          return ok(`Nic jsem nesmazala. Zeptej se pána: „Smazat ${stickyCount(all.length, true)}?“ ` +
+            `Až řekne ano, zavolej clear se sure: true. Lístečky:\n${stickies.describe(all)}`);
+        }
+        const gone = stickies.removeAll({ by: 'kacey' });
+        return ok(`Smazáno ${stickyCount(gone.length)} — do dne je vrátí tlačítko Vrátit na počítači nebo restore.`);
+      }
+      if (action === 'restore') {
+        const back = stickies.restoreLast({ by: 'kacey' });
+        return ok(`${back.length === 1 ? 'Vrácen 1 lísteček' : `Vráceno ${stickyCount(back.length)}`} na plochu počítače, kde byly: ` +
+          back.map((n) => `„${n.text.replace(/\s+/g, ' ').trim() || 'prázdný'}“`).join(', ') + '.');
       }
       const n = stickies.find(which);
       if (!n) return fail(`Nevím, který lísteček. Lístečky:\n${stickies.describe()}`);

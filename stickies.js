@@ -3,8 +3,9 @@
  *
  * The owner makes one with the header's note button (public/js/ui/stickies.js),
  * types on it, drags it anywhere and it stays there — across views, reloads
- * and desktops — until it is deleted. Kacey can write one too ("napiš mi
- * lísteček …", app_sticky in app-tools.js) and reads them in app_read.
+ * and desktops — until it is deleted, one by one or all at once (Smazat
+ * všechny lístečky). Kacey can write one too ("napiš mi lísteček …",
+ * app_sticky in app-tools.js) and reads them in app_read.
  *
  * One row per note (db.js, kacey_sticky). Each change is a small write of the
  * fields that changed, so a note dragged on one desktop and typed on in
@@ -126,14 +127,49 @@ export function remove(id, { by = 'user', origin = '' } = {}) {
   return note;
 }
 
-/** Smazat všechny lístečky: every open note at once (each kept a day for Vrátit).
+/** Smazat všechny lístečky: every open note at once, all with one deleted_at
+    (the batch restoreLast() brings back; each kept a day for Vrátit).
     The notes as they were; one `cleared` frame. */
 export function removeAll({ by = 'user', origin = '' } = {}) {
   const notes = list();
   if (!notes.length) return [];
-  open().prepare('UPDATE kacey_sticky SET deleted_at = ? WHERE deleted_at IS NULL').run(now());
+  const t = now();
+  transact((h) => {
+    const del = h.prepare('UPDATE kacey_sticky SET deleted_at = ? WHERE sticky_id = ? AND deleted_at IS NULL');
+    notes.forEach((n) => del.run(t, n.id));
+  });
   emit({ event: 'cleared', ids: notes.map((n) => n.id), by, origin });
   return notes;
+}
+
+/** Vrátit after Smazat všechny: the notes of `ids` deleted within the day come
+    back where they were, as many as fit under MAX (oldest first). One
+    `restored` frame. The notes back; throws when none could come back. */
+export function restoreMany(ids, { by = 'user', origin = '' } = {}) {
+  const want = [...new Set((Array.isArray(ids) ? ids : []).map((id) => String(id || '')).filter(Boolean))].slice(0, 100);
+  purge();
+  const back = transact((h) => {
+    const rows = want.map((id) => h.prepare('SELECT * FROM kacey_sticky WHERE sticky_id = ? AND deleted_at IS NOT NULL').get(id))
+      .filter(Boolean).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.sticky_id.localeCompare(b.sticky_id));
+    if (!rows.length) throw new Error(want.length === 1 ? 'Ten lísteček už vrátit nejde.' : 'Ty lístečky už vrátit nejde.');
+    const room = MAX - count();
+    if (room <= 0) throw new Error('Víc lístečků se nevejde — nejdřív nějaký smaž.');
+    const up = h.prepare('UPDATE kacey_sticky SET deleted_at = NULL, updated_at = ? WHERE sticky_id = ?');
+    const t = now();
+    return rows.slice(0, room).map((r) => { up.run(t, r.sticky_id); return r.sticky_id; });
+  });
+  emit({ event: 'restored', ids: back, by, origin });
+  return back.map(get);
+}
+
+/** Kacey's "vrať ty lístečky": the last delete — one note, or every note of a
+    Smazat všechny — if it was within the day. */
+export function restoreLast(opts = {}) {
+  purge();
+  const last = open().prepare('SELECT MAX(deleted_at) AS t FROM kacey_sticky WHERE deleted_at IS NOT NULL').get().t;
+  if (!last) throw new Error('Žádný smazaný lísteček k vrácení není.');
+  const ids = open().prepare('SELECT sticky_id FROM kacey_sticky WHERE deleted_at = ?').all(last).map((r) => r.sticky_id);
+  return restoreMany(ids, opts);
 }
 
 /** Vrátit: a note deleted within the day comes back where it was. */

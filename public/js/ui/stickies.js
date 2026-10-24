@@ -7,7 +7,8 @@
    desktops — until the owner deletes it: × in the corner asks "Smazat
    lísteček?" in a strip under the bar (Nechat · Smazat), every note, until
    answered. The header's bin, left of the note button and dimmed while there
-   is no note, deletes them all — after its own question. Kacey writes them too (app_sticky).
+   is no note, deletes them all — after its own question — and its Vrátit
+   brings the whole batch back. Kacey writes and clears them too (app_sticky).
 
    Stored on the server, one row per note (stickies.js, /api/stickies). This
    page sends only the fields that changed — the text debounced, a place or
@@ -31,7 +32,7 @@ var ORIGIN = 'p' + Math.random().toString(36).slice(2, 10);
 
 var layer = null;
 var notes = [];              // as the server has them, plus this page's unsent changes
-var nodes = {};              // id -> { box, text, x, confirm, timer }
+var nodes = {};              // id -> { box, text, x, ask, keep }
 var dirty = {};              // id -> the fields not saved yet
 var flushTimer = {};         // id -> debounce timer
 var drag = null;
@@ -69,6 +70,7 @@ function load() {
     paint();
   }).catch(function (err) {
     loadFailed = true;
+    paintAll();
     if (!isNetwork(err)) say('Lístečky se nepodařilo načíst — ' + err.message);
   });
 }
@@ -180,7 +182,8 @@ function paintAll() {
   var btn = $('stickyAllBtn');
   if (!btn) return;
   btn.disabled = !notes.length;
-  btn.title = notes.length ? 'Smazat všechny lístečky' : 'Žádné lístečky ke smazání';
+  btn.title = notes.length ? 'Smazat všechny lístečky'
+    : loadFailed ? 'Lístečky se nenačetly — zkusím to znovu, až se připojím.' : 'Žádné lístečky ke smazání';
   if (!notes.length) askAll(false);
   else if (!$('stickyAllDrop').hidden) askAll(true);
 }
@@ -194,25 +197,32 @@ function removeAll() {
     return api('?origin=' + ORIGIN, { method: 'DELETE' });
   }).then(function (out) {
     var list = out.stickies || [];
+    Object.keys(flushTimer).forEach(function (id) { clearTimeout(flushTimer[id]); });
     notes = [];
     dirty = {};
     askAll(false);
     paint();
-    if (list.length) offerBackAll(list);
+    if (list.length) {
+      offerBackAll(list.map(function (n) { return n.id; }),
+        list.length === 1 ? 'Lísteček smazán.' : 'Smazáno ' + count(list.length) + '.');
+    }
   }).catch(function (err) {
+    askAll(false);
     say(isNetwork(err) ? 'Jsi offline — smazat půjde, až se připojím.' : 'Smazat se nepovedlo — ' + err.message);
   }).then(function () { go.disabled = false; });
 }
 
-function offerBackAll(list) {
-  say(list.length === 1 ? 'Lísteček smazán.' : 'Smazáno ' + count(list.length) + '.', {
+/* Vrátit for a whole batch: one request, as many as fit back (POST /api/stickies/restore). */
+function offerBackAll(ids, msg) {
+  say(msg, {
     label: 'Vrátit',
     run: function () {
-      Promise.all(list.map(function (n) {
-        return api('/' + encodeURIComponent(n.id) + '/restore', json('POST', {}))
-          .then(function (out) { if (!noteOf(out.sticky.id)) notes.push(out.sticky); });
-      })).then(function () { paint(); }).catch(function (err) {
+      api('/restore', json('POST', { ids: ids })).then(function (out) {
+        var back = out.stickies || [];
+        back.forEach(function (n) { if (n && !noteOf(n.id)) notes.push(n); });
         paint();
+        if (back.length < ids.length) say('Vrátila jsem ' + count(back.length) + ' — víc se nevejde.');
+      }).catch(function (err) {
         say(isNetwork(err) ? 'Jsi offline — vrátit půjde, až se připojím.' : err.message);
       });
     }
@@ -225,7 +235,9 @@ function initAll() {
   btn.addEventListener('click', function () { askAll($('stickyAllDrop').hidden); });
   $('stickyAllKeep').addEventListener('click', function () { askAll(false); btn.focus(); });
   $('stickyAllGo').addEventListener('click', removeAll);
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('stickyAllDrop').hidden) askAll(false); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && !$('stickyAllDrop').hidden) { askAll(false); btn.focus(); }
+  });
   document.addEventListener('pointerdown', function (ev) {
     if (!$('stickyAllDrop').hidden && !ev.target.closest('#stickyAll')) askAll(false);
   });
@@ -373,6 +385,9 @@ function onFrame(msg) {
   if (msg.event === 'deleted' && msg.by === 'kacey') {
     var n = noteOf(msg.id);
     if (n && n.text.trim()) offerBack(n, 'Lísteček smazala Kacey.');
+  }
+  if (msg.event === 'cleared' && msg.by === 'kacey' && msg.ids && msg.ids.length) {
+    offerBackAll(msg.ids, msg.ids.length === 1 ? 'Lísteček smazala Kacey.' : 'Kacey smazala ' + count(msg.ids.length) + '.');
   }
   reloadSoon();
 }

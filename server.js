@@ -1605,8 +1605,15 @@ app.patch('/api/stickies/:id', express.json({ limit: '64kb' }), (req, res) => {
   } catch (err) { stickyError(res, err, 500); }
 });
 
+/* Smazat všechny lístečky: the notes as they were, for the page's Vrátit. */
 app.delete('/api/stickies', (req, res) => {
-  try { res.json({ ok: true, stickies: stickies.removeAll({ origin: String(req.query.origin || '').slice(0, 40) }) }); } catch (err) { stickyError(res, { message: 'Lístečky se nepodařilo smazat.' }, 500); }
+  try { res.json({ ok: true, stickies: stickies.removeAll({ origin: String(req.query.origin || '').slice(0, 40) }) }); } catch (err) { log(`stickies clear failed: ${err?.message || err}`); stickyError(res, { message: 'Lístečky se nepodařilo smazat.' }, 500); }
+});
+
+/* …and its Vrátit: `ids` back in one go (as many as fit). */
+app.post('/api/stickies/restore', express.json({ limit: '16kb' }), (req, res) => {
+  const b = req.body || {};
+  try { res.json({ ok: true, stickies: stickies.restoreMany(b.ids, { origin: stickyOrigin(b) }) }); } catch (err) { stickyError(res, err, 404); }
 });
 
 app.delete('/api/stickies/:id', (req, res) => {
