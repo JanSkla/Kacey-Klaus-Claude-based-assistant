@@ -5,8 +5,9 @@
 #
 # The venv is ~/.venvs/stt (Python 3.11 + faster-whisper >= 1.1, for turbo). On
 # the CPU: the 2 GB GPU belongs to XTTS. See docs/RUNBOOK-kaceybody.md.
-# STT_MODEL is only the first default: large-v3 or turbo, after that the
-# page's choice (voicelab/stt_state.json) wins.
+# STT_MODEL is only the first default: small, large-v3 or turbo, after that
+# the page's choice (voicelab/stt_state.json) wins. Small on kaceybody: the
+# large encoder takes ~27 s a sentence on its CPU, turbo included.
 
 [Unit]
 Description=Whisper speech-to-text for Kacey (CPU)
@@ -16,7 +17,7 @@ After=network.target
 Type=simple
 WorkingDirectory=%h/Kacey/Kacey-Klaus-Claude-based-assistant
 ExecStart=%h/.venvs/stt/bin/python voicelab/stt_server.py
-Environment=STT_MODEL=large-v3
+Environment=STT_MODEL=small
 Environment=STT_DEVICE=cpu
 Environment=STT_COMPUTE=int8
 Environment=STT_THREADS=4

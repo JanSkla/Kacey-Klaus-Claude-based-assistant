@@ -11,21 +11,26 @@ Endpoints
     GET  /health                   -> {ok, model, choice, loading, device, compute_type, load_seconds}
     POST /transcribe?lang=cs       <- audio (WAV from the page; anything ffmpeg/PyAV reads)
                                    -> {text, language, seconds, audio_seconds, model}
-    POST /model?name=turbo         -> 202 {choice, loading}: load the other model
+    POST /model?name=turbo         -> 202 {choice, loading}: load another model
 
-Whisper large v3 by default — the best of the family at Czech. Its turbo
-variant (large-v3-turbo: the same encoder, 4 decoder layers instead of 32) is
-several times faster at a small cost in accuracy; the page switches between the
-two and the choice is kept across restarts (stt_state.json beside this file).
-Turbo needs faster-whisper >= 1.1.
+Whisper small by default: on kaceybody's 4-core CPU it writes a sentence down
+in a second or two. Large v3 is the best of the family at Czech and its turbo
+variant (large-v3-turbo: the same encoder, 4 decoder layers instead of 32)
+nearly as good, but both run the large encoder over a 30 s window for every
+utterance — there that was 27–37 s a sentence, however short. The page
+switches between the three and the choice is kept across restarts
+(stt_state.json beside this file). Turbo needs faster-whisper >= 1.1.
 
 On the CPU by default: kaceybody's 2 GB GPU belongs to XTTS. Only one model is
 held at a time — the old one is dropped before the new one loads, so a switch
-never needs the RAM of both.
+never needs the RAM of both. Dropped means handed back to the system too:
+glibc keeps a freed model's arenas otherwise, and on kaceybody a switch from
+large v3 to turbo left the sidecar at 5.1 GB with swap full.
 """
 
 from __future__ import annotations
 
+import ctypes
 import gc
 import io
 import json
@@ -49,20 +54,21 @@ COMPUTE = os.environ.get("STT_COMPUTE", "int8")
 THREADS = int(os.environ.get("STT_THREADS", "4"))
 MAX_BYTES = 12 * 1024 * 1024                              # ~6 minutes of 16 kHz WAV
 
-# The page's two choices -> faster-whisper's model names.
-CHOICES = {"large-v3": "large-v3", "turbo": "large-v3-turbo"}
+# The page's choices -> faster-whisper's model names.
+CHOICES = {"small": "small", "large-v3": "large-v3", "turbo": "large-v3-turbo"}
+DEFAULT = "small"
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stt_state.json")
 
 _model = None
 _lock = threading.Lock()                                  # one transcription (or swap) at a time
 _meta: dict = {}
-_choice = "large-v3"
+_choice = DEFAULT
 _loading = False
 _error = ""
 
 
 def saved_choice() -> str:
-    """The page's last choice, else STT_MODEL, else large v3."""
+    """The page's last choice, else STT_MODEL, else small."""
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
             name = json.load(f).get("model")
@@ -70,8 +76,17 @@ def saved_choice() -> str:
             return name
     except (OSError, ValueError):
         pass
-    env = os.environ.get("STT_MODEL", "large-v3")
-    return env if env in CHOICES else "large-v3"
+    env = os.environ.get("STT_MODEL", DEFAULT)
+    return env if env in CHOICES else DEFAULT
+
+
+def release() -> None:
+    """Give a dropped model's memory back to the system, not just to malloc."""
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):                     # not glibc: nothing to trim
+        pass
 
 
 def load_model(choice: str) -> None:
@@ -84,7 +99,7 @@ def load_model(choice: str) -> None:
     try:
         with _lock:
             _model = None                                 # free its RAM before the next one loads
-            gc.collect()
+            release()
             t0 = time.time()
             print(f"[stt] loading whisper {name} on {DEVICE} ({COMPUTE}) …", flush=True)
             _model = WhisperModel(name, device=DEVICE, compute_type=COMPUTE, cpu_threads=THREADS)
@@ -104,11 +119,11 @@ def load_model(choice: str) -> None:
 
 
 def switch(choice: str) -> None:
-    """Load `choice`; when it will not load, go back to large v3 so dictation still works."""
+    """Load `choice`; when it will not load, go back to small so dictation still works."""
     load_model(choice)
-    if _model is None and choice != "large-v3":
+    if _model is None and choice != DEFAULT:
         failed = _error
-        load_model("large-v3")
+        load_model(DEFAULT)
         globals()["_error"] = f"{choice}: {failed}"
 
 
@@ -166,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
                 _loading, _choice = True, name            # before the reply, so /health agrees at once
                 threading.Thread(target=switch, args=(name,), daemon=True).start()
             else:
-                # Already held (e.g. back to large v3 after turbo failed): the old error is moot.
+                # Already held (e.g. back to small after turbo failed): the old error is moot.
                 _error, _choice = "", name
                 try:
                     with open(STATE_FILE, "w", encoding="utf-8") as f:
@@ -194,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     # Listen first and load behind it: /health answers "loading" rather than
-    # nothing during the minute large v3 takes to come up.
+    # nothing while the model comes up (about a minute for large v3).
     threading.Thread(target=switch, args=(saved_choice(),), daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"[stt] listening on http://{HOST}:{PORT}", flush=True)

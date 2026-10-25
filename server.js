@@ -1774,7 +1774,7 @@ app.post('/api/voice/stop', (_req, res) => {
  * Whisper sidecar transcribes it on this machine — the audio never leaves it.
  * ------------------------------------------------------------------------- */
 
-/* Whisper large v3, or its turbo variant (stt.js): the sidecar holds one, the
+/* Whisper small, large v3 or its turbo variant (stt.js): the sidecar holds one, the
  * owner's choice is kept in the database, and a switch from the Controller or
  * from Kacey (app_stt) goes out as an `stt` frame so every page follows. */
 stt.onEvent((ev) => {

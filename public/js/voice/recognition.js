@@ -25,7 +25,7 @@ import { ServerRecognition, serverSttKnown, onSttStatus, refreshSttStatus, micRe
    listener and the mic button, none of which can work without it. */
 export var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
-/* Dictation's engine: Whisper large v3 (or turbo) on Kacey's own machine
+/* Dictation's engine: Whisper (small, large v3 or turbo) on Kacey's own machine
    (server-stt.js, the same shape as a SpeechRecognition) whenever it is ready —
    the audio never leaves home and Czech comes out better than from the
    browser. The browser's own engine only while Whisper is down or loading a

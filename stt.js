@@ -3,8 +3,9 @@
  *
  * The page records one utterance and posts it to /api/stt; the sidecar
  * (voicelab/stt_server.py) transcribes it on this machine with Whisper
- * large v3 or its turbo variant. It holds one at a time and needs about a
- * minute to load the other, and during that minute it cannot transcribe.
+ * small (the default: on kaceybody's CPU the large encoder takes ~27 s a
+ * sentence), large v3 or its turbo variant. It holds one at a time and needs
+ * up to a minute to load another, and meanwhile it cannot transcribe.
  *
  * The owner's choice lives here, in kacey_kv `stt.model` — the Controller's
  * Přepis řeči row and Kacey's app_stt both switch through setModel(). The
@@ -27,9 +28,9 @@
 import { kvGet, kvSet, now } from './db.js';
 import { STT_URL, PREVIEW } from './config.js';
 
-export const MODELS = ['large-v3', 'turbo'];
-export const NAMES = { 'large-v3': 'large v3', turbo: 'turbo' };
-export const DEFAULT = 'large-v3';
+export const MODELS = ['small', 'large-v3', 'turbo'];
+export const NAMES = { small: 'small', 'large-v3': 'large v3', turbo: 'turbo' };
+export const DEFAULT = 'small';
 const RECONCILE_MS = 5 * 60 * 1000;
 const PREVIEW_LOAD_MS = 6000;
 
@@ -52,7 +53,7 @@ function problem(message, status, code) {
   return err;
 }
 
-/** The owner's choice: large v3 until they pick turbo. */
+/** The owner's choice: small until they pick another. */
 export function choice() {
   const m = kvGet('stt.model', null);
   return MODELS.includes(m) ? m : DEFAULT;

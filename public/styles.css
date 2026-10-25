@@ -1103,8 +1103,8 @@ button.rblock:hover { filter: brightness(1.3); }
 .srow__last { margin: 10px 0 0; font-size: 13px; color: var(--ink3); }
 .srow__note { margin: 10px 0 0; max-width: 60ch; font-size: 14px; line-height: 1.6; color: var(--ink2); }
 
-/* Přepis řeči: Whisper large v3 / turbo (ui/stt-picker.js) — an .srow with a
-   two-option .seg where the switch would be; the state says how it is going. */
+/* Přepis řeči: Whisper small / large v3 / turbo (ui/stt-picker.js) — an .srow with a
+   three-option .seg where the switch would be; the state says how it is going. */
 .sttpick__seg { flex: 0 0 auto; }
 .sttpick__seg .seg__opt { white-space: nowrap; }
 .sttpick__seg .seg__opt:disabled { cursor: wait; opacity: .45; }

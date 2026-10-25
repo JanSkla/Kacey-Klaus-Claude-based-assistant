@@ -19,6 +19,19 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.13 — 2026-10-25
+
+**Hlas — Whisper small zpět jako výchozí**
+- Whisper **small** is back as a third choice in Přepis řeči and is the
+  default again (`stt.js`, the sidecar, `stt.service`). On kaceybody's CPU
+  large v3 took ~37 s a sentence (127 s after idle, past Kacey's 60 s limit)
+  and turbo ~27 s whatever the length; small takes a second or two.
+  Kacey's `app_stt` and persona know all three and offer small when
+  dictation is slow.
+- A model switch no longer keeps the old model in memory: the sidecar now
+  hands it back to the system (`malloc_trim`). Switching large v3 → turbo had
+  left it at 5.1 GB with swap full and the machine crawling.
+
 ## KC 1.0.12 — 2026-10-25
 
 **Hlas — mikrofon na kaceybody zase končí větu**

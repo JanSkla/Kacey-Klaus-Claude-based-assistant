@@ -66,10 +66,10 @@ const reset = () => { Object.assign(side, { model: 'large-v3', loading: false, e
 
 /* ---- the choice ------------------------------------------------------------- */
 
-await test('large v3 until the owner picks; an unknown value in the database reads as large v3', () => {
-  assert.equal(stt.choice(), 'large-v3');
+await test('small until the owner picks; an unknown value in the database reads as small', () => {
+  assert.equal(stt.choice(), 'small');
   db.kvSet('stt.model', 'medium');
-  assert.equal(stt.choice(), 'large-v3');
+  assert.equal(stt.choice(), 'small');
 });
 
 await test('a sidecar holding something else than the owner chose is asked for theirs — once, not on every poll', async () => {
@@ -197,6 +197,15 @@ await test('a preview only pretends: the sidecar is never asked to switch, nothi
     stt.configure({ preview: false });
   }
 });
+await test('small is a choice like the others: back from turbo to small', async () => {
+  reset();
+  side.model = 'turbo';
+  db.kvSet('stt.model', 'turbo');
+  const out = await stt.setModel('small', { by: 'user' });
+  assert.deepEqual(out, { choice: 'small', loading: true });
+  assert.equal(stt.choice(), 'small');
+  assert.ok(side.calls.includes('POST /model?name=small'));
+});
 
 /* ---- Kacey ------------------------------------------------------------------ */
 
@@ -227,6 +236,7 @@ await test('app_stt switch switches as Kacey; the model already running is left 
   assert.match(text(out), /právě načítá/, 'asked again while it loads');
   out = await call('app_stt', { action: 'switch' });
   assert.ok(out.isError);
+  assert.match(text(out), /"small"/, 'the question names small too');
 });
 
 await test('app_stt cannot switch a Whisper that is not running, and says how to start it', async () => {

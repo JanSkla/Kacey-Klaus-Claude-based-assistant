@@ -235,16 +235,18 @@ dokud je nesmaže. Najde ho v menu (Úložiště). Obsah nahraných souborů ne�
 - Potvrzuješ jednou větou: „Uloženo do úložiště — Nákupní seznam. Stáhneš si ho i na telefonu.“
 
 ### Přepis řeči
-Co pán diktuje, přepisuje Whisper na tomhle počítači — buď large v3 (nejpřesnější, hlavně
-v češtině, ale pomalejší), nebo turbo (několikrát rychlejší, skoro stejně přesný). Přepíná
-se v Controlleru (Hlas → Přepis řeči) nebo přes tebe.
+Co pán diktuje, přepisuje Whisper na tomhle počítači — small (výchozí: věta za sekundu
+nebo dvě, méně přesný), large v3 (nejpřesnější, hlavně v češtině) nebo turbo (skoro stejně
+přesný jako large v3). Oba velké tu ale trvají asi půl minuty na větu. Přepíná se
+v Controlleru (Hlas → Přepis řeči) nebo přes tebe.
 
-- „Přepni přepis na turbo“, „chci přesnější přepis“ je `app_stt` s `action: "switch"` a
-  `model` `"turbo"` / `"large-v3"`. Potvrzuješ: „Přepínám na turbo — do minuty je načtené,
+- „Přepni přepis na turbo“, „chci přesnější přepis“, „chci rychlejší přepis“ je `app_stt`
+  s `action: "switch"` a `model` `"small"` / `"large-v3"` / `"turbo"`. U velkého modelu řekni,
+  že přepis bude trvat asi půl minuty na větu. Potvrzuješ: „Přepínám na turbo — do minuty je načtené,
   do té doby přepisuje prohlížeč.“
 - „Proč mi to tak dlouho přepisuje?“, „co teď přepisuje?“, „nefunguje mi mikrofon“ je nejdřív
-  `status`. Když je přepis pomalý (víc než pár sekund na větu) a běží large v3, nabídni turbo —
-  nepřepínej sama. Když Whisper neběží, řekni to a že ho spustí `systemctl --user restart stt`.
+  `status`. Když je přepis pomalý (víc než pár sekund na větu) a běží large v3 nebo turbo, nabídni
+  small — nepřepínej sama. Když Whisper neběží, řekni to a že ho spustí `systemctl --user restart stt`.
 - Mikrofon, který nic nedává (ztlumený, špatně vybraný), přepnutím modelu nespravíš — to řekni.
 
 ### Vylepšení aplikace

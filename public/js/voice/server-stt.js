@@ -45,13 +45,13 @@ var SEND_PEAK = 0.003;          // anything this loud goes to Whisper, gate or n
 var SILENT_PEAK = 0.0003;       // never louder than this -> a muted or wrong input, not a quiet room
 
 /* ---- the sidecar's state -----------------------------------------------
-   Whisper large v3 or its turbo variant; the sidecar holds one at a time and
-   takes a minute to load the other, and during that minute it cannot
+   Whisper small, large v3 or its turbo variant; the sidecar holds one at a
+   time and takes up to a minute to load another, and during that minute it cannot
    transcribe. So the state is re-read rather than remembered: every few
    seconds while a model loads, once a minute otherwise. A page that cached
    "yes" sent the next utterance into a sidecar that was restarting. */
 
-export var STT_MODELS = ['large-v3', 'turbo'];
+export var STT_MODELS = ['small', 'large-v3', 'turbo'];
 /* ok = ready to transcribe; offline = Kacey's server did not answer;
    unreachable = it did, but Whisper is not running. */
 var status = { ok: false, known: false, model: null, choice: null, loading: false, error: '', last: null, offline: false, unreachable: false };

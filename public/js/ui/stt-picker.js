@@ -1,9 +1,9 @@
 /* =========================================================================
-   Přepis řeči — Whisper large v3 or turbo, a row in Controller → Hlas.
+   Přepis řeči — Whisper small, large v3 or turbo, a row in Controller → Hlas.
    Not beside the talk button: the mic stays one button on the home screen.
 
-   The sidecar on kaceybody holds one of the two; switching drops it and loads
-   the other, which takes a minute, and meanwhile dictation falls back to the
+   The sidecar on kaceybody holds one of the three; switching drops it and loads
+   another, which takes a minute, and meanwhile dictation falls back to the
    browser's engine (recognition.js engine()). This only shows the state the
    server reports (server-stt.js polls /api/stt/health, stt.js keeps the
    owner's choice) and asks for the other model. Kacey switches too (app_stt):
@@ -14,7 +14,7 @@
      off   --ink2  "nedostupný" — Whisper is not running; "offline" — nor is
            the connection to Kacey; options held
      err   --err  the chosen model would not load ("turbo nejde": it fell back
-           to large v3; "nenačetl se": nothing runs)
+           to small; "nenačetl se": nothing runs)
    ========================================================================= */
 
 import { onSttStatus, onSttSwitch, setSttModel, sttStatus, STT_MODELS } from '../voice/server-stt.js';
@@ -22,7 +22,7 @@ import { SR } from '../voice/recognition.js';
 import { flashHint, showAlert } from './log.js';
 import { say } from './toast.js';
 
-var NAMES = { 'large-v3': 'large v3', turbo: 'turbo' };
+var NAMES = { small: 'small', 'large-v3': 'large v3', turbo: 'turbo' };
 var box, stateEl, metaEl, opts;
 var wasLoading = false;
 var asked = null;            // the model this page (or Kacey) asked for, to confirm it once loaded
