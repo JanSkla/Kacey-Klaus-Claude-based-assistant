@@ -19,6 +19,15 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.12 — 2026-10-25
+
+**Hlas — mikrofon na kaceybody zase končí větu**
+- The bedside mic recorded every request for the full 20 s: KC 1.0.11 capped
+  the speech gate at 0.02, below the room kaceybody's mic hears (0.005–0.064,
+  a fan or music), so the gate never closed. The level is now smoothed over a
+  few buffers, the noise floor keeps learning from quiet ones, and the gate
+  stays at least 2.5× above it. A quiet laptop mic keeps the low gate.
+
 ## KC 1.0.11 — 2026-10-25
 
 **Hlas — přechod na Whisper large v3**

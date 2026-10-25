@@ -26,13 +26,21 @@ var MIN_SPEECH_MS = 250;        // shorter than this is a cough, not a word
 
 var NO_FRAMES_MS = 2500;        // the mic opened but no audio arrived -> the context is dead
 
-/* Loudness, as the RMS of one buffer. The gate that says "speech" sits a few
-   times above the room but never above GATE_MAX: a fixed 0.012 floor, or a
-   floor taken as the loudest of the first 300 ms, was above a quiet laptop mic
-   or above anyone who started talking at once — the gate never opened, the
-   recording was thrown away and the page said "Nic jsem neslyšela". */
+/* Loudness, as the RMS of one buffer, smoothed over a few of them. The gate
+   that says "speech" sits a few times above the room: a fixed 0.012 floor, or
+   a floor taken as the loudest of the first 300 ms, was above a quiet laptop
+   mic or above anyone who started talking at once — the gate never opened,
+   the recording was thrown away and the page said "Nic jsem neslyšela".
+
+   But it may not sit below the room either. kaceybody's mic hears a room at
+   0.005–0.064 (a fan, music), and a gate capped at 0.02 was open all the
+   time: the utterance never ended, every request ran the full 20 s. So the
+   floor keeps learning from every quiet buffer, and the gate stays at least
+   GATE_OVER_FLOOR times above it — GATE_MAX caps only the "few times above". */
 var GATE_MIN = 0.005;
 var GATE_MAX = 0.02;
+var GATE_OVER_FLOOR = 2.5;
+var SMOOTH = 0.4;               // weight of the newest buffer: one click is not a word
 var SEND_PEAK = 0.003;          // anything this loud goes to Whisper, gate or not: its VAD decides
 var SILENT_PEAK = 0.0003;       // never louder than this -> a muted or wrong input, not a quiet room
 
@@ -219,7 +227,7 @@ ServerRecognition.prototype.start = function () {
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var s = self._s = {
         stream: stream, ctx: ctx, src: src, proc: proc, chunks: [], started: Date.now(),
-        floor: null, peak: 0, speechAt: 0, lastLoud: 0, timer: 0, watch: 0, frames: 0, finished: false
+        floor: null, level: null, peak: 0, speechAt: 0, lastLoud: 0, timer: 0, watch: 0, frames: 0, finished: false
       };
       /* The clock, not the audio, decides "nothing was said" and "the mic is
          dead": both have to fire precisely when no audio arrives. After the
@@ -246,11 +254,15 @@ ServerRecognition.prototype.start = function () {
         if (rms > s.peak) s.peak = rms;
         // What the orb shows: the mic itself, so a dead one is seen at once.
         self._emit('level', { level: Math.min(1, Math.sqrt(rms) * 3.2) });
+        var level = s.level = s.level === null ? rms : s.level * (1 - SMOOTH) + rms * SMOOTH;
         // The first ~300 ms set the room's noise floor — its quietest buffer,
-        // so someone who starts talking at once does not raise it.
-        if (now - s.started < 300) { s.floor = s.floor === null ? rms : Math.min(s.floor, rms); return; }
-        var gate = Math.min(GATE_MAX, Math.max(GATE_MIN, (s.floor || 0) * 3));
-        if (rms > gate) {
+        // and no louder than GATE_MAX, so someone who starts talking at once
+        // does not raise it. After that every quiet buffer refines it.
+        if (now - s.started < 300) { s.floor = Math.min(GATE_MAX, s.floor === null ? level : Math.min(s.floor, level)); return; }
+        var floor = s.floor || 0;
+        var gate = Math.max(GATE_MIN, Math.min(floor * 3, Math.max(GATE_MAX, floor * GATE_OVER_FLOOR)));
+        if (level <= gate) s.floor = floor * 0.95 + level * 0.05;
+        if (level > gate) {
           if (!s.speechAt) { s.speechAt = now; self._emit('speechstart'); }
           s.lastLoud = now;
         }
