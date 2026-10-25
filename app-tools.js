@@ -37,6 +37,7 @@ import * as gallery from './gallery.js';
 import * as whiteboard from './whiteboard.js';
 import * as stickies from './stickies.js';
 import * as storage from './storage.js';
+import * as stt from './stt.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -645,6 +646,34 @@ const sticky = tool(
       }
       stickies.remove(n.id, { by: 'kacey' });
       return ok(`Lísteček „${n.text.replace(/\s+/g, ' ').trim() || 'prázdný'}“ smazán — pán ho do dne vrátí tlačítkem Vrátit.`);
+    } catch (err) { return fail(err.message); }
+  },
+);
+
+/* Přepis řeči: which Whisper writes the owner's dictation down (stt.js). A
+   switch takes about a minute; the pages hear it as an `stt` frame. */
+const speechToText = tool(
+  'app_stt',
+  'Přepis pánova diktování — Whisper large v3 (nejpřesnější, pomalejší) nebo turbo (několikrát rychlejší, ' +
+    'skoro stejně přesný), běží na tomhle počítači. status = co teď běží a jak rychle, switch = přepni model ' +
+    '(načtení trvá asi minutu, do té doby přepisuje prohlížeč). Jen když o to pán řekne nebo si stěžuje na mikrofon.',
+  {
+    action: z.enum(['status', 'switch']),
+    model: z.enum(stt.MODELS).optional().describe('switch: "large-v3" nebo "turbo".'),
+  },
+  async ({ action, model }) => {
+    try {
+      const h = await stt.health();
+      if (action === 'status') return ok(stt.describe(h));
+      if (!model) return fail('Na který model? (model: "large-v3" nebo "turbo")');
+      if (h.unreachable) return fail('Whisper na kaceybody neběží, přepnout teď nejde — pán ho spustí: systemctl --user restart stt.');
+      if (h.loading && h.choice === model) return ok(`Whisper si ${stt.NAMES[model]} právě načítá — do minuty bude.`);
+      if (h.ok && h.model === model && h.choice === model && !h.error) {
+        return ok(`Přepis už běží na Whisper ${stt.NAMES[model]} — nic jsem neměnila.`);
+      }
+      await stt.setModel(model, { by: 'kacey' });
+      return ok(`Přepínám přepis řeči na Whisper ${stt.NAMES[model]} — načtení trvá asi minutu, do té doby přepisuje prohlížeč. ` +
+        'Pánovi se to ukáže v Controlleru (Hlas → Přepis řeči).');
     } catch (err) { return fail(err.message); }
   },
 );
@@ -1311,7 +1340,7 @@ function matchesWords(fileName, words) {
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskTags, journalAdd, sticky,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative, calendarSync,
-  notificationsRead, morningAdd,
+  notificationsRead, morningAdd, speechToText,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
@@ -1321,7 +1350,7 @@ export const APP_TOOL_NAMES = [
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
-  'app_whiteboard_read', 'app_whiteboard_edit', 'app_whiteboard_manage', 'app_storage',
+  'app_whiteboard_read', 'app_whiteboard_edit', 'app_whiteboard_manage', 'app_storage', 'app_stt',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 /** `ctx.sessionId()` names the chat that asks for an improvement (the history marks it). */
@@ -1350,7 +1379,8 @@ export function makeAppServer(ctx = {}) {
       'Když pán chce něco ujasnit nebo rozvrhnout („pomoz mi ujasnit si povinnosti“), sesbírej podklady z aplikace ' +
       '(app_read, kalendář, deník) a rozlož je na whiteboard. ' +
       'Soubory mezi pánovým počítačem a telefonem (Úložiště) spravuje app_storage: co tam je, text nebo fotku ' +
-      'z chatu uložit jako soubor, smazat, vrátit, otevřít.',
+      'z chatu uložit jako soubor, smazat, vrátit, otevřít. ' +
+      'Který Whisper přepisuje pánovo diktování (large v3 nebo turbo), ukáže a přepne app_stt.',
     tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx), ...makeWhiteboardTools(ctx), ...makeStorageTools(ctx)],
   });
 }

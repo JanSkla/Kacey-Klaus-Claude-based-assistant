@@ -154,7 +154,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(404, {"error": "not found"})
 
     def do_POST(self):
-        global _loading, _choice
+        global _loading, _choice, _error
         url = urlparse(self.path)
         if url.path == "/model":
             name = (parse_qs(url.query).get("name") or [""])[0]
@@ -165,6 +165,14 @@ class Handler(BaseHTTPRequestHandler):
             if name != _meta.get("model") or _model is None:
                 _loading, _choice = True, name            # before the reply, so /health agrees at once
                 threading.Thread(target=switch, args=(name,), daemon=True).start()
+            else:
+                # Already held (e.g. back to large v3 after turbo failed): the old error is moot.
+                _error, _choice = "", name
+                try:
+                    with open(STATE_FILE, "w", encoding="utf-8") as f:
+                        json.dump({"model": name}, f)
+                except OSError:
+                    pass
             return self._json(202, {"choice": name, "loading": _loading})
         if url.path != "/transcribe":
             return self._json(404, {"error": "not found"})

@@ -180,6 +180,11 @@ function buildRecognition() {
           showAlert(t().errNet);
         }
         break;
+      case 'stt-down':
+        state.micDesired = false;
+        state.resumeVoiceLoop = false;
+        showAlert(t().errSttDown);
+        break;
       case 'stt-loading':
         state.micDesired = false;
         state.resumeVoiceLoop = false;

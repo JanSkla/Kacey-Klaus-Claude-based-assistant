@@ -1112,7 +1112,6 @@ button.rblock:hover { filter: brightness(1.3); }
 .sttpick[data-st="ok"] .sttpick__state { color: var(--ok); }
 .sttpick[data-st="busy"] .sttpick__state { color: var(--acc); animation: pulseDot 1.4s infinite; }
 .sttpick[data-st="err"] .sttpick__state { color: var(--err); }
-.is-embed .sttpick .seg__opt { cursor: default; }
 
 .meter { display: flex; align-items: flex-end; gap: 3px; height: 28px; margin-top: 12px; }
 .meter__bar { flex: 1; height: 7%; min-height: 2px; background: var(--line2); transition: height 60ms linear; }

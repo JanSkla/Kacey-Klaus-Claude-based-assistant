@@ -43,6 +43,7 @@ import * as gallery from './gallery.js';
 import * as whiteboard from './whiteboard.js';
 import * as stickies from './stickies.js';
 import * as storage from './storage.js';
+import * as stt from './stt.js';
 import { webTracker, webOfTranscript, isTurnStart } from './web.js';
 import { addDays, turnClock } from './public/js/core/due.js';
 
@@ -51,7 +52,7 @@ import {
   PYTHON_BIN, KLAUS_MEMORY_PYTHONPATH, KLAUS_DB, KLAUS_CALENDARS, KLAUS_ENV_FILE,
   MCP_SERVERS, MEMORY_TOOLS, ALLOWED_TOOLS, CHAT_DISALLOWED_TOOLS, WEB_TOOLS,
   FALLBACK_PERSONA, OWNER_PROFILE, TURN_CONTEXT,
-  XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, STT_URL, NOWPLAYING_URL, DUCK_PERCENT,
+  XTTS_URL, VOICES, DEFAULT_VOICE, TTS_DOTS, NOWPLAYING_URL, DUCK_PERCENT,
   LOGICAL_DAY_START_HOUR, LIGHTSD_URL, PREVIEW, SELFUPDATE, GALLERY_DIR, WHITEBOARD_DIR,
 } from './config.js';
 
@@ -1773,65 +1774,38 @@ app.post('/api/voice/stop', (_req, res) => {
  * Whisper sidecar transcribes it on this machine — the audio never leaves it.
  * ------------------------------------------------------------------------- */
 
-/* Whisper large v3, or its turbo variant: the sidecar holds one and the page
- * switches. A preview shares the running app's sidecar, so it only pretends to
- * switch — a draft must never change the model the live app dictates with. */
-const STT_MODELS = ['large-v3', 'turbo'];
-const sttPreview = { choice: 'large-v3', until: 0 };
+/* Whisper large v3, or its turbo variant (stt.js): the sidecar holds one, the
+ * owner's choice is kept in the database, and a switch from the Controller or
+ * from Kacey (app_stt) goes out as an `stt` frame so every page follows. */
+stt.onEvent((ev) => {
+  log(`stt: switching to ${ev.choice} (${ev.by})${ev.preview ? ' — pretended, preview' : ''}`);
+  broadcast({ type: 'stt', ...ev });
+});
 
 app.get('/api/stt/health', async (_req, res) => {
-  let out;
-  try {
-    // Generous: on a machine that is swapping the sidecar answers late, not never.
-    const r = await fetch(`${STT_URL}/health`, { signal: AbortSignal.timeout(10000) });
-    out = await r.json();
-  } catch {
-    out = { ok: false };
-  }
-  if (PREVIEW) {
-    const loading = Date.now() < sttPreview.until;
-    out = { ...out, ok: !!out.ok && !loading, model: sttPreview.choice, choice: sttPreview.choice, loading, preview: true };
-  }
-  res.json(out);
+  res.json(await stt.health());
 });
 
 app.post('/api/stt/model', express.json(), async (req, res) => {
-  const name = String(req.body?.model || '');
-  if (!STT_MODELS.includes(name)) return res.status(400).json({ error: 'neznámý model' });
-  if (PREVIEW) {
-    if (name !== sttPreview.choice) Object.assign(sttPreview, { choice: name, until: Date.now() + 6000 });
-    return res.status(202).json({ choice: name, loading: Date.now() < sttPreview.until });
-  }
   try {
-    const r = await fetch(`${STT_URL}/model?name=${encodeURIComponent(name)}`, { method: 'POST', signal: AbortSignal.timeout(10000) });
-    const out = await r.json();
-    if (!r.ok) throw new Error(out.error || `STT ${r.status}`);
-    log(`stt: switching to ${name}`);
+    const out = await stt.setModel(req.body?.model, { by: 'user', origin: String(req.body?.origin || '').slice(0, 40) });
     res.status(202).json(out);
   } catch (err) {
     log(`stt switch failed: ${err.message}`);
-    res.status(502).json({ error: `Přepis řeči se nepřepnul (${err.message})` });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 app.post('/api/stt', express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '12mb' }), async (req, res) => {
-  const lang = /^[a-z]{2}(-[A-Z]{2})?$/.test(String(req.query.lang || '')) ? String(req.query.lang) : 'cs';
-  if (!req.body || !req.body.length) return res.status(400).json({ error: 'žádný zvuk' });
   try {
-    const started = Date.now();
-    const r = await fetch(`${STT_URL}/transcribe?lang=${encodeURIComponent(lang)}`, {
-      method: 'POST', headers: { 'Content-Type': req.get('content-type') || 'audio/wav' },
-      body: req.body, signal: AbortSignal.timeout(60000),
-    });
-    const out = await r.json();
-    // Loading the other model: the page says so and tries the browser's engine.
-    if (r.status === 503) return res.status(503).json({ error: 'Přepis řeči načítá model', loading: true });
-    if (!r.ok) throw new Error(out.error || `STT ${r.status}`);
-    log(`stt: ${out.model || ''} ${out.audio_seconds}s -> ${JSON.stringify(out.text).slice(0, 80)} in ${Date.now() - started} ms`);
+    const out = await stt.transcribe(req.body, { lang: req.query.lang, type: req.get('content-type') || 'audio/wav' });
+    log(`stt: ${out.model || ''} ${out.audio_seconds}s -> ${JSON.stringify(out.text).slice(0, 80)} in ${out.seconds} s`);
     res.json(out);
   } catch (err) {
+    // Loading the other model: the page says so and tries the browser's engine.
+    if (err.code === 'loading') return res.status(503).json({ error: err.message, loading: true });
     log(`stt failed: ${err.message}`);
-    res.status(502).json({ error: `Přepis řeči neodpovídá (${err.message})` });
+    res.status(err.status || 502).json({ error: err.message });
   }
 });
 

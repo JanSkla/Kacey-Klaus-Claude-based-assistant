@@ -16,6 +16,8 @@
    own server, which hands it to a sidecar on the same machine.
    ========================================================================= */
 
+import * as bus from '../core/bus.js';
+
 var TARGET_RATE = 16000;
 var NO_SPEECH_MS = 7000;        // nothing said this long after start -> 'no-speech'
 var END_SILENCE_MS = 1200;      // this much quiet after speech -> the utterance is over
@@ -42,9 +44,12 @@ var SILENT_PEAK = 0.0003;       // never louder than this -> a muted or wrong in
    "yes" sent the next utterance into a sidecar that was restarting. */
 
 export var STT_MODELS = ['large-v3', 'turbo'];
-var status = { ok: false, known: false, model: null, choice: null, loading: false, error: '', last: null };
+/* ok = ready to transcribe; offline = Kacey's server did not answer;
+   unreachable = it did, but Whisper is not running. */
+var status = { ok: false, known: false, model: null, choice: null, loading: false, error: '', last: null, offline: false, unreachable: false };
 var listeners = [];
 var pollTimer = 0;
+var ORIGIN = 'p' + Math.random().toString(36).slice(2, 10);
 
 export function sttStatus() { return status; }
 export function onSttStatus(fn) { listeners.push(fn); fn(status); }
@@ -58,23 +63,35 @@ function publish(next) {
 
 export function refreshSttStatus() {
   return fetch('/api/stt/health', { cache: 'no-store' })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (j) {
+      j = j || {};
       publish({
-        ok: !!(j && j.ok), loading: !!(j && j.loading), error: (j && j.error) || '',
-        model: (j && j.model) || null, choice: (j && (j.choice || j.model)) || null
+        ok: !!j.ok, loading: !!j.loading, error: j.error || '', offline: false, unreachable: !!j.unreachable,
+        model: j.model || null, choice: j.choice || j.model || null, last: j.last || null
       });
       return status.ok;
     })
-    .catch(function () { publish({ ok: false, loading: false }); return false; });
+    .catch(function () { publish({ ok: false, loading: false, offline: true }); return false; });
 }
+
+/* Another page or Kacey switched the model, or the server is back: ask again.
+   The frame goes on to the picker (by Kacey: it says so), not this page's own. */
+var frameListeners = [];
+export function onSttSwitch(fn) { frameListeners.push(fn); }
+bus.on('stt', function (msg) {
+  if (!msg || msg.origin === ORIGIN) return;
+  frameListeners.forEach(function (fn) { try { fn(msg); } catch (e) { console.error('[kacey] stt frame listener failed', e); } });
+  refreshSttStatus();
+});
+bus.on('conn', function (st) { if (st === 'online' && status.offline) refreshSttStatus(); });
 
 /** Ask the sidecar for the other model. Resolves once it has started loading. */
 export function setSttModel(name) {
   if (STT_MODELS.indexOf(name) === -1) return Promise.reject(new Error('unknown model'));
   publish({ choice: name, loading: true, ok: false, error: '' });
   return fetch('/api/stt/model', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name })
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, origin: ORIGIN })
   })
     .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
     .then(function () { return refreshSttStatus(); })
@@ -296,13 +313,15 @@ ServerRecognition.prototype._finish = function () {
     .then(function (r) {
       return r.json().then(function (j) {
         if (r.status === 503) { var e = new Error('loading'); e.code = 'stt-loading'; throw e; }
-        if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+        // Kacey answered, Whisper did not (stopped, crashed): not the network.
+        if (!r.ok) { var d = new Error(j.error || 'HTTP ' + r.status); d.code = 'stt-down'; throw d; }
         return j;
       });
     })
     .then(function (j) {
-      // How long the last sentence took, for the Přepis řeči card.
-      publish({ last: { seconds: (Date.now() - sent) / 1000, model: (j && j.model) || status.model } });
+      // How long the last sentence took, for the Přepis řeči row (the server
+      // keeps it too, so the other devices show the same).
+      publish({ last: { seconds: (j && Number(j.seconds)) || (Date.now() - sent) / 1000, model: (j && j.model) || status.model } });
       if (gen !== self._gen) return;           // aborted while Whisper was working
       var text = String((j && j.text) || '').trim();
       if (!text) { self._emit('error', { error: 'no-speech' }); return; }
@@ -312,7 +331,8 @@ ServerRecognition.prototype._finish = function () {
       self._emit('result', { resultIndex: 0, results: [result] });
     })
     .catch(function (err) {
-      if (err && err.code === 'stt-loading') refreshSttStatus();
+      // Loading, stopped or offline: the row and engine() learn it now, not in a minute.
+      refreshSttStatus();
       if (gen === self._gen) self._emit('error', { error: (err && err.code) || 'network' });
     })
     .then(function () { if (gen !== self._gen) return; self._busy = false; self._emit('end'); });

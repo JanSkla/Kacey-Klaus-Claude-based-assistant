@@ -19,6 +19,39 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.11 — 2026-10-25
+
+**Hlas — přechod na Whisper large v3**
+- The mic works again: the recording's audio context is made inside the tap
+  (made after the permission prompt it started suspended in Chrome and
+  Safari, recorded nothing and sat on "Poslouchám" for 20 s), the speech gate
+  adapts to a quiet laptop mic, and a mic that gives pure silence says so
+  ("…jestli není ztlumený…") instead of "Nic jsem neslyšela". While Whisper
+  records, the orb and the HUD meter follow the real mic level; after the
+  utterance the strip reads "Přepisuji, co jsem slyšela…".
+- Dictation goes to Whisper on kaceybody whenever it is ready (the audio
+  stays home), the browser's engine only while Whisper is down or loading,
+  or after the browser's own fails with `network` (Chromium on Linux).
+  `?stt=native` still prefers the browser.
+- Whisper **large v3** by default (was `small`), with **turbo**
+  (large-v3-turbo, several times faster) one tap away: Controller → Hlas →
+  Přepis řeči, `large v3 · turbo`, with the state ("připraveno", "věta za
+  2,4 s", "načítám turbo…", "nedostupný", "offline", "turbo nejde"). A switch
+  takes about a minute; a model that will not load falls back to large v3.
+- [stt.js](stt.js): the choice in `kacey_kv` `stt.model`, the last sentence's
+  time in `stt.last` (every device shows it); a sidecar that comes up with a
+  different model is asked for the owner's (at most every 5 minutes, never
+  over its own load error); `stt` frames on a switch. Routes
+  `GET /api/stt/health`, `POST /api/stt/model`, `POST /api/stt`. A preview
+  only pretends to switch, so a draft never changes the live app's model.
+- Sidecar ([voicelab/stt_server.py](voicelab/stt_server.py)): one model at a
+  time (the old one freed first), `POST /model`, the choice kept in
+  `stt_state.json` across restarts; needs faster-whisper ≥ 1.1 for turbo.
+- Kacey by voice: `app_stt` `status` and `switch` ("přepni přepis na
+  turbo"); the persona offers turbo when large v3 is slow but does not
+  switch on her own.
+- Tests: [test/stt.mjs](test/stt.mjs) (`npm run test:stt`).
+
 ## KC 1.0.10 — 2026-10-24
 
 **Lístečky — potvrzení mazání a smazat vše**

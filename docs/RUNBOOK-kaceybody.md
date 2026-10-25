@@ -147,7 +147,7 @@ running without a login.
 | Unit | Venv | What |
 | ---- | ---- | ---- |
 | `xtts` (`voicelab/xtts.service`) | `~/.venvs/xtts`: Python 3.11 via uv, torch 2.6 cu126 (the last builds with `sm_50`), coqui-tts | XTTS-v2 in **float16** on the 940MX: ~950 MiB after load, ~1.1 GB peak. About **2× slower than real time** (a 5 s sentence in ~11 s) |
-| `stt` (`voicelab/stt.service`) | `~/.venvs/stt`: Python 3.11, faster-whisper | Whisper `small`, int8, on the CPU: about real time once warm |
+| `stt` (`voicelab/stt.service`) | `~/.venvs/stt`: Python 3.11, faster-whisper ≥ 1.1 | Whisper **large v3** or **turbo** (switched in Controller → Hlas → Přepis řeči, KC 1.0.11; was `small`), int8, on the CPU, one model in RAM at a time. large v3 is far heavier than `small` (not yet timed on this CPU — the row shows "věta za … s"); turbo is the one to pick if a sentence takes too long |
 
 ```bash
 systemctl --user status xtts stt

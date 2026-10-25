@@ -238,6 +238,12 @@ export function onServer(msg) {
       bus.emit('storage', msg);
       break;
 
+    case 'stt':
+      /* Přepis řeči switched to the other Whisper — from another page or by
+         Kacey (stt.js on the server, voice/server-stt.js and ui/stt-picker.js here). */
+      bus.emit('stt', msg);
+      break;
+
     case 'calendar_sync':
       /* A calendar sync started or ended — the night's, or Synchronizovat on
          any open page (calsync.js on the server, ui/calendar.js here). */

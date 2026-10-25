@@ -644,6 +644,26 @@ with real progress and reloads after reconnecting. Kacey's `app_storage`
 lists, writes a text or a chat photo as a file (`device: kacey`), deletes,
 restores, and opens the screen (an `open` frame to her own chat's page).
 
+### Přepis řeči
+
+Dictation is recorded by the page
+([voice/server-stt.js](public/js/voice/server-stt.js), a stand-in with the
+shape of a `SpeechRecognition`) as 16 kHz WAV and posted to `/api/stt`;
+[stt.js](stt.js) hands it to the Whisper sidecar on this machine
+([voicelab/stt_server.py](voicelab/stt_server.py), port 8791, CPU int8).
+[recognition.js](public/js/voice/recognition.js) prefers it whenever
+`/api/stt/health` says ready and uses the browser's engine only while Whisper
+is down or loading. The sidecar holds one model — **large v3** or **turbo**
+(large-v3-turbo) — and frees it before loading the other. The owner's choice
+is `kacey_kv` `stt.model` (the Controller's Přepis řeči row and Kacey's
+`app_stt` switch through `setModel`); the sidecar's own `stt_state.json`
+only brings it up right without Kacey, and `health()` asks a sidecar that
+holds something else for the owner's model, at most every 5 minutes and never
+over its own load error. The last sentence's time is `stt.last`. A switch goes
+out as an `stt` frame (`by`, `origin`): other pages poll again, Kacey's is
+said on every page. In a preview the switch is pretended — the sidecar is the
+live app's.
+
 ### The web
 
 The chat's session has two built-in tools, `WebSearch` and `WebFetch`
