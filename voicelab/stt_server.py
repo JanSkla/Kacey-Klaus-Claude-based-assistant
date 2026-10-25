@@ -14,7 +14,7 @@ Endpoints
     POST /model?name=turbo         -> 202 {choice, loading}: load another model
 
 Whisper small by default: on kaceybody's 4-core CPU it writes a sentence down
-in a second or two. Large v3 is the best of the family at Czech and its turbo
+in about 5 s. Large v3 is the best of the family at Czech and its turbo
 variant (large-v3-turbo: the same encoder, 4 decoder layers instead of 32)
 nearly as good, but both run the large encoder over a 30 s window for every
 utterance — there that was 27–37 s a sentence, however short. The page

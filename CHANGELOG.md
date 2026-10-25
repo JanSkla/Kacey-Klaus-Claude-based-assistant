@@ -25,7 +25,7 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 - Whisper **small** is back as a third choice in Přepis řeči and is the
   default again (`stt.js`, the sidecar, `stt.service`). On kaceybody's CPU
   large v3 took ~37 s a sentence (127 s after idle, past Kacey's 60 s limit)
-  and turbo ~27 s whatever the length; small takes a second or two.
+  and turbo ~27 s whatever the length; small takes ~5 s (less accurate).
   Kacey's `app_stt` and persona know all three and offer small when
   dictation is slow.
 - A model switch no longer keeps the old model in memory: the sidecar now

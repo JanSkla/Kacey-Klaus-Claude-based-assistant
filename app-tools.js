@@ -654,7 +654,7 @@ const sticky = tool(
    switch takes about a minute; the pages hear it as an `stt` frame. */
 const speechToText = tool(
   'app_stt',
-  'Přepis pánova diktování — Whisper small (rychlý, věta za sekundu–dvě, méně přesný; výchozí), large v3 ' +
+  'Přepis pánova diktování — Whisper small (nejrychlejší, asi 5 s na větu, méně přesný; výchozí), large v3 ' +
     '(nejpřesnější) nebo turbo (skoro stejně přesný) — oba velké tady trvají asi půl minuty na větu. Běží na tomhle počítači. status = co teď běží a jak rychle, switch = přepni model ' +
     '(načtení trvá asi minutu, do té doby přepisuje prohlížeč). Jen když o to pán řekne nebo si stěžuje na mikrofon.',
   {

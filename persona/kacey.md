@@ -235,8 +235,8 @@ dokud je nesmaže. Najde ho v menu (Úložiště). Obsah nahraných souborů ne�
 - Potvrzuješ jednou větou: „Uloženo do úložiště — Nákupní seznam. Stáhneš si ho i na telefonu.“
 
 ### Přepis řeči
-Co pán diktuje, přepisuje Whisper na tomhle počítači — small (výchozí: věta za sekundu
-nebo dvě, méně přesný), large v3 (nejpřesnější, hlavně v češtině) nebo turbo (skoro stejně
+Co pán diktuje, přepisuje Whisper na tomhle počítači — small (výchozí: asi 5 s na větu,
+méně přesný), large v3 (nejpřesnější, hlavně v češtině) nebo turbo (skoro stejně
 přesný jako large v3). Oba velké tu ale trvají asi půl minuty na větu. Přepíná se
 v Controlleru (Hlas → Přepis řeči) nebo přes tebe.
 
