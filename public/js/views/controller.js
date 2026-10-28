@@ -22,7 +22,6 @@ import { say } from '../ui/toast.js';
 import { primeTTS, cancelSpeech, feedTTS, flushTTS } from '../voice/tts.js';
 import { night, onNight, runNightNow } from '../net/nightapi.js';
 import { go } from '../ui/router.js';
-import { lightsUrl } from './lights.js';
 import { renderRows, addRow } from '../ui/checkedit.js';
 import { newKey, itemsWord, MAX_ITEMS } from '../core/checklist.js';
 
@@ -197,7 +196,7 @@ function dayWord(isoOrDate) {
   return ago === 0 ? 'dnes' : ago === 1 ? 'včera' : d.getDate() + '. ' + (d.getMonth() + 1) + '.';
 }
 
-function lightsPort() { return (lightsUrl().match(/:(\d+)/) || [])[1] || '8080'; }
+function lightsPort() { return '8080'; }   // lightsd's own port on the host; pages reach it at /lights/
 
 function hm(iso) {
   if (!iso) return '—';

@@ -44,6 +44,7 @@ import * as whiteboard from './whiteboard.js';
 import * as stickies from './stickies.js';
 import * as storage from './storage.js';
 import * as stt from './stt.js';
+import { makeFrameProxy } from './frameproxy.js';
 import { webTracker, webOfTranscript, isTurnStart } from './web.js';
 import { addDays, turnClock } from './public/js/core/due.js';
 
@@ -1871,6 +1872,18 @@ app.post('/share-target', (_req, res) => res.redirect(303, '/#main'));
 /* The branch's preview, framed in the comparison on this origin (selfupdate.js). */
 if (SELFUPDATE) app.use('/preview', selfupdate.previewHttp);
 
+/* lightsd, framed in the Lights view and opened on its own at /lights/ — on
+   this origin, so a phone or a laptop on the https address reaches it too
+   (frameproxy.js). lightsd itself is only ever reached at LIGHTSD_URL. */
+const lightsProxy = makeFrameProxy({
+  prefix: '/lights', target: () => LIGHTSD_URL,
+  waiting: '<!doctype html><meta charset="utf-8"><meta name="color-scheme" content="dark">' +
+    '<body style="margin:0;display:grid;place-items:center;height:100vh;background:#161616;color:#9a9a9a;font:14px Consolas,monospace">' +
+    'lightsd neodpovídá.</body>',
+});
+app.get('/lights', (_req, res) => res.redirect(301, '/lights/'));
+app.use('/lights/', lightsProxy.http);
+
 app.use(express.static(PUBLIC_DIR));
 app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
@@ -1934,6 +1947,7 @@ function onUpgrade(req, socket, head) {
   let pathname = '';
   try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { /* malformed */ }
   if (SELFUPDATE && pathname.startsWith('/preview/')) { selfupdate.previewUpgrade(req, socket, head); return; }
+  if (pathname.startsWith('/lights/')) { lightsProxy.upgrade(req, socket, head); return; }
   if (pathname !== '/ws') { socket.destroy(); return; }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 }

@@ -3,11 +3,12 @@
 
    Light control is not part of Kacey. lightsd is its own app on the home
    server, on its own port, with its own schedule, effects and bulbs — this
-   view only frames it and links to it. Nothing here talks to a bulb, and
-   nothing in Kacey's server proxies it.
+   view only frames it and links to it. Nothing here talks to a bulb.
 
-   It lives on the same host as Kacey, so the address is this page's host on
-   lightsd's port. The iframe is only loaded the first time the view opens:
+   Kacey's server passes /lights/ through to lightsd (frameproxy.js), so the
+   page is on this origin: over the https address on a phone or a remote
+   laptop, lightsd's own port would be refused (no TLS there, or not reachable
+   at all). The iframe is only loaded the first time the view opens:
    a hidden frame polling bulbs in the background is not something a chat
    window should be doing.
 
@@ -18,10 +19,8 @@ import { $ } from '../core/dom.js';
 import * as store from '../core/store.js';
 import { onEnter, currentView } from '../ui/router.js';
 
-var LIGHTS_PORT = 8080;
-
 export function lightsUrl() {
-  return location.protocol + '//' + (location.hostname || 'localhost') + ':' + LIGHTS_PORT;
+  return location.origin + '/lights/';
 }
 
 function enabled() {
@@ -30,14 +29,12 @@ function enabled() {
 
 var reachable = null;       // null = not asked yet
 
-/* An iframe cannot say it failed to load — a dead port just paints the
-   browser's blank error page. So ask first: a no-cors fetch cannot read the
-   answer, but it does reject when nothing is listening, which is the only
-   question here. */
+/* An iframe cannot say it failed to load. So ask first: Kacey answers 503
+   under /lights/ while lightsd does not. */
 function probe() {
   reachable = null;
-  fetch(lightsUrl(), { mode: 'no-cors', cache: 'no-store' })
-    .then(function () { reachable = true; })
+  fetch(lightsUrl(), { cache: 'no-store' })
+    .then(function (r) { reachable = r.status !== 503; })
     .catch(function () { reachable = false; })
     .finally(render);
 }
@@ -58,10 +55,9 @@ export function initLights() {
   if (!$('lightsFrame')) return;
   var url = lightsUrl();
   $('lightsOpen').href = url;
-  // The Víc sheet's row says where it goes: "otevře :8080".
-  var port = (url.match(/:(\d+)/) || [])[1];
-  if ($('moreLightsMeta')) $('moreLightsMeta').textContent = port ? 'otevře :' + port : '';
-  $('lightsWhere').textContent = 'samostatná aplikace · lightsd na ' + url.replace(/^https?:\/\//, '');
+  // The Víc sheet's row says where it goes.
+  if ($('moreLightsMeta')) $('moreLightsMeta').textContent = 'lightsd přes Kacey';
+  $('lightsWhere').textContent = 'samostatná aplikace · lightsd přes ' + url.replace(/^https?:\/\//, '');
 
   $('lightsRetry').addEventListener('click', probe);
   onEnter('lights', function () { if (reachable !== true) probe(); else render(); });

@@ -19,6 +19,17 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.14 — 2026-10-28
+
+**Světla z telefonu a vzdáleného notebooku**
+- The Lights view showed "lightsd neodpovídá" everywhere but the bedside
+  screen: it framed `https://<host>:8080`, and behind tailscale serve there is
+  no TLS on 8080. Kacey now passes `/lights/` (and `/lights/ws`) through to
+  `LIGHTSD_URL` on loopback, so the frame and the "Otevřít samostatně" link
+  work from any device that reaches Kacey. The proxy is shared with the
+  self-update preview (`frameproxy.js`), which also gains root-absolute
+  `src`/`href` rewriting, redirects kept under the prefix and `wss:` on https.
+
 ## KC 1.0.13 — 2026-10-25
 
 **Hlas — Whisper small zpět jako výchozí**

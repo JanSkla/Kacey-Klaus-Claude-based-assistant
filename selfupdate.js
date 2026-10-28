@@ -29,7 +29,7 @@ import { query, createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, symlinkSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import http from 'node:http';
+import { makeFrameProxy } from './frameproxy.js';
 import path from 'node:path';
 import { z } from 'zod';
 
@@ -747,85 +747,20 @@ function stopPreview() {
 
 /* ---- the preview, through Kacey ------------------------------------------------------------
    The comparison loads the preview at /preview/ on Kacey's own origin, not on
-   its port: behind an https front (tailscale serve) a frame on http://host:8092
-   is refused, and a phone may not reach that port at all. Every request under
-   /preview/ is passed to the preview process, and its page gets a <base> and a
-   small shim so the absolute URLs its code uses (/api/…, the /ws socket) stay
-   under /preview/ too. The shim is Kacey's, not the branch's, so it works for
-   whatever the branch has changed. */
-
-const PREFIX = '/preview';
-
-const SHIM = `<base href="${PREFIX}/"><script>(function(){
-var P=${JSON.stringify(PREFIX)};
-function fix(u){try{var x=new URL(String(u),location.href);
-if(x.host===location.host&&x.pathname.indexOf(P+'/')!==0){x.pathname=P+x.pathname;return x.href;}}catch(e){}return u;}
-var F=window.fetch;window.fetch=function(i,o){
-if(typeof i==='string'||i instanceof URL)i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);return F.call(this,i,o);};
-var W=window.WebSocket;function S(u,p){return p===undefined?new W(fix(u)):new W(fix(u),p);}
-S.prototype=W.prototype;['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(function(k){S[k]=W[k];});window.WebSocket=S;
-var E=window.EventSource;if(E){var ES=function(u,o){return new E(fix(u),o);};ES.prototype=E.prototype;window.EventSource=ES;}
-var X=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){arguments[1]=fix(u);return X.apply(this,arguments);};
-if(navigator.serviceWorker)navigator.serviceWorker.register=function(){return Promise.reject(new Error('preview'));};
-})();</script>`;
+   its port (frameproxy.js says why). The shim there is Kacey's, not the
+   branch's, so it works for whatever the branch has changed. */
 
 const WAITING = '<!doctype html><meta charset="utf-8"><meta name="color-scheme" content="dark">' +
   '<body style="margin:0;display:grid;place-items:center;height:100vh;background:#161616;color:#9a9a9a;font:14px Consolas,monospace">' +
   'Náhled ještě neběží.</body>';
 
+const previewProxy = makeFrameProxy({ prefix: '/preview', target: () => `http://127.0.0.1:${PREVIEW_PORT}`, waiting: WAITING });
+
 /** Express middleware, mounted at /preview. */
-export function previewHttp(req, res) {
-  const headers = { ...req.headers, host: `127.0.0.1:${PREVIEW_PORT}`, 'accept-encoding': 'identity' };
-  delete headers['if-none-match'];
-  delete headers['if-modified-since'];
-  const out = http.request({ host: '127.0.0.1', port: PREVIEW_PORT, method: req.method, path: req.url || '/', headers }, (pr) => {
-    const type = String(pr.headers['content-type'] || '');
-    if (!type.startsWith('text/html')) {
-      res.writeHead(pr.statusCode || 502, pr.headers);
-      pr.pipe(res);
-      return;
-    }
-    const chunks = [];
-    pr.on('data', (c) => chunks.push(c));
-    pr.on('end', () => {
-      let html = Buffer.concat(chunks).toString('utf8');
-      html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + SHIM) : SHIM + html;
-      const hdrs = { ...pr.headers, 'content-length': Buffer.byteLength(html), 'cache-control': 'no-store' };
-      delete hdrs.etag;
-      delete hdrs['transfer-encoding'];
-      delete hdrs['last-modified'];
-      res.writeHead(pr.statusCode || 200, hdrs);
-      res.end(html);
-    });
-  });
-  out.on('error', () => {
-    if (res.headersSent) res.end();
-    else res.status(503).type('html').send(WAITING);
-  });
-  req.pipe(out);
-}
+export const previewHttp = previewProxy.http;
 
 /** The socket of a framed preview (/preview/ws) → the preview's own /ws. */
-export function previewUpgrade(req, socket, head) {
-  const pathPart = (req.url || '').slice(PREFIX.length) || '/';
-  const out = http.request({
-    host: '127.0.0.1', port: PREVIEW_PORT, method: 'GET', path: pathPart,
-    headers: { ...req.headers, host: `127.0.0.1:${PREVIEW_PORT}` },
-  });
-  out.on('upgrade', (pres, psock, phead) => {
-    let lines = 'HTTP/1.1 101 Switching Protocols\r\n';
-    for (let i = 0; i < pres.rawHeaders.length; i += 2) lines += `${pres.rawHeaders[i]}: ${pres.rawHeaders[i + 1]}\r\n`;
-    socket.write(`${lines}\r\n`);
-    if (phead?.length) socket.write(phead);
-    if (head?.length) psock.write(head);
-    psock.on('error', () => socket.destroy());
-    socket.on('error', () => psock.destroy());
-    psock.pipe(socket).pipe(psock);
-  });
-  out.on('response', () => socket.destroy());
-  out.on('error', () => socket.destroy());
-  out.end();
-}
+export const previewUpgrade = previewProxy.upgrade;
 
 /* ---- helpers ------------------------------------------------------------------------- */
 
