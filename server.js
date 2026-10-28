@@ -1881,8 +1881,14 @@ const lightsProxy = makeFrameProxy({
     '<body style="margin:0;display:grid;place-items:center;height:100vh;background:#161616;color:#9a9a9a;font:14px Consolas,monospace">' +
     'lightsd neodpovídá.</body>',
 });
-app.get('/lights', (_req, res) => res.redirect(301, '/lights/'));
-app.use('/lights/', lightsProxy.http);
+// Express matches /lights and /lights/ alike; only the bare one is redirected.
+app.use('/lights', (req, res) => {
+  if (req.originalUrl === '/lights' || req.originalUrl.startsWith('/lights?')) {
+    res.redirect(302, '/lights/' + req.originalUrl.slice('/lights'.length));
+    return;
+  }
+  lightsProxy.http(req, res);
+});
 
 app.use(express.static(PUBLIC_DIR));
 app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));

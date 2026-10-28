@@ -19,6 +19,13 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.15 — 2026-10-28
+
+**Světla — oprava přesměrování**
+- `/lights/` redirected to itself: Express matches `/lights` and `/lights/`
+  alike, so the bare-path redirect caught both. Only the bare `/lights` is
+  redirected now.
+
 ## KC 1.0.14 — 2026-10-28
 
 **Světla z telefonu a vzdáleného notebooku**
