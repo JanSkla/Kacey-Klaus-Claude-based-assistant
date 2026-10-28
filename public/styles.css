@@ -3516,6 +3516,7 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
 .runwin__body { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 12px 10px; }
 .runwin__title { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .runwin__meta { margin: 2px 0 0; font-size: 13px; color: var(--ink2); }
+.runwin__off { margin: 8px 0 0; padding-left: 8px; border-left: 2px solid var(--warn); font-size: 12px; line-height: 1.5; color: var(--ink2); }
 .runwin__list { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; }
 .runwin__empty { margin: 0; font-size: 13px; line-height: 1.6; }
 .runitem--win { min-height: 44px; gap: 12px; padding: 8px 12px; }

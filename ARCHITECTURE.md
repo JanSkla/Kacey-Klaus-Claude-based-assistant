@@ -622,6 +622,23 @@ one transaction and one `restored` frame. That shared timestamp is also what
 Kacey's `restore` uses to find "the last delete". Her `clear` refuses without
 `sure: true`, which the persona sets only after the owner says yes.
 
+### Seznam u úkolu
+
+A task's own checklist (Seznam / Spustit on its row) is the app section
+`checklists`: kv `checklists`, `{ [task id]: [{ id, label, note, done }] }`.
+[public/js/core/tasklist.js](public/js/core/tasklist.js) is shared by the
+browser and the server: `setSection('checklists')` cleans every write with it
+(labels capped, 40 items, ids kept unique), and Kacey's `app_task_list`
+(add / check / uncheck / remove / reset / clear, items by id or words) uses its
+`applyListOp`; `app_read` prints a task's list under its line. The night run
+writes one with a generated task (nightstore.js). On a desktop the list opens
+in a floating window ([public/js/ui/runwins.js](public/js/ui/runwins.js)) in
+the lístečky's layer, up to 6 at once; which are open and where is this
+device's localStorage (`kacey.tasks.runwins`), restored only once the store has
+heard from the server, so an offline boot does not drop them. The phone keeps
+the full-screen `task` view. Both write through the store's section, so a
+Kacey change (an `app_changed` frame) redraws an open window.
+
 ### Úložiště
 
 [storage.js](storage.js) moves files between the owner's devices. The bytes

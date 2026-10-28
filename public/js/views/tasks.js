@@ -33,6 +33,7 @@ import { submit, isOnline } from '../net/protocol.js';
 import * as bus from '../core/bus.js';
 import { orbState } from '../ui/orb.js';
 import { initRunWins, openRunWin, isRunWinOpen, refreshRunWins } from '../ui/runwins.js';
+import { MAX_ITEMS as MAX_LIST_ITEMS, newItemId } from '../core/tasklist.js';
 
 /* `optional` groups only appear when something is in them. */
 var GROUPS = [
@@ -869,7 +870,9 @@ function renderRunner() {
 function addChecklistItem(label) {
   var text = String(label || '').trim();
   if (!text || !runId) return false;
-  setChecklist(runId, checklistFor(runId).concat([{ id: 'c' + Date.now(), label: text, note: '', done: false }]));
+  var items = checklistFor(runId);
+  if (items.length >= MAX_LIST_ITEMS) { say('Víc než ' + MAX_LIST_ITEMS + ' položek se do jednoho seznamu nevejde.'); return false; }
+  setChecklist(runId, items.concat([{ id: newItemId(), label: text, note: '', done: false }]));
   return true;
 }
 
@@ -987,7 +990,7 @@ export function initTasks() {
     setItems: setChecklist,
     finish: toggleTaskDone,
     when: whenText,
-    ready: store.isReady,
+    ready: store.isLoaded,
     onPaint: renderTasks
   });
 

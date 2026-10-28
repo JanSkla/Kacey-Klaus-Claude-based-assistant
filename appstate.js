@@ -25,6 +25,7 @@ import path from 'node:path';
 
 import { HERE, LOGICAL_DAY_START_HOUR, MORNING_ITEMS } from './config.js';
 import { normalizeChecklist } from './public/js/core/checklist.js';
+import { normalizeTaskLists } from './public/js/core/tasklist.js';
 import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 import { KIND_KEYS } from './public/js/core/routine-cats.js';
@@ -360,7 +361,8 @@ export function setSection(name, value, opts = {}) {
     case 'journal': writeJournal(value); break;
     case 'routine': writeRoutine(value); break;
     case 'timers': kvSet('timers.presets', (value && value.presets) || []); break;
-    case 'checklists': kvSet('checklists', value || {}); break;
+    // The tasks' own lists (public/js/core/tasklist.js), cleaned whoever sends them.
+    case 'checklists': kvSet('checklists', normalizeTaskLists(value)); break;
     case 'settings': kvSet('settings', normalizeSettings(value)); break;
     case 'morning': kvSet('morning.checklist', normalizeChecklist(value, morningChecklist())); break;
     default: break;

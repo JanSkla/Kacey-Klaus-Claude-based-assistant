@@ -21,6 +21,7 @@ var pending = {};          // section -> timer
 var ops = {};              // section -> the patches since the last successful save
 var unsaved = {};          // section -> its last save failed for want of a connection
 var ready = false;
+var loaded = false;        // the server has answered at least once
 
 /* The same shape the server defaults to, so a view rendered before the fetch
    lands (or with the server down) has something coherent to draw. */
@@ -48,6 +49,10 @@ export var data = {
 };
 
 export function isReady() { return ready; }
+
+/** Whether `data` is the server's, not the defaults of a page that booted
+    offline — what may decide that a task is gone. */
+export function isLoaded() { return loaded; }
 
 /** Subscribe to every change. Returns nothing — nothing unsubscribes here. */
 export function onChange(fn) { listeners.push(fn); }
@@ -213,6 +218,7 @@ export async function load() {
         : doc[key];
     }
     fresh = true;
+    loaded = true;
   } catch (err) {
     console.warn('[kacey] app state unavailable, running on defaults: ' + err.message);
   }

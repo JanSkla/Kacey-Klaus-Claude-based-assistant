@@ -11,13 +11,23 @@
 
    The windows share the lístečky's layer, so the one touched last is on top
    of both. Which lists are open, and where, is this device's choice
-   (localStorage), like the tasks view; the lists themselves are the store's.
+   (localStorage), like the tasks view; the lists themselves are the store's
+   (kv `checklists`, public/js/core/tasklist.js), so a tick here is a tick on
+   the phone's runner, and Kacey's app_task_list redraws an open window.
+
+   Offline a window keeps working: the store keeps the change and sends it
+   when the server answers again, and the window says so under its title.
+   The lists open at the last reload come back only once the server's tasks
+   are here — a page that booted offline must not take "no tasks" for "the
+   tasks are gone" and forget them.
 
    The phone keeps the full-screen runner (views/tasks.js): there is no
    room for a window, and no lístečky either.
    ========================================================================= */
 
 import { el, fill } from '../core/el.js';
+import * as bus from '../core/bus.js';
+import { MAX_ITEMS, MAX_LABEL, newItemId, progressText } from '../core/tasklist.js';
 import { say } from './toast.js';
 import { isPhone } from './psheet.js';
 
@@ -25,18 +35,20 @@ var KEY = 'kacey.tasks.runwins';
 var MAX = 6;
 var W = 340, H = 440;
 
-var deps = null;             // { task(id), items(id), setItems(id, list), finish(id), when(t), onPaint() }
+var deps = null;             // { task(id), items(id), setItems(id, list), finish(id), when(t), ready(), onPaint() }
 var layer = null;
 var wins = {};               // task id -> { box, ... }
 var places = {};             // task id -> { x, y, w, h } as last dragged
 var order = [];              // task ids, oldest first
 var drag = null;
+var offline = false;
 
 function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(order.map(function (id) {
-      return Object.assign({ id: id }, places[id] || {});
-    })));
+    // Lists still waiting for their tasks (an offline boot) are kept, after the open ones.
+    var open = order.map(function (id) { return Object.assign({ id: id }, places[id] || {}); });
+    var waiting = (pending || []).filter(function (p) { return !wins[p.id]; });
+    localStorage.setItem(KEY, JSON.stringify(open.concat(waiting).slice(0, MAX)));
   } catch (e) { /* private mode: this load only */ }
 }
 
@@ -56,12 +68,8 @@ function host() {
   return layer;
 }
 
-/** "1 položka", "3 položky", "5 položek". */
-function itemsWord(n) {
-  return n + (n === 1 ? ' položka' : n >= 2 && n <= 4 ? ' položky' : ' položek');
-}
-
-export function isRunWinOpen(id) { return !!wins[id]; }
+/* Hidden on a phone (styles.css): there the row's button opens the runner. */
+export function isRunWinOpen(id) { return !!wins[id] && !isPhone(); }
 
 /* ---- where a window goes ------------------------------------------------- */
 
@@ -98,16 +106,20 @@ function build(id, k) {
 
   var title = el('h3.runwin__title');
   var meta = el('p.runwin__meta');
+  var off = el('p.runwin__off', { role: 'status', hidden: true }, 'Jsi offline — co odškrtneš, uložím, až se připojím.');
   var list = el('div.runwin__list');
   var input = el('input.input', {
-    type: 'text', placeholder: 'Přidat položku — „boty“, „ručník“…', autocomplete: 'off', 'aria-label': 'Nová položka'
+    type: 'text', placeholder: 'Přidat položku — „boty“, „ručník“…', autocomplete: 'off', 'aria-label': 'Nová položka',
+    maxlength: String(MAX_LABEL)
   });
   var form = el('form.runwin__add', {
     onsubmit: function (ev) {
       ev.preventDefault();
       var text = input.value.trim();
       if (!text) return;
-      deps.setItems(id, deps.items(id).concat([{ id: 'c' + Date.now(), label: text, note: '', done: false }]));
+      var items = deps.items(id);
+      if (items.length >= MAX_ITEMS) { say('Víc než ' + MAX_ITEMS + ' položek se do jednoho seznamu nevejde.'); return; }
+      deps.setItems(id, items.concat([{ id: newItemId(), label: text, note: '', done: false }]));
       input.value = '';
     }
   }, [input, el('button.btn.btn--sm', { type: 'submit' }, 'Přidat')]);
@@ -125,7 +137,7 @@ function build(id, k) {
   ]);
 
   var box = el('section.sticky.runwin', { role: 'dialog', 'aria-label': 'Seznam', 'data-task': id }, [
-    bar, el('div.runwin__body', [title, meta, list]), form, foot
+    bar, el('div.runwin__body', [title, meta, off, list]), form, foot
   ]);
   box.addEventListener('pointerdown', function () { toFront(rec); }, true);
   box.addEventListener('keydown', function (ev) {
@@ -169,7 +181,7 @@ function build(id, k) {
     }, 300);
   }).observe(box);
 
-  Object.assign(rec, { box: box, count: count, title: title, meta: meta, list: list, input: input, fillBar: fillBar });
+  Object.assign(rec, { box: box, count: count, title: title, meta: meta, off: off, list: list, input: input, fillBar: fillBar });
   return rec;
 }
 
@@ -178,7 +190,8 @@ function paint(rec) {
   var items = deps.items(rec.id);
   var done = items.filter(function (i) { return i.done; }).length;
   rec.box.setAttribute('aria-label', 'Seznam · ' + (t ? t.label : 'Úkol'));
-  rec.count.textContent = items.length ? done + ' z ' + items.length + ' hotovo' : 'prázdný';
+  rec.count.textContent = progressText(items);
+  rec.off.hidden = !offline;
   rec.box.classList.toggle('is-complete', !!items.length && done === items.length);
   rec.title.textContent = t ? t.label : 'Úkol';
   var meta = t ? [deps.when(t), t.meta].filter(Boolean).join(' · ') : '';
@@ -189,7 +202,10 @@ function paint(rec) {
     return el('button.runitem.runitem--win' + (item.done ? '.is-done' : ''), {
       type: 'button', 'aria-pressed': String(!!item.done),
       onclick: function () {
-        deps.setItems(rec.id, items.map(function (x, n) { return n === i ? Object.assign({}, x, { done: !x.done }) : x; }));
+        // The list as it is now (Kacey may have changed it since this was drawn), by the item's id.
+        deps.setItems(rec.id, deps.items(rec.id).map(function (x, n) {
+          return (item.id ? x.id === item.id : n === i) ? Object.assign({}, x, { done: !x.done }) : x;
+        }));
       }
     }, [
       el('span.runitem__box', item.done ? '✓' : ''),
@@ -213,7 +229,10 @@ export function openRunWin(id, quiet) {
     rec.input.focus({ preventScroll: true });
     return true;
   }
-  if (order.length >= MAX) { say('Víc seznamů najednou se nevejde — nějaký zavři.'); return true; }
+  if (order.length >= MAX) {
+    if (!quiet) say('Víc seznamů najednou se nevejde — nějaký zavři.');
+    return true;
+  }
   rec = wins[id] = build(id, order.length);
   order.push(id);
   host().appendChild(rec.box);
@@ -251,7 +270,9 @@ export function refreshRunWins() {
   restore();
 }
 
-/* The lists open at the last reload come back once the tasks are there. */
+/* The lists open at the last reload come back once the server's tasks are
+   there (deps.ready: the store has heard from it), and on a desktop-wide
+   window — a phone-wide one keeps them for later. */
 var pending = null;
 function restore() {
   if (!pending || !deps.ready() || isPhone()) return;
@@ -270,6 +291,15 @@ function restore() {
 export function initRunWins(d) {
   deps = d;
   pending = saved();
-  window.addEventListener('resize', function () { order.forEach(function (id) { place(wins[id]); }); });
+  window.addEventListener('resize', function () {
+    order.forEach(function (id) { place(wins[id]); });
+    restore();
+  });
+  // 'connecting' is not offline yet: the HTTP side usually still answers (as ui/stickies.js).
+  bus.on('conn', function (st) {
+    var was = offline;
+    offline = st === 'offline';
+    if (offline !== was) order.forEach(function (id) { paint(wins[id]); });
+  });
   setTimeout(restore, 0);
 }

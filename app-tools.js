@@ -26,6 +26,7 @@ import { LOGICAL_DAY_START_HOUR } from './config.js';
 import { bucketOf, dueLabel, normalizeDue, parseDue, DAY_START_HOUR } from './public/js/core/due.js';
 import { CATEGORY_KEYS, KINDS } from './public/js/core/routine-cats.js';
 import { MAX_ITEMS, newKey } from './public/js/core/checklist.js';
+import { MAX_ITEMS as LIST_MAX, applyListOp, progressText } from './public/js/core/tasklist.js';
 import { TAG_HINT_MAX, guessTag, newTagId, tagById, tagByName, tagNameProblem, tagsFrom } from './public/js/core/tasktags.js';
 import { logicalDateOf } from './rules.js';
 import * as nightstore from './nightstore.js';
@@ -57,6 +58,13 @@ function describeTask(t, tags = tagsFrom(appstate.get().settings)) {
     : BUCKET_WORDS.none;
   const tag = tagById(tags, t.tag);
   return `- [${t.done ? 'x' : ' '}] (${t.id}) [${tag ? tag.name : 'bez štítku'}] ${t.label} — ${when}${t.meta ? ` · ${t.meta}` : ''}`;
+}
+
+/** A task's own list (Seznam / Spustit), as Kacey reads it: "seznam 1 z 2 hotovo: [x] (c1) Boty · [ ] (c2) Ručník". */
+function describeList(items) {
+  const list = items || [];
+  return `seznam ${progressText(list)}` +
+    (list.length ? ': ' + list.map((i) => `[${i.done ? 'x' : ' '}] (${i.id}) ${i.label}`).join(' · ') : '');
 }
 
 const TAG_HELP =
@@ -167,8 +175,10 @@ const appRead = tool(
         ? 'ŠTÍTKY (za pomlčkou pánův popisek, co pod štítek patří — drž se ho):\n' +
           tags.map((g) => `- ${g.name}${g.hint ? ` — ${g.hint}` : ''}`).join('\n')
         : 'ŠTÍTKY: ' + (tags.map((g) => g.name).join(' · ') || '(žádné — úkoly budou bez štítku)'));
+      const lists = doc.checklists || {};
       parts.push('TASKS:\n' + (doc.tasks.length
-        ? doc.tasks.map((t) => describeTask(t, tags)).join('\n')
+        ? doc.tasks.map((t) => describeTask(t, tags) +
+            (lists[t.id] && lists[t.id].length ? '\n    ' + describeList(lists[t.id]) : '')).join('\n')
         : '(žádné)'));
     }
     if (section === 'all' || section === 'journal') {
@@ -491,6 +501,56 @@ const taskUpdate = tool(
     onWrite('tasks', before);
 
     return ok(`Upraveno: ${describeTask(appstate.get().tasks.find((t) => t.id === id)).slice(2)}`);
+  },
+);
+
+/* A task's own list — what the Seznam / Spustit button opens (a window on a
+   desktop, the full-screen runner on a phone). Kept in kv `checklists`
+   (public/js/core/tasklist.js); an open one redraws on the app_changed frame. */
+const LIST_DONE = {
+  add: 'Přidáno do seznamu', check: 'Odškrtnuto', uncheck: 'Zase neodškrtnuté', remove: 'Smazáno ze seznamu',
+  reset: 'Odškrtnuto zpátky', clear: 'Seznam smazán',
+};
+const taskList = tool(
+  'app_task_list',
+  'Seznam u úkolu (tlačítko Seznam / Spustit u úkolu): věci, které k úkolu patří — co sbalit, co koupit, kroky. ' +
+    'Přidej položky (add), odškrtni (check), vrať odškrtnutí (uncheck), smaž položku (remove), ' +
+    'odškrtej všechno zpátky (reset) nebo smaž celý seznam (clear — jen na výslovné přání). ' +
+    'Id úkolu i položek vypíše app_read (TASKS, řádek „seznam“ pod úkolem). Otevřený seznam se pánovi překreslí sám.',
+  {
+    task: z.string().describe('Id úkolu z app_read.'),
+    action: z.enum(['add', 'check', 'uncheck', 'remove', 'reset', 'clear']),
+    items: z.array(z.string()).optional().describe(
+      'add: nové položky, každá zvlášť a krátce („boty“, „ručník“). ' +
+      'check / uncheck / remove: id položek (c…) z app_read, nebo jejich slova.'),
+  },
+  async ({ task, action, items }) => {
+    const doc = appstate.get();
+    const t = doc.tasks.find((x) => x.id === task);
+    if (!t) return fail(`Úkol "${task}" neexistuje. Vypiš si je přes app_read.`);
+    const names = (items || []).map((s) => String(s).trim()).filter(Boolean);
+    if (action !== 'reset' && action !== 'clear' && !names.length) return fail('Které položky? Nic se nezměnilo.');
+
+    const before = doc.checklists || {};
+    const out = applyListOp(before[t.id], action, names);
+    if (!out.changed.length) {
+      if (out.full.length) return fail(`Seznam u „${t.label}“ má už ${LIST_MAX} položek. Nic se nepřidalo.`);
+      if (out.missing.length) {
+        return fail(`V seznamu u „${t.label}“ není: ${out.missing.join(', ')}. Nic se nezměnilo.\n${describeList(before[t.id])}`);
+      }
+      return ok(action === 'clear' ? `Seznam u „${t.label}“ je prázdný — není co mazat.` : `V seznamu u „${t.label}“ nic odškrtnuté není.`);
+    }
+
+    const next = { ...before };
+    if (out.items.length) next[t.id] = out.items; else delete next[t.id];
+    appstate.setSection('checklists', next);
+    onWrite('checklists', before);
+
+    const now = appstate.get().checklists[t.id] || [];
+    return ok(`${LIST_DONE[action]} u „${t.label}“: ${out.changed.join(', ')}.` +
+      (out.missing.length ? ` Nenašla jsem: ${out.missing.join(', ')}.` : '') +
+      (out.full.length ? ` Nevešlo se (max ${LIST_MAX}): ${out.full.join(', ')}.` : '') +
+      `\nTeď: ${describeList(now)}`);
   },
 );
 
@@ -1338,7 +1398,7 @@ function matchesWords(fileName, words) {
 /* ---- the server --------------------------------------------------------- */
 
 export const APP_TOOLS = [
-  appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskTags, journalAdd, sticky,
+  appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskList, taskTags, journalAdd, sticky,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative, calendarSync,
   notificationsRead, morningAdd, speechToText,
 ];
@@ -1346,7 +1406,7 @@ export const APP_TOOLS = [
 /** Fully-qualified names, for the allow-list in server.js. */
 export const APP_TOOL_NAMES = [
   'app_read', 'app_routine_paint', 'app_routine_erase', 'app_routine_hours', 'app_routine_alter',
-  'app_task_add', 'app_task_update', 'app_task_tags', 'app_journal_add', 'app_sticky',
+  'app_task_add', 'app_task_update', 'app_task_list', 'app_task_tags', 'app_journal_add', 'app_sticky',
   'rules_list', 'ruleset_upsert', 'rule_upsert', 'rule_delete', 'rule_preview',
   'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
@@ -1360,7 +1420,8 @@ export function makeAppServer(ctx = {}) {
     version: '1.0.0',
     instructions:
       'Nástroje pro úpravu Kaceyiny vlastní aplikace: týdenní rutina, úkoly (každý se štítkem, ' +
-      'štítky samotné upravuje app_task_tags, i s pánovým popiskem, co pod štítek patří), deník, ' +
+      'štítky samotné upravuje app_task_tags, i s pánovým popiskem, co pod štítek patří; ' +
+      'seznam věcí u úkolu — co sbalit, co koupit — app_task_list), deník, ' +
       'lístečky na ploše počítače (app_sticky), ' +
       'a pravidla nočního plánování (rules_*, rule_*), podle kterých se v noci samy zakládají úkoly. ' +
       'Nejisté události kalendáře označuje app_calendar_tentative. ' +

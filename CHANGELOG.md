@@ -19,6 +19,29 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.16 — 2026-10-28
+
+**Úkoly — seznamy jako plovoucí okna**
+- On a desktop, Seznam / Spustit on a task opens its checklist in a window
+  that floats over every page like a lísteček — dragged by its bar, resized
+  from its corner, up to 6 at once, the one touched last on top — instead of
+  the full-screen runner. Everything the runner did is there: tick, Přidat,
+  Reset, Hotovo, zavřít; × closes the window and keeps the list
+  ([public/js/ui/runwins.js](public/js/ui/runwins.js)). The phone keeps the
+  full-screen runner.
+- Which lists are open, and where, is kept per device and comes back after a
+  reload — only once the server's tasks are in, so a page that booted offline
+  does not forget them. Offline a window says so and keeps working; the
+  change is sent when the connection is back.
+- The lists are cleaned on every write (`checklists` section, shared
+  [public/js/core/tasklist.js](public/js/core/tasklist.js)): labels trimmed to
+  120 characters, at most 40 items, unique ids.
+- Kacey reads a task's list in `app_read` and changes it with the new
+  `app_task_list` (add, check, uncheck, remove, reset, clear); an open window
+  redraws, and the toast's Vrátit zpět undoes her change. Persona: „Seznam u
+  úkolu“.
+- Tests: `test/tasklist.mjs` (`npm run test:tasklist`, part of `npm test`).
+
 ## KC 1.0.15 — 2026-10-28
 
 **Světla — oprava přesměrování**
