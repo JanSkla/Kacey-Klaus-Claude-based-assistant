@@ -32,6 +32,7 @@ import { isPhone, openSheet, closeSheet } from '../ui/psheet.js';
 import { submit, isOnline } from '../net/protocol.js';
 import * as bus from '../core/bus.js';
 import { orbState } from '../ui/orb.js';
+import { initRunWins, openRunWin, isRunWinOpen, refreshRunWins } from '../ui/runwins.js';
 
 /* `optional` groups only appear when something is in them. */
 var GROUPS = [
@@ -213,8 +214,12 @@ function taskRow(t, big, byTag) {
        clock. A task that already has a list leads with the list, because that
        is the thing the user built. */
     var hasList = checklistFor(t.id).length > 0;
-    kids.push(el('button.btn.btn--sm' + (hasList ? '.btn--accent' : ''), {
-      type: 'button', onclick: function () { openRunner(t.id); }
+    // On a desktop the list opens as a window; while it is open, the button says so.
+    var winOpen = isRunWinOpen(t.id);
+    kids.push(el('button.btn.btn--sm' + (hasList && !winOpen ? '.btn--accent' : ''), {
+      type: 'button', 'aria-pressed': winOpen ? 'true' : null,
+      title: winOpen ? 'Seznam je otevřený — ukázat ho' : null,
+      onclick: function () { openRunner(t.id); }
     }, hasList ? 'Spustit' : 'Seznam'));
     kids.push(el('button.btn.btn--sm', {
       type: 'button', onclick: function () { openFocus(t.id); }
@@ -810,9 +815,10 @@ function startFocusClock() {
 function stopFocusClock() { clearInterval(focusTimer); focusTimer = 0; }
 
 /* ---- the checklist runner ----------------------------------------------
-   A task can carry a checklist; running it is a full-screen list with targets
-   big enough to hit without looking, because this is the one screen used while
-   doing something else. */
+   A task can carry a checklist. On a desktop it opens as a floating window,
+   several at once (ui/runwins.js); on a phone running it is a full-screen
+   list with targets big enough to hit without looking, because this is the
+   one screen used while doing something else. */
 
 export function checklistFor(id) {
   var list = store.data.checklists[id];
@@ -820,6 +826,7 @@ export function checklistFor(id) {
 }
 
 export function openRunner(id) {
+  if (openRunWin(id)) return;
   runId = id;
   go('task');
 }
@@ -974,7 +981,18 @@ export function initTasks() {
   onEnter('tasks', function () { stopFocusClock(); renderTasks(); });
   onEnter('main', stopFocusClock);
 
+  initRunWins({
+    task: function (id) { return tasks().filter(function (x) { return x.id === id; })[0] || null; },
+    items: checklistFor,
+    setItems: setChecklist,
+    finish: toggleTaskDone,
+    when: whenText,
+    ready: store.isReady,
+    onPaint: renderTasks
+  });
+
   store.onChange(function () {
+    refreshRunWins();
     renderToday();
     renderTasks();
     if (runId) renderRunner();

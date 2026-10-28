@@ -3502,6 +3502,33 @@ body[data-view="board"] .top, body[data-view="board"] .sidenav, body[data-view="
 .sticky:focus-within { border-color: var(--line2); outline: 1px solid var(--acc); outline-offset: -1px; }
 @media (max-width: 760px) { .stickies { display: none; } }
 
+/* ==== Seznam u úkolu jako plovoucí okno (ui/runwins.js, 2026-10-28) =====================
+   A lísteček that holds a task's checklist: the same card, bar, × and corner, in the
+   lístečky's layer; its top edge and kicker take --acc (a list in progress, the runner's
+   "Úkol probíhá"), not the note's žlutá. The runner's .runitem, smaller. Desktop only:
+   the phone keeps the full-screen runner. */
+.runwin { --c: var(--acc); min-width: 280px; min-height: 240px; }
+.runwin.is-complete { --c: var(--ok); }
+.runwin.is-flash { animation: runwinFlash 600ms cubic-bezier(.2, 0, .38, .9); }
+@keyframes runwinFlash { 0%, 40% { outline: 2px solid var(--acc); outline-offset: 2px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
+.runwin__count { font-size: 12px; color: var(--ink3); white-space: nowrap; }
+.runwin.is-complete .runwin__count { color: var(--ok); }
+.runwin__body { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 12px 10px; }
+.runwin__title { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.runwin__meta { margin: 2px 0 0; font-size: 13px; color: var(--ink2); }
+.runwin__list { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; }
+.runwin__empty { margin: 0; font-size: 13px; line-height: 1.6; }
+.runitem--win { min-height: 44px; gap: 12px; padding: 8px 12px; }
+.runitem--win .runitem__box { width: 22px; height: 22px; flex-basis: 22px; font-size: 14px; }
+.runitem--win .runitem__label { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+.runitem--win .runitem__note { font-size: 12px; color: var(--ink3); }
+.runitem--win:hover:not(.is-done) { background: var(--l3); }
+.runwin__add { flex: none; display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); }
+.runwin__add .input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 14px; }
+.runwin__foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 12px; }
+.runwin__foot .bar { height: 4px; }
+.runwin .runwin__x { margin-left: 2px; }
+
 /* ==== Úložiště — files between devices (views/storage.js, 2026-10-23) ===================
    One list, a row per file on the #2e2e2e divider: tick box, a folded-corner file icon
    with the extension, the name (the download), size, when · from which device, and
