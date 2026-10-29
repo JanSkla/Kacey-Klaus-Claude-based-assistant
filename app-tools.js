@@ -738,6 +738,50 @@ const speechToText = tool(
   },
 );
 
+/* Hlasitost Kacey: how loud her own voice is on the owner's devices,
+   settings.ttsVolume 0–100 (Controller → Hlas). The pages hear it as an
+   `app_changed` settings frame and say where it landed, with one-click undo. */
+const VOLUME_STEP = 15;
+
+function volumeWords(v) { return v === 0 ? 'ticho (0 %)' : `${v} %`; }
+
+const voiceVolume = tool(
+  'app_voice_volume',
+  'Hlasitost tvého vlastního hlasu (čtení odpovědí nahlas) na pánových zařízeních, 0–100 %. Hudbu to nemění. ' +
+    'status = jak nahlas teď mluvíš; set = nastav přesně (percent); louder / quieter = o kus hlasitěji / tišeji ' +
+    `(o ${VOLUME_STEP} %, nebo o by). Jen když o to pán řekne („mluv tišeji“, „dej hlasitost na 40“). ` +
+    'Změna platí od další věty; pán ji vidí v Controlleru (Hlas → Hlasitost Kacey).',
+  {
+    action: z.enum(['status', 'set', 'louder', 'quieter']),
+    percent: z.number().min(0).max(100).optional().describe('set: nová hlasitost v procentech, 0–100.'),
+    by: z.number().min(1).max(100).optional().describe(`louder / quieter: o kolik procent (výchozí ${VOLUME_STEP}).`),
+  },
+  async ({ action, percent, by }) => {
+    try {
+      const doc = appstate.get();
+      const now = Math.max(0, Math.min(100, Math.round(Number(doc.settings.ttsVolume ?? 100))));
+      if (action === 'status') return ok(`Mluvíš na ${volumeWords(now)}.`);
+      let next;
+      if (action === 'set') {
+        if (typeof percent !== 'number') return fail('Na kolik procent? (percent: 0–100)');
+        next = percent;
+      } else {
+        next = now + (action === 'louder' ? 1 : -1) * (by || VOLUME_STEP);
+      }
+      next = Math.max(0, Math.min(100, Math.round(next / 5) * 5));
+      if (next === now) {
+        return ok(now === 100 && action === 'louder' ? 'Už mluvíš naplno (100 %) — víc přidá jen reproduktor.'
+          : now === 0 && action === 'quieter' ? 'Už jsi úplně potichu (0 %).'
+          : `Hlasitost už je ${volumeWords(now)} — nic jsem neměnila.`);
+      }
+      appstate.setSection('settings', { ...doc.settings, ttsVolume: next, ttsVolumeBy: 'kacey', ttsVolumeAt: new Date().toISOString() });
+      onWrite('settings', doc.settings);
+      return ok(`Hlasitost tvého hlasu: ${volumeWords(now)} → ${volumeWords(next)}. Platí od další věty.` +
+        (next === 0 ? ' Pán tě teď neuslyší — odpovídej i tak, čte to.' : ''));
+    } catch (err) { return fail(err.message); }
+  },
+);
+
 /* ---- the night routine's rules --------------------------------------------
    docs/DREAM.md §8. A rule turns a standing pattern ("whenever I have gym,
    remind me the evening before to pack my bag") into tasks the night run
@@ -1400,7 +1444,7 @@ function matchesWords(fileName, words) {
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskList, taskTags, journalAdd, sticky,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative, calendarSync,
-  notificationsRead, morningAdd, speechToText,
+  notificationsRead, morningAdd, speechToText, voiceVolume,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
@@ -1411,6 +1455,7 @@ export const APP_TOOL_NAMES = [
   'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
   'app_whiteboard_read', 'app_whiteboard_edit', 'app_whiteboard_manage', 'app_storage', 'app_stt',
+  'app_voice_volume',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 /** `ctx.sessionId()` names the chat that asks for an improvement (the history marks it). */
@@ -1441,7 +1486,8 @@ export function makeAppServer(ctx = {}) {
       '(app_read, kalendář, deník) a rozlož je na whiteboard. ' +
       'Soubory mezi pánovým počítačem a telefonem (Úložiště) spravuje app_storage: co tam je, text nebo fotku ' +
       'z chatu uložit jako soubor, smazat, vrátit, otevřít. ' +
-      'Který Whisper přepisuje pánovo diktování (small, large v3 nebo turbo), ukáže a přepne app_stt.',
+      'Který Whisper přepisuje pánovo diktování (small, large v3 nebo turbo), ukáže a přepne app_stt. ' +
+      'Jak nahlas mluvíš ty sama („mluv tišeji“, „hlasitost na 40“), ukáže a nastaví app_voice_volume.',
     tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx), ...makeWhiteboardTools(ctx), ...makeStorageTools(ctx)],
   });
 }

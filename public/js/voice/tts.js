@@ -24,6 +24,7 @@ import { uiAudio } from './chime.js';
 import { takeSentences, forSpeech } from './sentences.js';
 import { noteSpoken, clearSpoken } from './barge.js';
 import { stopRecognition, maybeResumeVoiceLoop } from './recognition.js';
+import { data as appData } from '../core/store.js';
 
 var synth = window.speechSynthesis || null;
 var ttsBuf = '';
@@ -70,6 +71,34 @@ function audioEl() {
     ttsEl.preload = 'auto';
   }
   return ttsEl;
+}
+
+/* How loud her voice is, 0–1: Controller → Hlas → Hlasitost Kacey, stored in
+   settings.ttsVolume (0–100) so it survives a restart and Kacey can change it
+   (app_voice_volume). Both engines read it per sentence; the music is not
+   touched. */
+export function speechVolume() {
+  var v = Number(appData.settings && appData.settings.ttsVolume);
+  if (!isFinite(v)) return 1;
+  return Math.max(0, Math.min(100, v)) / 100;
+}
+
+/* A slider moved while she is speaking: the XTTS clip follows at once (to
+   `percent` while it is still being dragged, else the stored value). The
+   browser engine cannot change an utterance already queued; the next one is. */
+export function applySpeechVolume(percent) {
+  var v = typeof percent === 'number' ? Math.max(0, Math.min(100, percent)) / 100 : speechVolume();
+  if (xttsAudio) { try { xttsAudio.volume = v; } catch (e) { /* iOS: read-only */ } }
+}
+
+/* iOS ignores HTMLMediaElement.volume (the hardware buttons own it), so the
+   XTTS voices cannot be turned down there — the Controller says so. */
+export function mediaVolumeWorks() {
+  try {
+    var a = document.createElement('audio');
+    a.volume = 0.5;
+    return a.volume === 0.5;
+  } catch (e) { return false; }
 }
 
 /* Unlock audio on the first real user gesture (Safari/iOS refuse otherwise).
@@ -196,6 +225,7 @@ function speakChunkXtts(text) {
           var a = audioEl();                  // the primed element, not a new one
           var url = URL.createObjectURL(blob);
           xttsAudio = a;
+          try { a.volume = speechVolume(); } catch (e) { /* iOS: read-only */ }
           a.onended = function () { URL.revokeObjectURL(url); finish(); resolve(); };
           a.onerror = function () { URL.revokeObjectURL(url); finish(); resolve(); };
           a.src = url;
@@ -247,7 +277,7 @@ function speakChunk(text) {
   u.lang = state.lang;
   var v = pickVoice(state.lang);
   if (v) u.voice = v;
-  u.rate = 1.02; u.pitch = 1; u.volume = 1;
+  u.rate = 1.02; u.pitch = 1; u.volume = speechVolume();
 
   var done = false, guard = 0;
   function finish() {
@@ -298,6 +328,7 @@ export function playClip(url, text) {
     return new Promise(function (resolve) {
       var a = audioEl();
       xttsAudio = a;
+      try { a.volume = speechVolume(); } catch (e) { /* iOS: read-only */ }
       a.onended = function () { finish(); resolve(); };
       a.onerror = function () { finish(); resolve(); };
       a.src = url;

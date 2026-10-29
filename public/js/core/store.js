@@ -43,7 +43,7 @@ export var data = {
      since) is refused instead of deleting them. */
   tasksRev: 0,
   settings: {
-    hue: 193, wakeMin: 405, briefPrompt: '',
+    hue: 193, wakeMin: 405, briefPrompt: '', ttsVolume: 100,
     injected: {}, sources: {}, memory: {}, calOn: {}, tools: {}
   }
 };
@@ -197,6 +197,19 @@ export async function applyRemoteChange(section, undo, quiet) {
       say('Úkol přidán · ' + t.label + ' · ' + (tag ? tag.name : 'bez štítku'), act, taskOpener ? function () { taskOpener(t.id); } : null);
       return;
     }
+  }
+  // Kacey set her own volume from the chat (app_voice_volume): say where it landed.
+  if (section === 'settings' && undo && typeof undo === 'object' && data.settings.ttsVolume !== (undo.ttsVolume == null ? 100 : undo.ttsVolume)) {
+    var was = undo.ttsVolume == null ? 100 : undo.ttsVolume;
+    var now = data.settings.ttsVolume;
+    say('Hlasitost Kacey · ' + (now === 0 ? 'ticho' : now + ' %') + ' — změnila Kacey.', {
+      label: 'Vrátit na ' + (was === 0 ? 'ticho' : was + ' %'),
+      run: function () {
+        patchSettings({ ttsVolume: was, ttsVolumeBy: 'owner', ttsVolumeAt: new Date().toISOString() });
+        say('Hlasitost vrácena na ' + (was === 0 ? 'ticho' : was + ' %') + '.');
+      }
+    });
+    return;
   }
   say(label + ' — změnila Kacey.', act);
 }

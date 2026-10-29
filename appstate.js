@@ -48,6 +48,8 @@ const DEFAULT_SETTINGS = {
   memory: { people: true, work: true, health: true, journal: true, dreams: false },
   calOn: {},
   tools: {},
+  // How loud Kacey's own voice is, 0–100 (Controller → Hlas; app_voice_volume).
+  ttsVolume: 100,
   // The owner's task tags, theirs to rename, add and delete (public/js/core/tasktags.js).
   taskTags: DEFAULT_TAGS,
 };

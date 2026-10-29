@@ -1007,6 +1007,17 @@
           <span class="srow__state" id="ttsState" aria-live="polite">—</span>
           <button type="button" class="switch" id="mute" aria-pressed="true"><span class="switch__knob"></span></button>
         </div>
+        <!-- How loud Kacey's own voice is, saved in settings.ttsVolume (views/ttsvolume.js). -->
+        <div class="srow ttsvol" id="ttsVol">
+          <span class="srow__text"><b id="ttsVolLabel">Hlasitost Kacey</b><em id="ttsVolMeta">Jen její hlas — hudba má hlasitost vlastní.</em></span>
+          <span class="ttsvol__ctl">
+            <button type="button" class="btn btn--step ttsvol__step" id="ttsVolDown" aria-label="Tišeji">−</button>
+            <input type="range" class="vol ttsvol__range" id="ttsVolRange" min="0" max="100" step="5" value="100" aria-labelledby="ttsVolLabel" aria-valuetext="100 %" />
+            <button type="button" class="btn btn--step ttsvol__step" id="ttsVolUp" aria-label="Hlasitěji">+</button>
+            <span class="ttsvol__num num" id="ttsVolNum" aria-live="polite">100 %</span>
+          </span>
+          <button type="button" class="btn btn--sm ttsvol__try" id="ttsVolTry">Vyzkoušet</button>
+        </div>
         <div class="srow">
           <span class="srow__text"><b>Poslouchat „KC“</b><em id="wakeMeta">—</em></span>
           <span class="srow__state" id="wakeState" aria-live="polite">—</span>

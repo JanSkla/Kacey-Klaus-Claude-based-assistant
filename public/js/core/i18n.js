@@ -31,6 +31,7 @@ var STR = {
       if (n === 'app_sticky') return 'Sahám na lístečky…';
       if (n === 'app_task_list') return 'Píšu do seznamu u úkolu…';
       if (n === 'app_storage') return 'Sahám do úložiště…';
+      if (n === 'app_voice_volume') return 'Ladím hlasitost…';
       if (n === 'WebSearch') return 'Hledám na internetu…';
       if (n === 'WebFetch') return 'Čtu webovou stránku…';
       return n === 'klaus-memory' ? 'Prohledávám paměť…' : 'Používám ' + n + '…';

@@ -23,6 +23,7 @@ import { primeTTS, cancelSpeech, feedTTS, flushTTS } from '../voice/tts.js';
 import { night, onNight, runNightNow } from '../net/nightapi.js';
 import { go } from '../ui/router.js';
 import { renderRows, addRow } from '../ui/checkedit.js';
+import { initTtsVolume } from './ttsvolume.js';
 import { newKey, itemsWord, MAX_ITEMS } from '../core/checklist.js';
 
 var SOURCES = [
@@ -414,6 +415,7 @@ export function initController(restartSession) {
 
   $('ctrlRunNight').addEventListener('click', function () { runNow(false); });
   initChecklist();
+  initTtsVolume({ whenWord: whenWord });
 
   onEnter('controller', render);
   setInterval(function () { if (currentView() === 'controller' && !monitorBusy) loadMonitor(); }, 5000);
