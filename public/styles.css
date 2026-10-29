@@ -181,6 +181,10 @@ select:focus-visible, textarea:focus-visible {
   background: var(--acc); color: var(--on-acc); font-weight: 600; font-size: 13px; cursor: pointer;
 }
 .mini__play:hover { filter: brightness(1.12); }
+/* Nothing playing: the bar is a way through to the player page. The empty
+   window and the title step back; Otevřít keeps the accent. */
+.mini.is-idle .mini__win { background: var(--l1); }
+.mini.is-idle .mini__text b { font-weight: 400; color: var(--ink2); }
 
 .mini__drop {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 340px;
