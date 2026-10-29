@@ -13,8 +13,9 @@
    the live turntable, the title, and Pauza/Hrát. Tapped, it drops a panel
    with the turntable at full size, progress, transport and volume.
 
-   Hidden entirely when nothing is playing or nowplayingd is down. Paused, it
-   stays, with the record holding its frame.
+   Nothing playing (or nowplayingd down), it stays as an idle bar: "Nic
+   nehraje" and Otevřít, a way through to the player page to start something
+   from there. Paused, it stays, with the record holding its frame.
    ========================================================================= */
 
 import { $ } from '../core/dom.js';
@@ -122,9 +123,10 @@ function render() {
   var track = status && status.track;
   // Controller → Zdroje → Hudba off: no mini player (nowplayingd plays on regardless).
   var musicOff = ((store.data.settings || {}).sources || {}).music === false;
-  $('mini').hidden = !track || musicOff;
+  $('mini').hidden = musicOff;
+  $('mini').classList.toggle('is-idle', !track);
   if (musicOff) { setOpen(false); return; }
-  if (!track) { setOpen(false); return; }
+  if (!track) { renderIdle(); return; }
 
   playing = !!status.playing;
   progressBase = status.progress_ms || 0;
@@ -138,6 +140,7 @@ function render() {
   $('miniBigArtist').textContent = track.artist || '';
   $('miniPlay').textContent = playing ? 'Pauza' : 'Hrát';
   $('miniPlay').setAttribute('aria-label', playing ? 'Pozastavit' : 'Přehrát');
+  $('miniOpen').title = 'Klepnutí: přehrávač · dvojklepnutí: celá obrazovka';
   $('miniToggle').textContent = playing ? 'Pauza' : 'Přehrát';
   $('miniState').textContent = (playing ? 'HRAJE' : 'POZASTAVENO') + (status.device ? ' · ' + status.device : '');
   $('miniSeek').classList.toggle('is-paused', !playing);
@@ -151,6 +154,22 @@ function render() {
   $('miniError').textContent = status.spotify_error || '';
   $('miniError').hidden = !status.spotify_error;
 }
+
+/* Nothing on: no panel to drop (no track to seek, nothing to pause), so the
+   whole bar is a link through to the player page. */
+function renderIdle() {
+  setOpen(false);
+  playing = false;
+  duration = 0;
+  loadDeck(null);
+  $('miniTitle').textContent = 'Nic nehraje';
+  $('miniArtist').textContent = status ? '' : '· přehrávač neodpovídá';
+  $('miniPlay').textContent = 'Otevřít';
+  $('miniPlay').setAttribute('aria-label', 'Otevřít přehrávač');
+  $('miniOpen').title = 'Otevřít přehrávač';
+}
+
+function idle() { return !(status && status.track); }
 
 function setOpen(open) {
   $('miniDrop').hidden = !open;
@@ -203,6 +222,14 @@ function post(path, body) {
 }
 
 function toggle() { post('/api/player', { action: playing ? 'pause' : 'play' }); }
+
+/* The vinyl full screen: over this page on the kiosk (no second window
+   there), a tab of its own elsewhere. */
+function openPlayer() {
+  setOpen(false);
+  if (KIOSK) openVisual();
+  else window.open(nowplayingUrl(), 'kacey-vinyl');
+}
 
 /* ---- seeking ---------------------------------------------------------------
    Drag shows where it will land; the jump is sent once, on release. The new
@@ -350,22 +377,21 @@ export function initMiniPlayer() {
   });
 
   $('miniOpen').addEventListener('click', function () {
+    if (idle()) { openPlayer(); return; }
     var open = $('miniDrop').hidden;
     setOpen(open);
     if (open) readKeep();              // the visual may have changed it
   });
-  /* Double-click goes straight to the vinyl, full screen: over this page on
-     the kiosk (no second window there), a tab of its own elsewhere. The two
-     clicks before it have opened and closed the panel, so it ends closed. */
+  /* Double-click goes straight to the vinyl, full screen. The two clicks
+     before it have opened and closed the panel, so it ends closed. Idle, the
+     first click already went there. */
   $('miniOpen').addEventListener('dblclick', function (ev) {
     ev.preventDefault();
-    setOpen(false);
-    if (KIOSK) openVisual();
-    else window.open(nowplayingUrl(), 'kacey-vinyl');
+    if (!idle()) openPlayer();
   });
   initSeek();
   $('miniClose').addEventListener('click', function () { setOpen(false); });
-  $('miniPlay').addEventListener('click', toggle);
+  $('miniPlay').addEventListener('click', function () { if (idle()) openPlayer(); else toggle(); });
   $('miniToggle').addEventListener('click', toggle);
   $('miniPrev').addEventListener('click', function () { post('/api/player', { action: 'previous' }); });
   $('miniNext').addEventListener('click', function () { post('/api/player', { action: 'next' }); });

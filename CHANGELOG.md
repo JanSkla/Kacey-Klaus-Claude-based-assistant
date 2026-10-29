@@ -19,6 +19,14 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.16 — 2026-10-29
+
+**Přehrávač — otevřít i bez hudby**
+- The header mini player no longer disappears when nothing is playing (or
+  nowplayingd is down). It stays as an idle bar, "Nic nehraje" with Otevřít,
+  and a click on it opens the player page (the visual over the page on the
+  kiosk, its own tab elsewhere). "Hudba" off in the Controller still hides it.
+
 ## KC 1.0.15 — 2026-10-28
 
 **Světla — oprava přesměrování**
