@@ -999,16 +999,47 @@ app.get('/api/calendar/sources', async (_req, res) => {
 app.get('/api/lights/state', async (_req, res) => {
   try {
     const status = await fetch(`${LIGHTSD_URL}/api/status`, { signal: AbortSignal.timeout(3000) }).then((r) => r.json());
-    const lamp = (status.lights || [])[0];
+    const lamps = status.lights || [];
+    const lamp = lamps[0];
     const out = lamp && lamp.output;
-    if (!out) return res.json({ ok: true, on: false, known: false });
+    if (!out) return res.json({ ok: true, on: false, known: false, lit: 0, total: lamps.length });
     const color = out.color || {};
     res.json({
       ok: true, known: true, on: !!out.on, name: lamp.name || lamp.id,
       brightness: Math.round(Number(color.brightness) || 0), mode: color.mode || null, css: color.css || null,
+      // The Lights view's "Vypnout vše" strip: how many lamps are lit, of how many.
+      lit: lamps.filter((l) => l.output && l.output.on).length, total: lamps.length,
     });
   } catch (err) {
     res.status(502).json({ ok: false, error: `lightsd neodpovídá (${err.message})` });
+  }
+});
+
+/* The Lights view's "Vypnout vše": every lamp lightsd knows goes off, in one
+   press. The one place Kacey writes a bulb's state — at the owner's request —
+   and it does so as an ordinary client of lightsd's per-lamp API, like the
+   sunrise shift above. Answers with what is lit afterwards, so the strip and
+   the header chip repaint from the truth, not from a guess.
+   DRAFT: lightsd's off call (POST /api/lights/:id/off) is to be checked
+   against lightsd before this ships. */
+app.post('/api/lights/off', async (_req, res) => {
+  try {
+    const list = await fetch(`${LIGHTSD_URL}/api/lights`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json());
+    const lamps = list.lights || [];
+    let off = 0;
+    for (const l of lamps) {
+      const r = await fetch(`${LIGHTSD_URL}/api/lights/${encodeURIComponent(l.id)}/off`, {
+        method: 'POST', signal: AbortSignal.timeout(5000),
+      }).catch(() => null);
+      if (r && r.ok) off++;
+    }
+    if (lamps.length && !off) return res.status(502).json({ error: 'lightsd žádnou lampu nevypnul' });
+    const status = await fetch(`${LIGHTSD_URL}/api/status`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => ({}));
+    const lit = (status.lights || []).filter((l) => l.output && l.output.on).length;
+    log(`lights: all off from the Lights view (${off}/${lamps.length} lamp(s), ${lit} still lit)`);
+    res.json({ ok: true, off, total: lamps.length, lit });
+  } catch (err) {
+    res.status(502).json({ error: `lightsd neodpovídá (${err.message})` });
   }
 });
 

@@ -1054,6 +1054,16 @@ button.rblock:hover { filter: brightness(1.3); }
 .viewbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 0 0 auto; }
 .embed { flex: 1; min-height: 0; width: 100%; border: 1px solid var(--line); background: var(--bg); }
 .embed__off .btn { align-self: flex-start; margin-top: 10px; }
+/* Vypnout vše: a strip over lightsd's page, the one action Kacey takes on the lamps. */
+.alloff { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 14px; padding: 12px 14px; border-left: 4px solid var(--acc); }
+.alloff.is-dark { border-left-color: var(--line2); }
+.alloff__bulb { flex: 0 0 auto; color: var(--acc); }
+.alloff.is-dark .alloff__bulb { color: var(--ink3); }
+.alloff__text { flex: 1; min-width: 0; }
+.alloff__title { margin: 0; font-size: 15px; font-weight: 600; }
+.alloff__note.is-err { color: var(--err); }
+.alloff__btn { flex: 0 0 auto; min-width: 200px; }
+.alloff__btn[aria-busy="true"] { cursor: wait; }
 
 /* =======================================================================
    TIMERS
@@ -2142,6 +2152,8 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .view[data-view="lights"] .viewbar .muted-3 { font-size: 12px; }
   .view[data-view="lights"] .viewbar .link { min-height: 44px; }
   .embed { flex: 1 0 auto; min-height: 80vh; }
+  .alloff { flex-wrap: wrap; gap: 10px 12px; }
+  .alloff__btn { flex: 1 0 100%; min-height: 52px; }
 
   /* =====================================================================
      CONTROLLER — every group a card, the switches easy to hit

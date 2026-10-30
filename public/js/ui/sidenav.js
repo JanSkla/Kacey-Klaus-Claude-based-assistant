@@ -6,9 +6,9 @@
    the date on Kalendář, the open tasks for today on Úkoly.
 
    The lights chip shows what the room light is doing, from GET
-   /api/lights/state — Kacey reads lightsd there and never writes to it. The
-   chip itself is a [data-go="lights"] button: changing the light happens in
-   lightsd's own page, framed by the Lights view. When lightsd does not answer
+   /api/lights/state. The chip itself is a [data-go="lights"] button: changing
+   the light happens in the Lights view (lightsd's own page, framed, and its
+   "Vypnout vše", which repaints the chip at once). When lightsd does not answer
    (or the source is switched off in the Controller), the chip hides.
    ========================================================================= */
 
@@ -72,4 +72,5 @@ export function initSidenav() {
   onEnter('lights', loadLights);
   // Back from lightsd's page, the light has probably just changed.
   onEnter('main', loadLights);
+  bus.on('lights:changed', loadLights);
 }

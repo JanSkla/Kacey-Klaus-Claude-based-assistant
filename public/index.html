@@ -916,6 +916,18 @@
       <span class="muted-3" id="lightsWhere">samostatná aplikace</span>
       <a class="link push" id="lightsOpen" href="#" target="_blank" rel="noopener">Otevřít<span class="desk-only"> samostatně</span> ↗</a>
     </div>
+    <!-- Vypnout vše: every lamp off in one press (POST /api/lights/off), above lightsd's own page. -->
+    <div class="card alloff" id="lightsAll" hidden>
+      <svg class="alloff__bulb" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <div class="alloff__text">
+        <p class="alloff__title num" id="lightsAllTitle">Zjišťuji, co svítí…</p>
+        <p class="muted-3 alloff__note" id="lightsAllNote" role="status">Jedním stiskem zhasneš všechny lampy ve všech místnostech.</p>
+      </div>
+      <button type="button" class="btn btn--accent btn--lg alloff__btn" id="lightsAllOff">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>
+        <span id="lightsAllLabel">Vypnout vše</span>
+      </button>
+    </div>
     <iframe class="embed" id="lightsFrame" title="Světla v místnosti" hidden></iframe>
     <div class="card card--pad embed__off" id="lightsDown" hidden>
       <p class="strong">lightsd neodpovídá.</p>
