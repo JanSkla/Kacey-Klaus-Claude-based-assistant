@@ -29,7 +29,7 @@ import {
 import { pauseReply, stopAndEnd, endListening } from '../voice/commands.js';
 import { refreshCalendar } from '../ui/calendar.js';
 import { attachments, hasAttachments, clearAttachments } from '../ui/attachments.js';
-import { applyRemoteChange } from '../core/store.js';
+import { applyRemoteChange, noteVoiceVolume } from '../core/store.js';
 import { receiveNightState, receiveMorning, refresh as refreshNight } from './nightapi.js';
 import { makeSocketTransport } from './transport-socket.js';
 import { makeMockTransport } from './transport-mock.js';
@@ -242,6 +242,12 @@ export function onServer(msg) {
       /* Přepis řeči switched to the other Whisper — from another page or by
          Kacey (stt.js on the server, voice/server-stt.js and ui/stt-picker.js here). */
       bus.emit('stt', msg);
+      break;
+
+    case 'voice_volume':
+      /* Hlasitost Kacey moved on another page (PUT /api/voice/volume):
+         follow it quietly — views/ttsvolume.js repaints, tts.js reads it. */
+      noteVoiceVolume(msg);
       break;
 
     case 'calendar_sync':

@@ -8,7 +8,9 @@
    is not touched: nowplayingd has its own volume in the mini player.
 
    The slider repaints as it moves and an XTTS sentence already playing
-   follows it at once; the value is saved when it is let go (or by − / +).
+   follows it at once; the value is saved when it is let go (or by − / +),
+   through store.setVoiceVolume → PUT /api/voice/volume, and the other pages
+   follow. Offline it holds here and the meta line says it is not saved yet.
    ========================================================================= */
 
 import { $ } from '../core/dom.js';
@@ -17,21 +19,18 @@ import { state } from '../core/state.js';
 import { onEnter } from '../ui/router.js';
 import { say } from '../ui/toast.js';
 import { primeTTS, cancelSpeech, feedTTS, flushTTS, applySpeechVolume, mediaVolumeWorks } from '../voice/tts.js';
+import { STEP, clampVolume, volumeOf, volumeWords } from '../core/voicevolume.js';
 
-var STEP = 5;
 var seen = null;           // the last value painted, to spot one that came from elsewhere
 var dragging = false;
 var whenWord = function () { return ''; };
 
-function stored() {
-  var v = Number(store.data.settings.ttsVolume);
-  return isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : 100;
-}
+function stored() { return volumeOf(store.data.settings); }
 
 function paint(v) {
   var range = $('ttsVolRange');
   if (!range) return;
-  var words = v === 0 ? 'ticho' : v + ' %';
+  var words = volumeWords(v);
   range.value = String(v);
   range.style.setProperty('--v', v + '%');
   range.setAttribute('aria-valuetext', words);
@@ -43,6 +42,8 @@ function paint(v) {
 
 function meta(v) {
   var s = store.data.settings;
+  if (store.voiceVolumeUnsaved()) return 'Offline — hlasitost platí tady, uložím ji, až se připojím.';
+  if (!store.isLoaded()) return 'Server neodpovídá — uloženou hlasitost načtu, až se připojím.';
   if (state.muted) return 'Čtení nahlas je vypnuté — hlasitost se použije, až ho zapneš.';
   if (state.voice !== 'browser' && !mediaVolumeWorks()) return 'Na tomhle zařízení hlasitost řídí jen tlačítka telefonu.';
   if (v === 0) return 'Ticho — odpovědi poběží, ale nebude je slyšet.';
@@ -58,6 +59,7 @@ function render() {
   seen = v;
   paint(v);
   $('ttsVol').classList.toggle('is-muted', !!state.muted);
+  $('ttsVol').classList.toggle('is-off', store.voiceVolumeUnsaved() || !store.isLoaded());
   $('ttsVolMeta').textContent = meta(v);
 }
 
@@ -69,9 +71,9 @@ function flash() {
 }
 
 function commit(v) {
-  v = Math.max(0, Math.min(100, Math.round(v / STEP) * STEP));
+  v = clampVolume(v);
   seen = v;                // our own change: no flash
-  store.patchSettings({ ttsVolume: v, ttsVolumeBy: 'owner', ttsVolumeAt: new Date().toISOString() });
+  store.setVoiceVolume(v);
   applySpeechVolume();
 }
 
@@ -93,6 +95,8 @@ export function initTtsVolume(opts) {
   });
   $('ttsVolDown').addEventListener('click', function () { commit(stored() - STEP); });
   $('ttsVolUp').addEventListener('click', function () { commit(stored() + STEP); });
+  // Released outside the page (a phone's thumb slides off): still saved.
+  range.addEventListener('blur', function () { if (dragging) { dragging = false; commit(Number(range.value)); } });
 
   $('ttsVolTry').addEventListener('click', function () {
     if (state.muted) { say('Čtení nahlas je vypnuté — zapni „Číst odpovědi nahlas“.'); return; }

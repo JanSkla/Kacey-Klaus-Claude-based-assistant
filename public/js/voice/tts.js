@@ -25,6 +25,7 @@ import { takeSentences, forSpeech } from './sentences.js';
 import { noteSpoken, clearSpoken } from './barge.js';
 import { stopRecognition, maybeResumeVoiceLoop } from './recognition.js';
 import { data as appData } from '../core/store.js';
+import { volumeOf } from '../core/voicevolume.js';
 
 var synth = window.speechSynthesis || null;
 var ttsBuf = '';
@@ -78,9 +79,7 @@ function audioEl() {
    (app_voice_volume). Both engines read it per sentence; the music is not
    touched. */
 export function speechVolume() {
-  var v = Number(appData.settings && appData.settings.ttsVolume);
-  if (!isFinite(v)) return 1;
-  return Math.max(0, Math.min(100, v)) / 100;
+  return volumeOf(appData.settings) / 100;
 }
 
 /* A slider moved while she is speaking: the XTTS clip follows at once (to

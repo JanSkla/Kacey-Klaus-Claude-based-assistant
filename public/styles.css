@@ -1144,6 +1144,8 @@ button.rblock:hover { filter: brightness(1.3); }
 .ttsvol.is-muted .vol::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--ink3) var(--v), var(--l3) var(--v)); }
 .ttsvol.is-muted .vol::-moz-range-progress { background: var(--ink3); }
 .ttsvol.is-muted .ttsvol__num, .ttsvol.is-silent .ttsvol__num { color: var(--ink3); }
+/* Offline / server down: the meta line gets a --warn edge, like .runwin__off; the slider keeps working. */
+.ttsvol.is-off .srow__text em { padding-left: 8px; border-left: 2px solid var(--warn); }
 .ttsvol.is-new { animation: ttsvolNew 2.4s ease-out; }
 @keyframes ttsvolNew { 0%, 30% { box-shadow: inset 3px 0 0 var(--acc); background: var(--acc-dim); } 100% { box-shadow: inset 3px 0 0 transparent; } }
 

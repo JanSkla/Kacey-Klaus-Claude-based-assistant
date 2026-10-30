@@ -1770,6 +1770,24 @@ app.post('/api/voice/stop', (_req, res) => {
 });
 
 /* ---------------------------------------------------------------------------
+ * Hlasitost Kacey — how loud her own voice is, 0–100 % (Controller → Hlas,
+ * public/js/core/voicevolume.js). Its own door rather than the settings
+ * section, so a stale page saving settings cannot put an old volume back;
+ * every page follows through a `voice_volume` frame. Kacey's app_voice_volume
+ * writes the same row and goes out as `app_changed` (with an undo).
+ * ------------------------------------------------------------------------- */
+
+app.put('/api/voice/volume', express.json(), (req, res) => {
+  try {
+    const out = appstate.setVoiceVolume(req.body?.percent, { by: 'owner' });
+    broadcast({ type: 'voice_volume', ...out });
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/* ---------------------------------------------------------------------------
  * Speech-to-text, for a browser without Web Speech recognition (the kiosk's
  * Epiphany). The page records one utterance as WAV and posts it here; the
  * Whisper sidecar transcribes it on this machine — the audio never leaves it.

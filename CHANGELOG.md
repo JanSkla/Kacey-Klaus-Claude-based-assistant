@@ -21,6 +21,22 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ## KC 1.0.17 — 2026-10-29
 
+**Hlas — nastavení hlasitosti**
+- Controller → Hlas has "Hlasitost Kacey": a slider with − / + (steps of 5 %)
+  and Vyzkoušet, for how loud Kacey reads her answers — both the XTTS voices
+  and the browser's. The music keeps its own volume.
+- Saved in the database (`settings.ttsVolume`) through its own route,
+  `PUT /api/voice/volume`, so it holds after a restart and on every device;
+  the other open pages follow at once (`voice_volume` frame). A settings save
+  from a page that went stale keeps the stored volume
+  ([public/js/core/voicevolume.js](public/js/core/voicevolume.js)).
+- Kacey changes it when asked in the chat ("mluv tišeji", "hlasitost na 40"):
+  `app_voice_volume` — status, set, louder / quieter (15 % unless told). The
+  page says where it landed, with one-click "Vrátit na …".
+- Offline the slider still works on that device and is saved once the page is
+  back; the row says so. On iOS with an XTTS voice it says the phone's buttons
+  are the volume there.
+
 **Přehrávač — otevřít i bez hudby**
 - The header mini player no longer disappears when nothing is playing (or
   nowplayingd is down). It stays as an idle bar, "Nic nehraje" with Otevřít,

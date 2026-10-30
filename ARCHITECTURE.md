@@ -683,6 +683,21 @@ out as an `stt` frame (`by`, `origin`): other pages poll again, Kacey's is
 said on every page. In a preview the switch is pretended — the sidecar is the
 live app's.
 
+### Hlasitost Kacey
+
+How loud her own voice is, 0–100 % on a 5 % grid
+([core/voicevolume.js](public/js/core/voicevolume.js), shared with the
+server): `settings.ttsVolume` with `ttsVolumeBy` (`owner` | `kacey`) and
+`ttsVolumeAt`. It is written only through `appstate.setVoiceVolume` — by
+`PUT /api/voice/volume` (the Controller's slider; a `voice_volume` frame makes
+every page follow) and by Kacey's `app_voice_volume` (an `app_changed`
+settings frame whose undo offers "Vrátit na …"). A whole-settings save keeps
+the stored value, so a stale page cannot put an old volume back.
+[voice/tts.js](public/js/voice/tts.js) reads it per sentence for both engines
+(`audio.volume` for XTTS, `utterance.volume` for the browser); iOS ignores the
+first and the row says so. Offline the page keeps its value and saves it on
+reconnect ([core/store.js](public/js/core/store.js) `setVoiceVolume`).
+
 ### The web
 
 The chat's session has two built-in tools, `WebSearch` and `WebFetch`

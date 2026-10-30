@@ -28,6 +28,7 @@ import { CATEGORY_KEYS, KINDS } from './public/js/core/routine-cats.js';
 import { MAX_ITEMS, newKey } from './public/js/core/checklist.js';
 import { MAX_ITEMS as LIST_MAX, applyListOp, progressText } from './public/js/core/tasklist.js';
 import { TAG_HINT_MAX, guessTag, newTagId, tagById, tagByName, tagNameProblem, tagsFrom } from './public/js/core/tasktags.js';
+import { VOICE_STEP, clampVolume, stepVolume } from './public/js/core/voicevolume.js';
 import { logicalDateOf } from './rules.js';
 import * as nightstore from './nightstore.js';
 import * as eventflags from './eventflags.js';
@@ -740,42 +741,44 @@ const speechToText = tool(
 
 /* Hlasitost Kacey: how loud her own voice is on the owner's devices,
    settings.ttsVolume 0–100 (Controller → Hlas). The pages hear it as an
-   `app_changed` settings frame and say where it landed, with one-click undo. */
-const VOLUME_STEP = 15;
-
+   `app_changed` settings frame and say where it landed, with one-click undo.
+   Written through appstate.setVoiceVolume — a settings save would keep the old one. */
 function volumeWords(v) { return v === 0 ? 'ticho (0 %)' : `${v} %`; }
 
 const voiceVolume = tool(
   'app_voice_volume',
   'Hlasitost tvého vlastního hlasu (čtení odpovědí nahlas) na pánových zařízeních, 0–100 %. Hudbu to nemění. ' +
     'status = jak nahlas teď mluvíš; set = nastav přesně (percent); louder / quieter = o kus hlasitěji / tišeji ' +
-    `(o ${VOLUME_STEP} %, nebo o by). Jen když o to pán řekne („mluv tišeji“, „dej hlasitost na 40“). ` +
+    `(o ${VOICE_STEP} %, nebo o by). Jen když o to pán řekne („mluv tišeji“, „dej hlasitost na 40“). ` +
     'Změna platí od další věty; pán ji vidí v Controlleru (Hlas → Hlasitost Kacey).',
   {
     action: z.enum(['status', 'set', 'louder', 'quieter']),
     percent: z.number().min(0).max(100).optional().describe('set: nová hlasitost v procentech, 0–100.'),
-    by: z.number().min(1).max(100).optional().describe(`louder / quieter: o kolik procent (výchozí ${VOLUME_STEP}).`),
+    by: z.number().min(1).max(100).optional().describe(`louder / quieter: o kolik procent (výchozí ${VOICE_STEP}).`),
   },
   async ({ action, percent, by }) => {
     try {
-      const doc = appstate.get();
-      const now = Math.max(0, Math.min(100, Math.round(Number(doc.settings.ttsVolume ?? 100))));
-      if (action === 'status') return ok(`Mluvíš na ${volumeWords(now)}.`);
+      const was = appstate.voiceVolume();
+      const now = was.percent;
+      if (action === 'status') {
+        return ok(`Mluvíš na ${volumeWords(now)}` + (was.by === 'kacey' ? ' — naposledy jsi ji nastavila ty.' : '.'));
+      }
       let next;
       if (action === 'set') {
         if (typeof percent !== 'number') return fail('Na kolik procent? (percent: 0–100)');
-        next = percent;
+        next = clampVolume(percent);
       } else {
-        next = now + (action === 'louder' ? 1 : -1) * (by || VOLUME_STEP);
+        next = stepVolume(now, action, by);
       }
-      next = Math.max(0, Math.min(100, Math.round(next / 5) * 5));
       if (next === now) {
         return ok(now === 100 && action === 'louder' ? 'Už mluvíš naplno (100 %) — víc přidá jen reproduktor.'
           : now === 0 && action === 'quieter' ? 'Už jsi úplně potichu (0 %).'
           : `Hlasitost už je ${volumeWords(now)} — nic jsem neměnila.`);
       }
-      appstate.setSection('settings', { ...doc.settings, ttsVolume: next, ttsVolumeBy: 'kacey', ttsVolumeAt: new Date().toISOString() });
-      onWrite('settings', doc.settings);
+      // The undo is the settings as they were: the pages offer "Vrátit na <was>".
+      const before = appstate.get().settings;
+      appstate.setVoiceVolume(next, { by: 'kacey' });
+      onWrite('settings', before);
       return ok(`Hlasitost tvého hlasu: ${volumeWords(now)} → ${volumeWords(next)}. Platí od další věty.` +
         (next === 0 ? ' Pán tě teď neuslyší — odpovídej i tak, čte to.' : ''));
     } catch (err) { return fail(err.message); }

@@ -361,6 +361,8 @@ HTTP:
 - `GET /api/chat/sessions` → earlier conversations (title, count, `upgrade`) · `GET /api/chat/sessions/:id` → its transcript, user and Kacey text only
 - `PUT /api/app/tasks` takes `{ value, base_rev }` and answers **409** when
   `base_rev` is stale (the night run added tasks since the page loaded)
+- `PUT /api/voice/volume { percent }` → `{ ok, percent, by, at }`: Hlasitost Kacey, 0–100 on the 5 % grid
+  (**400** otherwise); every page gets a `voice_volume` frame. `PUT /api/app/settings` keeps the stored volume
 
 ## Editing the persona
 

@@ -30,6 +30,7 @@ import { open, transact, kvGet, kvSet, now, close } from './db.js';
 import { addDays, dueFromGroup, logicalToday, normalizeDue, parseDue } from './public/js/core/due.js';
 import { KIND_KEYS } from './public/js/core/routine-cats.js';
 import { DEFAULT_TAGS, normalizeTags } from './public/js/core/tasktags.js';
+import { DEFAULT_VOLUME, clampVolume, validVolume } from './public/js/core/voicevolume.js';
 import { importFromSettings as importStickies } from './stickies.js';
 
 /** The JSON document this replaced. Imported once, then renamed aside. */
@@ -49,7 +50,7 @@ const DEFAULT_SETTINGS = {
   calOn: {},
   tools: {},
   // How loud Kacey's own voice is, 0–100 (Controller → Hlas; app_voice_volume).
-  ttsVolume: 100,
+  ttsVolume: DEFAULT_VOLUME,
   // The owner's task tags, theirs to rename, add and delete (public/js/core/tasktags.js).
   taskTags: DEFAULT_TAGS,
 };
@@ -70,7 +71,40 @@ function normalizeSettings(value) {
      write them back. */
   importStickies();
   delete next.stickies;
+  /* Kacey's volume has its own door (setVoiceVolume): a settings save keeps
+     the stored one, so a page that loaded before she was turned down cannot
+     turn her back up by toggling something else. */
+  const kept = kvGet('settings', {}) || {};
+  for (const key of VOLUME_KEYS) {
+    if (key in kept) next[key] = kept[key];
+    else delete next[key];
+  }
   return next;
+}
+
+const VOLUME_KEYS = ['ttsVolume', 'ttsVolumeBy', 'ttsVolumeAt'];
+
+/** How loud Kacey's voice is: { percent, by, at } (public/js/core/voicevolume.js). */
+export function voiceVolume() {
+  const s = { ...DEFAULT_SETTINGS, ...kvGet('settings', {}) };
+  return { percent: clampVolume(s.ttsVolume), by: s.ttsVolumeBy || null, at: s.ttsVolumeAt || null };
+}
+
+/**
+ * Set Kacey's volume — the Controller's slider (by 'owner') or her own
+ * app_voice_volume (by 'kacey'). A number 0–100, put on the 5 % grid;
+ * anything else throws. Returns voiceVolume() as stored.
+ */
+export function setVoiceVolume(percent, { by = 'owner' } = {}) {
+  importLegacyOnce();
+  if (!validVolume(percent)) throw new Error('Hlasitost musí být číslo 0–100.');
+  kvSet('settings', {
+    ...kvGet('settings', {}),
+    ttsVolume: clampVolume(percent),
+    ttsVolumeBy: by === 'kacey' ? 'kacey' : 'owner',
+    ttsVolumeAt: new Date().toISOString(),
+  });
+  return voiceVolume();
 }
 
 const DEFAULT_PRESETS = [

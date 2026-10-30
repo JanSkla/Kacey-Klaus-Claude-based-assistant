@@ -15,6 +15,7 @@
 
 import { say } from '../ui/toast.js';
 import { tagById, tagsFrom } from './tasktags.js';
+import { clampVolume, volumeOf, volumeWords } from './voicevolume.js';
 
 var listeners = [];
 var pending = {};          // section -> timer
@@ -136,7 +137,12 @@ function rebase(section, sent, attempt) {
  */
 export function patch(section, value) {
   (ops[section] || (ops[section] = [])).push(typeof value === 'function' ? value : { value: value });
+  var was = data[section];
   data[section] = typeof value === 'function' ? value(data[section]) : value;
+  /* Kacey's volume has its own door (setVoiceVolume below) and the server
+     keeps it through a settings save — so must this copy, or an undo of
+     other settings would show the old volume here. */
+  if (section === 'settings') data.settings = Object.assign({}, data.settings, volumeFields(was));
   save(section);
   emit();
 }
@@ -144,6 +150,82 @@ export function patch(section, value) {
 /** Convenience for the many single-key settings toggles. */
 export function patchSettings(partial) {
   patch('settings', Object.assign({}, data.settings, partial));
+}
+
+/* ---- Hlasitost Kacey ---------------------------------------------------------
+   Not saved with the settings section but through PUT /api/voice/volume
+   (core/voicevolume.js says why). Set here at once, so her next sentence
+   uses it; offline it waits like a section does and goes out when the
+   browser is back, or in a while. */
+
+var volumeWaiting = null;   // the value still to be saved, or null
+var volumeTimer = 0;        // set while it waits for a connection
+var volumeSending = false;  // one request at a time, so the last value is the one that lands
+
+function volumeFields(s) {
+  var out = {};
+  ['ttsVolume', 'ttsVolumeBy', 'ttsVolumeAt'].forEach(function (k) { if (s && k in s) out[k] = s[k]; });
+  return out;
+}
+
+/** Set Kacey's volume (0–100) as the owner. */
+export function setVoiceVolume(percent) {
+  var v = clampVolume(percent);
+  data.settings = Object.assign({}, data.settings, { ttsVolume: v, ttsVolumeBy: 'owner', ttsVolumeAt: new Date().toISOString() });
+  emit();
+  volumeWaiting = v;
+  // Offline it goes out with the retry already waiting; otherwise now.
+  if (!volumeTimer) sendVolume();
+}
+
+/** Whether the last volume is still waiting for a connection. */
+export function voiceVolumeUnsaved() { return volumeTimer !== 0; }
+
+function sendVolume() {
+  if (volumeWaiting === null || volumeSending) return;
+  var v = volumeWaiting;
+  var waited = volumeTimer !== 0;
+  clearTimeout(volumeTimer);
+  volumeTimer = 0;
+  volumeSending = true;
+  fetch('/api/voice/volume', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ percent: v })
+  }).then(function (res) {
+    return res.json().catch(function () { return {}; }).then(function (out) {
+      if (!res.ok) throw Object.assign(new Error((out && out.error) || 'HTTP ' + res.status), { refused: true });
+      volumeSending = false;
+      if (volumeWaiting === v) volumeWaiting = null;
+      else { sendVolume(); return; }   // moved again while this was on its way
+      if (waited) { say('Připojeno — hlasitost ' + volumeWords(v) + ' je uložená.'); emit(); }
+    });
+  }).catch(function (err) {
+    volumeSending = false;
+    console.warn('[kacey] could not save the voice volume: ' + err.message);
+    if (err.refused) {
+      volumeWaiting = null;
+      say('Hlasitost se nepovedlo uložit: ' + err.message);
+      load();               // show what the server holds
+      return;
+    }
+    if (!waited) say('Jsi offline — hlasitost platí tady, uložím ji, až se připojím.');
+    volumeTimer = setTimeout(sendVolume, 15000);
+    emit();
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', function () { if (volumeTimer) sendVolume(); });
+}
+
+/** Another page moved it (a `voice_volume` frame): follow, unless this one has its own on the way. */
+export function noteVoiceVolume(msg) {
+  if (!msg || volumeWaiting !== null) return;
+  data.settings = Object.assign({}, data.settings, {
+    ttsVolume: clampVolume(msg.percent), ttsVolumeBy: msg.by || 'owner', ttsVolumeAt: msg.at || null
+  });
+  emit();
 }
 
 export function flip(group, key) {
@@ -199,14 +281,13 @@ export async function applyRemoteChange(section, undo, quiet) {
     }
   }
   // Kacey set her own volume from the chat (app_voice_volume): say where it landed.
-  if (section === 'settings' && undo && typeof undo === 'object' && data.settings.ttsVolume !== (undo.ttsVolume == null ? 100 : undo.ttsVolume)) {
-    var was = undo.ttsVolume == null ? 100 : undo.ttsVolume;
-    var now = data.settings.ttsVolume;
-    say('Hlasitost Kacey · ' + (now === 0 ? 'ticho' : now + ' %') + ' — změnila Kacey.', {
-      label: 'Vrátit na ' + (was === 0 ? 'ticho' : was + ' %'),
+  if (section === 'settings' && undo && typeof undo === 'object' && volumeOf(data.settings) !== volumeOf(undo)) {
+    var was = volumeOf(undo);
+    say('Hlasitost Kacey · ' + volumeWords(volumeOf(data.settings)) + ' — změnila Kacey.', {
+      label: 'Vrátit na ' + volumeWords(was),
       run: function () {
-        patchSettings({ ttsVolume: was, ttsVolumeBy: 'owner', ttsVolumeAt: new Date().toISOString() });
-        say('Hlasitost vrácena na ' + (was === 0 ? 'ticho' : was + ' %') + '.');
+        setVoiceVolume(was);
+        say('Hlasitost vrácena na ' + volumeWords(was) + '.');
       }
     });
     return;
