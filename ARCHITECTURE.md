@@ -698,6 +698,19 @@ the stored value, so a stale page cannot put an old volume back.
 first and the row says so. Offline the page keeps its value and saves it on
 reconnect ([core/store.js](public/js/core/store.js) `setVoiceVolume`).
 
+### Vypnout vše
+
+Kacey reads lightsd and otherwise leaves the lamps to it; "Vypnout vše" is the
+exception ([lightsoff.js](lightsoff.js)). It lists lightsd's lamps
+(`GET /api/lights`), calls `POST /api/lights/:id/off` on all of them at once,
+then reads `/api/status` again and reports what is still lit, by name — the
+pages and Kacey repeat that, never a guess. The last run is kv
+`lights.all_off` (`at`, `by`, `off`, `total`, `lit`). Two doors: the Lights
+view's button (`POST /api/lights/off` with the page's `origin`) and Kacey's
+`app_lights` (`status` | `all_off`); both go out as a `lights` frame, which the
+Lights view and the header chip repaint from. In a preview the press is
+pretended — lightsd is the live app's.
+
 ### The web
 
 The chat's session has two built-in tools, `WebSearch` and `WebFetch`

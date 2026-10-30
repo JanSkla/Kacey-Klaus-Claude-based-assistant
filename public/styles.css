@@ -1062,6 +1062,8 @@ button.rblock:hover { filter: brightness(1.3); }
 .alloff__text { flex: 1; min-width: 0; }
 .alloff__title { margin: 0; font-size: 15px; font-weight: 600; }
 .alloff__note.is-err { color: var(--err); }
+/* Offline, or a lamp stayed lit: the note gets a --warn edge, like .runwin__off. */
+.alloff__note.is-warn { padding-left: 8px; border-left: 2px solid var(--warn); color: var(--ink2); }
 .alloff__btn { flex: 0 0 auto; min-width: 200px; }
 .alloff__btn[aria-busy="true"] { cursor: wait; }
 

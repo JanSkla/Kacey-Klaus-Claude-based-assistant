@@ -40,6 +40,7 @@ import * as whiteboard from './whiteboard.js';
 import * as stickies from './stickies.js';
 import * as storage from './storage.js';
 import * as stt from './stt.js';
+import * as lightsoff from './lightsoff.js';
 import {
   RuleSchema, explainIssues, describeRule, describeTrigger, describeTiming, describeItem,
 } from './rules.js';
@@ -785,6 +786,41 @@ const voiceVolume = tool(
   },
 );
 
+/* Světla: what is lit, and "Vypnout vše" — the same call as the Lights view's
+   button (lightsoff.js). The pages hear it as a `lights` frame and repaint.
+   Single lamps, colours and the schedule stay in lightsd's own page. */
+function sinceWords(iso) {
+  const d = new Date(iso);
+  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return logicalDateOf(d) === logicalDateOf(new Date()) ? `dnes, ${hm}` : `${d.getDate()}. ${d.getMonth() + 1}., ${hm}`;
+}
+
+const lights = tool(
+  'app_lights',
+  'Světla v pánových místnostech (lamps v lightsd). status = co teď svítí; all_off = zhasni všechna světla ve všech ' +
+    'místnostech najednou („zhasni všechno“, „vypni světla“, „jdu spát, zhasni“). Jednotlivé lampy, barvy a rozvrh ' +
+    'nastavuje pán sám v Ovládání světel — tím nástrojem je nezměníš.',
+  { action: z.enum(['status', 'all_off']) },
+  async ({ action }) => {
+    try {
+      if (action === 'status') {
+        const st = await lightsoff.state();
+        const prev = lightsoff.last();
+        const when = prev ? ` Naposledy se zhasínalo všechno ${sinceWords(prev.at)} (${prev.by === 'kacey' ? 'ty' : 'pán'}).` : '';
+        if (!st.total) return ok('lightsd nemá žádnou lampu.' + when);
+        const lit = st.lamps.filter((l) => l.on).map((l) => l.name);
+        return ok((lit.length ? `Svítí ${lightsoff.lampWords(lit.length)} z ${st.total}: ${lit.join(', ')}.` : `Nic nesvítí (lamp v lightsd: ${st.total}).`) + when);
+      }
+      const out = await lightsoff.allOff({ by: 'kacey' });
+      return out.lit && !out.preview ? fail(lightsoff.describe(out)) : ok(lightsoff.describe(out));
+    } catch (err) {
+      return fail(err.code === 'unreachable'
+        ? 'lightsd neodpovídá — světla teď zhasnout nejde. Pán je může vypnout vypínačem nebo až lightsd zase poběží.'
+        : `Světla se nezhasla: ${err.message}.`);
+    }
+  },
+);
+
 /* ---- the night routine's rules --------------------------------------------
    docs/DREAM.md §8. A rule turns a standing pattern ("whenever I have gym,
    remind me the evening before to pack my bag") into tasks the night run
@@ -1447,7 +1483,7 @@ function matchesWords(fileName, words) {
 export const APP_TOOLS = [
   appRead, routinePaint, routineErase, routineHours, routineAlter, taskAdd, taskUpdate, taskList, taskTags, journalAdd, sticky,
   rulesList, rulesetUpsert, ruleUpsert, ruleDelete, rulePreview, calendarTentative, calendarSync,
-  notificationsRead, morningAdd, speechToText, voiceVolume,
+  notificationsRead, morningAdd, speechToText, voiceVolume, lights,
 ];
 
 /** Fully-qualified names, for the allow-list in server.js. */
@@ -1458,7 +1494,7 @@ export const APP_TOOL_NAMES = [
   'app_calendar_tentative', 'app_calendar_sync', 'app_notifications', 'app_morning_add', 'app_upgrade_request',
   'app_gallery_save', 'app_gallery_search',
   'app_whiteboard_read', 'app_whiteboard_edit', 'app_whiteboard_manage', 'app_storage', 'app_stt',
-  'app_voice_volume',
+  'app_voice_volume', 'app_lights',
 ].map((n) => `mcp__${APP_SERVER_NAME}__${n}`);
 
 /** `ctx.sessionId()` names the chat that asks for an improvement (the history marks it). */
@@ -1490,7 +1526,8 @@ export function makeAppServer(ctx = {}) {
       'Soubory mezi pánovým počítačem a telefonem (Úložiště) spravuje app_storage: co tam je, text nebo fotku ' +
       'z chatu uložit jako soubor, smazat, vrátit, otevřít. ' +
       'Který Whisper přepisuje pánovo diktování (small, large v3 nebo turbo), ukáže a přepne app_stt. ' +
-      'Jak nahlas mluvíš ty sama („mluv tišeji“, „hlasitost na 40“), ukáže a nastaví app_voice_volume.',
+      'Jak nahlas mluvíš ty sama („mluv tišeji“, „hlasitost na 40“), ukáže a nastaví app_voice_volume. ' +
+      'Co svítí, ukáže app_lights; když pán řekne „zhasni všechno“, zhasne všechna světla (all_off).',
     tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx), ...makeWhiteboardTools(ctx), ...makeStorageTools(ctx)],
   });
 }

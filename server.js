@@ -44,6 +44,7 @@ import * as whiteboard from './whiteboard.js';
 import * as stickies from './stickies.js';
 import * as storage from './storage.js';
 import * as stt from './stt.js';
+import * as lightsoff from './lightsoff.js';
 import { makeFrameProxy } from './frameproxy.js';
 import { webTracker, webOfTranscript, isTurnStart } from './web.js';
 import { addDays, turnClock } from './public/js/core/due.js';
@@ -1002,45 +1003,35 @@ app.get('/api/lights/state', async (_req, res) => {
     const lamps = status.lights || [];
     const lamp = lamps[0];
     const out = lamp && lamp.output;
-    if (!out) return res.json({ ok: true, on: false, known: false, lit: 0, total: lamps.length });
+    // The Lights view's "Vypnout vše" strip: how many lamps are lit, of how many, and when it last ran.
+    const all = { lit: lightsoff.countLit(status), total: lamps.length, all_off: lightsoff.last() };
+    if (!out) return res.json({ ok: true, on: false, known: false, ...all });
     const color = out.color || {};
     res.json({
       ok: true, known: true, on: !!out.on, name: lamp.name || lamp.id,
       brightness: Math.round(Number(color.brightness) || 0), mode: color.mode || null, css: color.css || null,
-      // The Lights view's "Vypnout vše" strip: how many lamps are lit, of how many.
-      lit: lamps.filter((l) => l.output && l.output.on).length, total: lamps.length,
+      ...all,
     });
   } catch (err) {
     res.status(502).json({ ok: false, error: `lightsd neodpovídá (${err.message})` });
   }
 });
 
-/* The Lights view's "Vypnout vše": every lamp lightsd knows goes off, in one
-   press. The one place Kacey writes a bulb's state — at the owner's request —
-   and it does so as an ordinary client of lightsd's per-lamp API, like the
-   sunrise shift above. Answers with what is lit afterwards, so the strip and
-   the header chip repaint from the truth, not from a guess.
-   DRAFT: lightsd's off call (POST /api/lights/:id/off) is to be checked
-   against lightsd before this ships. */
-app.post('/api/lights/off', async (_req, res) => {
+/* The Lights view's "Vypnout vše" (lightsoff.js): every lamp off in one press.
+   Answers with what lightsd shows lit afterwards, so the strip and the header
+   chip repaint from the truth; every page hears it as a `lights` frame. */
+app.post('/api/lights/off', express.json({ limit: '1kb' }), async (req, res) => {
   try {
-    const list = await fetch(`${LIGHTSD_URL}/api/lights`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json());
-    const lamps = list.lights || [];
-    let off = 0;
-    for (const l of lamps) {
-      const r = await fetch(`${LIGHTSD_URL}/api/lights/${encodeURIComponent(l.id)}/off`, {
-        method: 'POST', signal: AbortSignal.timeout(5000),
-      }).catch(() => null);
-      if (r && r.ok) off++;
-    }
-    if (lamps.length && !off) return res.status(502).json({ error: 'lightsd žádnou lampu nevypnul' });
-    const status = await fetch(`${LIGHTSD_URL}/api/status`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => ({}));
-    const lit = (status.lights || []).filter((l) => l.output && l.output.on).length;
-    log(`lights: all off from the Lights view (${off}/${lamps.length} lamp(s), ${lit} still lit)`);
-    res.json({ ok: true, off, total: lamps.length, lit });
+    const out = await lightsoff.allOff({ by: 'owner', origin: String(req.body?.origin || '').slice(0, 40) });
+    res.json({ ok: true, ...out });
   } catch (err) {
-    res.status(502).json({ error: `lightsd neodpovídá (${err.message})` });
+    res.status(err.status || 500).json({ error: err.message, code: err.code || null });
   }
+});
+
+lightsoff.onEvent((ev) => {
+  log(`lights: all off by ${ev.by} (${ev.off}/${ev.total} lamp(s), ${ev.lit} still lit)${ev.preview ? ' — pretended, preview' : ''}`);
+  broadcast({ type: 'lights', ...ev });
 });
 
 /* ---------------------------------------------------------------------------

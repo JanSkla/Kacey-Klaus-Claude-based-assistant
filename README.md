@@ -363,6 +363,10 @@ HTTP:
   `base_rev` is stale (the night run added tasks since the page loaded)
 - `PUT /api/voice/volume { percent }` → `{ ok, percent, by, at }`: Hlasitost Kacey, 0–100 on the 5 % grid
   (**400** otherwise); every page gets a `voice_volume` frame. `PUT /api/app/settings` keeps the stored volume
+- `GET /api/lights/state` → the header chip's lamp plus `lit`, `total`, `all_off` (the last "Vypnout vše") ·
+  `POST /api/lights/off { origin? }` → `{ ok, off, total, lit, still, preview, last }`: every lamp off
+  ([lightsoff.js](lightsoff.js)); **502** with `code` `unreachable` / `refused` when lightsd does not answer or
+  turned none off; every page gets a `lights` frame
 
 ## Editing the persona
 

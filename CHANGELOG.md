@@ -19,6 +19,27 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.18 — 2026-10-30
+
+**Světla — tlačítko pro vypnutí všech světel**
+- The Lights view has "Vypnout vše" above lightsd's page: one press switches
+  every lamp lightsd knows off, in all rooms at once. The strip says how many
+  are lit ("Svítí 3 světla z 5"), and after the press lightsd's page and the
+  header chip show the dark room straight away; other open pages follow
+  (`lights` frame).
+- The answer is read back from lightsd, not assumed: a lamp that stayed lit is
+  named ("Nezhaslo: Ložnice") with "Zkusit znovu". lightsd not answering,
+  lightsd without lamps, and the page offline each have their own line.
+- `POST /api/lights/off` ([lightsoff.js](lightsoff.js)); `/api/lights/state`
+  also reports `lit`, `total` and the last run, which is kept in the database
+  (kv `lights.all_off`) — "zhasnuto dnes, 23:10 (Kacey)".
+- Kacey does it by voice: `app_lights` — `status` (what is lit, by name) and
+  `all_off` ("zhasni všechno", "jdu spát, zhasni").
+- A preview of a branch only pretends; the real lamps stay as they are.
+- lightsd's per-lamp off call (`POST /api/lights/:id/off`) could not be checked
+  against lightsd from here; if lightsd answers otherwise, the strip says
+  "lightsd žádnou lampu nevypnul" rather than pretending.
+
 ## KC 1.0.17 — 2026-10-29
 
 **Hlas — nastavení hlasitosti**

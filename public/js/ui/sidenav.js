@@ -73,4 +73,5 @@ export function initSidenav() {
   // Back from lightsd's page, the light has probably just changed.
   onEnter('main', loadLights);
   bus.on('lights:changed', loadLights);
+  bus.on('lights', loadLights);        // Kacey or another page switched everything off
 }

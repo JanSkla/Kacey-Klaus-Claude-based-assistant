@@ -244,6 +244,12 @@ export function onServer(msg) {
       bus.emit('stt', msg);
       break;
 
+    case 'lights':
+      /* "Vypnout vše" ran — on another page or by Kacey (lightsoff.js on the
+         server, views/lights.js and the header chip in ui/sidenav.js here). */
+      bus.emit('lights', msg);
+      break;
+
     case 'voice_volume':
       /* Hlasitost Kacey moved on another page (PUT /api/voice/volume):
          follow it quietly — views/ttsvolume.js repaints, tts.js reads it. */
