@@ -1,9 +1,10 @@
-"""Persistent Whisper speech-to-text server for Kacey.
+"""Persistent speech-to-text server for Kacey: Whisper or Parakeet.
 
 The bedside kiosk runs Epiphany (WebKitGTK), which has no working Web Speech
 recognition — so the page records the utterance itself and sends it here.
-faster-whisper (CTranslate2) holds the model in memory and answers over plain
-HTTP; Kacey's /api/stt proxies to it. Stdlib HTTP, like xtts_server.py.
+faster-whisper (CTranslate2) or onnx-asr (ONNX Runtime) holds the model in
+memory and answers over plain HTTP; Kacey's /api/stt proxies to it. Stdlib
+HTTP, like xtts_server.py.
 
     ~/.venvs/stt/bin/python voicelab/stt_server.py        # port 8791
 
@@ -17,9 +18,14 @@ Whisper small by default: on kaceybody's 4-core CPU it writes a sentence down
 in about 5 s. Large v3 is the best of the family at Czech and its turbo
 variant (large-v3-turbo: the same encoder, 4 decoder layers instead of 32)
 nearly as good, but both run the large encoder over a 30 s window for every
-utterance — there that was 27–37 s a sentence, however short. The page
-switches between the three and the choice is kept across restarts
-(stt_state.json beside this file). Turbo needs faster-whisper >= 1.1.
+utterance — there that was 27–37 s a sentence, however short. Parakeet TDT
+0.6B v3 (NVIDIA, 25 European languages, int8 ONNX via onnx-asr) is not a
+Whisper: its time follows the audio, ~0.2x real time there, so a short
+command takes under a second, and on real Czech speech it made about half
+small's word errors (timed 2026-11-01). It cannot be told the language: now
+and then it writes a sentence as Slovak or Polish. The page switches between
+the four and the choice is kept across restarts (stt_state.json beside this
+file). Turbo needs faster-whisper >= 1.1, Parakeet onnx-asr[hub].
 
 On the CPU by default: kaceybody's 2 GB GPU belongs to XTTS. Only one model is
 held at a time — the old one is dropped before the new one loads, so a switch
@@ -54,8 +60,17 @@ COMPUTE = os.environ.get("STT_COMPUTE", "int8")
 THREADS = int(os.environ.get("STT_THREADS", "4"))
 MAX_BYTES = 12 * 1024 * 1024                              # ~6 minutes of 16 kHz WAV
 
-# The page's choices -> faster-whisper's model names.
-CHOICES = {"small": "small", "large-v3": "large-v3", "turbo": "large-v3-turbo"}
+# The page's choices -> (engine, the engine's model name).
+CHOICES = {
+    "small": ("whisper", "small"),
+    "large-v3": ("whisper", "large-v3"),
+    "turbo": ("whisper", "large-v3-turbo"),
+    "parakeet": ("parakeet", "nemo-parakeet-tdt-0.6b-v3"),
+}
+RATE = 16000
+# Parakeet attends over the whole utterance at once (memory grows with its
+# square), so anything longer goes in pieces of this many seconds.
+PARAKEET_CHUNK_S = 30
 DEFAULT = "small"
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stt_state.json")
 
@@ -89,21 +104,35 @@ def release() -> None:
         pass
 
 
+def open_model(engine: str, name: str):
+    """The model itself, and the device and precision it runs at."""
+    if engine == "parakeet":
+        import onnx_asr
+        import onnxruntime as ort
+
+        opts = ort.SessionOptions()
+        opts.intra_op_num_threads = THREADS
+        # Always the CPU and int8: the GPU is XTTS's, and the float model is 2.5 GB.
+        return onnx_asr.load_model(name, quantization="int8", sess_options=opts), "cpu", "int8"
+    from faster_whisper import WhisperModel
+
+    return WhisperModel(name, device=DEVICE, compute_type=COMPUTE, cpu_threads=THREADS), DEVICE, COMPUTE
+
+
 def load_model(choice: str) -> None:
     """Drop the model held now and load `choice` in its place."""
     global _model, _meta, _choice, _loading, _error
-    from faster_whisper import WhisperModel
 
     _choice, _loading, _error = choice, True, ""
-    name = CHOICES[choice]
+    engine, name = CHOICES[choice]
     try:
         with _lock:
             _model = None                                 # free its RAM before the next one loads
             release()
             t0 = time.time()
-            print(f"[stt] loading whisper {name} on {DEVICE} ({COMPUTE}) …", flush=True)
-            _model = WhisperModel(name, device=DEVICE, compute_type=COMPUTE, cpu_threads=THREADS)
-            _meta = {"model": choice, "device": DEVICE, "compute_type": COMPUTE,
+            print(f"[stt] loading {engine} {name} …", flush=True)
+            _model, device, compute = open_model(engine, name)
+            _meta = {"model": choice, "engine": engine, "device": device, "compute_type": compute,
                      "load_seconds": round(time.time() - t0, 1)}
         print(f"[stt] ready in {_meta['load_seconds']}s", flush=True)
         try:
@@ -111,7 +140,7 @@ def load_model(choice: str) -> None:
                 json.dump({"model": choice}, f)
         except OSError as exc:
             print(f"[stt] could not keep the choice: {exc}", flush=True)
-    except Exception as exc:                              # e.g. turbo on a faster-whisper < 1.1
+    except Exception as exc:                              # e.g. turbo on a faster-whisper < 1.1, no onnx-asr
         _error = str(exc)
         print(f"[stt] ERROR loading {name}: {exc}", flush=True)
     finally:
@@ -128,6 +157,8 @@ def switch(choice: str) -> None:
 
 
 def transcribe(audio: bytes, lang: str | None) -> dict:
+    if _meta.get("engine") == "parakeet":
+        return transcribe_parakeet(audio, lang)
     t0 = time.time()
     with _lock:
         segments, info = _model.transcribe(
@@ -143,6 +174,25 @@ def transcribe(audio: bytes, lang: str | None) -> dict:
         "language": info.language,
         "seconds": round(time.time() - t0, 2),
         "audio_seconds": round(info.duration, 2),
+        "model": _meta.get("model"),
+    }
+
+
+def transcribe_parakeet(audio: bytes, lang: str | None) -> dict:
+    """Parakeet takes 16 kHz samples, not a file: PyAV (faster-whisper's) decodes."""
+    from faster_whisper.audio import decode_audio
+
+    t0 = time.time()
+    samples = decode_audio(io.BytesIO(audio), sampling_rate=RATE)
+    step = PARAKEET_CHUNK_S * RATE
+    with _lock:
+        parts = [_model.recognize(samples[i:i + step], sample_rate=RATE)
+                 for i in range(0, max(len(samples), 1), step)]
+    return {
+        "text": " ".join(p.strip() for p in parts if p and p.strip()),
+        "language": lang or "",          # it finds the language itself and does not say which
+        "seconds": round(time.time() - t0, 2),
+        "audio_seconds": round(len(samples) / RATE, 2),
         "model": _meta.get("model"),
     }
 

@@ -1035,12 +1035,13 @@
           <span class="srow__state" id="wakeState" aria-live="polite">—</span>
           <button type="button" class="switch" id="wake" aria-pressed="true"><span class="switch__knob"></span></button>
         </div>
-        <!-- Who turns speech into text: Whisper small, large v3 or turbo on kaceybody (ui/stt-picker.js). -->
+        <!-- Who turns speech into text: Whisper small, large v3 or turbo, or Parakeet, on kaceybody (ui/stt-picker.js). -->
         <div class="srow sttpick" id="sttPick" data-st="off">
-          <span class="srow__text"><b id="sttPickLabel">Přepis řeči</b><em id="sttPickMeta">Zjišťuji, jestli Whisper běží…</em></span>
+          <span class="srow__text"><b id="sttPickLabel">Přepis řeči</b><em id="sttPickMeta">Zjišťuji, jestli přepis řeči běží…</em></span>
           <span class="srow__state sttpick__state" id="sttPickState" aria-live="polite">—</span>
           <span class="seg sttpick__seg" role="group" aria-labelledby="sttPickLabel">
-            <button type="button" class="seg__opt" data-stt-model="small" aria-pressed="false" title="Nejrychlejší — asi 5 s na větu, méně přesný">small</button>
+            <button type="button" class="seg__opt" data-stt-model="small" aria-pressed="false" title="Whisper small — asi 5 s na větu, méně přesný">small</button>
+            <button type="button" class="seg__opt" data-stt-model="parakeet" aria-pressed="false" title="Nejrychlejší — pod sekundu na krátkou větu a přesnější než small, ale jazyk si určuje sám: občas větu napíše slovensky nebo polsky">Parakeet</button>
             <button type="button" class="seg__opt" data-stt-model="large-v3" aria-pressed="false" title="Nejpřesnější, hlavně v češtině — na kaceybody přes půl minuty na větu">large v3</button>
             <button type="button" class="seg__opt" data-stt-model="turbo" aria-pressed="false" title="Skoro stejně přesný jako large v3, ale na kaceybody pořád ~půl minuty na větu">turbo</button>
           </span>

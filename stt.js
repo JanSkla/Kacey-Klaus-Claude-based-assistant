@@ -1,11 +1,13 @@
 /**
- * Kacey — přepis řeči: which Whisper writes the owner's words down.
+ * Kacey — přepis řeči: which model writes the owner's words down.
  *
  * The page records one utterance and posts it to /api/stt; the sidecar
  * (voicelab/stt_server.py) transcribes it on this machine with Whisper
  * small (the default: on kaceybody's CPU the large encoder takes ~27 s a
- * sentence), large v3 or its turbo variant. It holds one at a time and needs
- * up to a minute to load another, and meanwhile it cannot transcribe.
+ * sentence), large v3 or its turbo variant, or with NVIDIA's Parakeet (under
+ * a second for a short command, more accurate than small, but it picks the
+ * language itself). It holds one at a time and needs up to a minute to load
+ * another, and meanwhile it cannot transcribe.
  *
  * The owner's choice lives here, in kacey_kv `stt.model` — the Controller's
  * Přepis řeči row and Kacey's app_stt both switch through setModel(). The
@@ -28,8 +30,10 @@
 import { kvGet, kvSet, now } from './db.js';
 import { STT_URL, PREVIEW } from './config.js';
 
-export const MODELS = ['small', 'large-v3', 'turbo'];
-export const NAMES = { small: 'small', 'large-v3': 'large v3', turbo: 'turbo' };
+export const MODELS = ['small', 'parakeet', 'large-v3', 'turbo'];
+export const NAMES = { small: 'small', parakeet: 'Parakeet', 'large-v3': 'large v3', turbo: 'turbo' };
+/** The model as a sentence names it: "Whisper turbo", but plain "Parakeet". */
+export function label(m) { return m === 'parakeet' ? NAMES.parakeet : `Whisper ${NAMES[m] || m}`; }
 export const DEFAULT = 'small';
 const RECONCILE_MS = 5 * 60 * 1000;
 const PREVIEW_LOAD_MS = 6000;
@@ -59,7 +63,7 @@ export function choice() {
   return MODELS.includes(m) ? m : DEFAULT;
 }
 
-/** The last utterance Whisper wrote down, or null. */
+/** The last utterance the sidecar wrote down, or null. */
 export function last() {
   const l = kvGet('stt.last', null);
   return l && Number.isFinite(l.seconds) ? l : null;
@@ -115,7 +119,7 @@ export async function health() {
  */
 export async function setModel(name, { by = 'user', origin = '' } = {}) {
   const model = String(name || '').trim();
-  if (!MODELS.includes(model)) throw problem(`Neznámý model „${model}“ — jde large-v3 nebo turbo.`, 400);
+  if (!MODELS.includes(model)) throw problem(`Neznámý model „${model}“ — jde small, parakeet, large-v3 nebo turbo.`, 400);
   if (opts.preview) {
     if (model !== (pretend.model || choice())) Object.assign(pretend, { model, until: Date.now() + PREVIEW_LOAD_MS });
     emit({ event: 'switch', choice: model, by, origin, preview: true });
@@ -125,10 +129,10 @@ export async function setModel(name, { by = 'user', origin = '' } = {}) {
   try {
     r = await sidecar(`/model?name=${encodeURIComponent(model)}`, { method: 'POST' });
   } catch {
-    throw problem('Whisper na kaceybody neběží', 502, 'unreachable');
+    throw problem('Přepis řeči na kaceybody neběží', 502, 'unreachable');
   }
-  if (r.status === 409) throw problem('Whisper právě načítá jiný model — zkus to za minutu', 409, 'busy');
-  if (!r.ok) throw problem(r.body.error || `Whisper odpověděl ${r.status}`, 502);
+  if (r.status === 409) throw problem('Přepis řeči právě načítá jiný model — zkus to za minutu', 409, 'busy');
+  if (!r.ok) throw problem(r.body.error || `Přepis řeči odpověděl ${r.status}`, 502);
   kvSet('stt.model', model);
   reconciledAt = Date.now();
   emit({ event: 'switch', choice: model, by, origin });
@@ -167,12 +171,12 @@ function secs(n) { return String(Math.round(n * 10) / 10).replace('.', ',') + ' 
 
 /** The state in one Czech line, for Kacey. */
 export function describe(h) {
-  const want = NAMES[h.choice] || h.choice;
-  const held = NAMES[h.model] || h.model;
+  const want = label(h.choice);
+  const held = label(h.model);
   const tail = h.last ? ` Poslední věta (${secs(h.last.audio_seconds)} řeči) se přepisovala ${secs(h.last.seconds)}.` : '';
-  if (h.unreachable) return `Whisper na kaceybody neběží — diktování teď přepisuje prohlížeč, kde to umí. Vybraný model: ${want}.`;
-  if (h.loading) return `Whisper si načítá ${want} — asi minutu, do té doby přepisuje prohlížeč.`;
-  if (h.error && h.model) return `Whisper ${want} se nenačetl (${h.error}), přepisuje dál ${held}.${tail}`;
-  if (!h.ok) return `Whisper se nenačetl${h.error ? ` (${h.error})` : ''} — diktování teď přepisuje prohlížeč.`;
-  return `Přepis řeči běží na Whisper ${held}, na tomhle počítači.${tail}`;
+  if (h.unreachable) return `Přepis řeči na kaceybody neběží — diktování teď přepisuje prohlížeč, kde to umí. Vybraný model: ${want}.`;
+  if (h.loading) return `Načítá se ${want} — asi minutu, do té doby přepisuje prohlížeč.`;
+  if (h.error && h.model) return `${want} se nenačetl (${h.error}), přepisuje dál ${held}.${tail}`;
+  if (!h.ok) return `Model přepisu se nenačetl${h.error ? ` (${h.error})` : ''} — diktování teď přepisuje prohlížeč.`;
+  return `Přepis řeči běží na ${held}, na tomhle počítači.${tail}`;
 }

@@ -666,14 +666,17 @@ restores, and opens the screen (an `open` frame to her own chat's page).
 Dictation is recorded by the page
 ([voice/server-stt.js](public/js/voice/server-stt.js), a stand-in with the
 shape of a `SpeechRecognition`) as 16 kHz WAV and posted to `/api/stt`;
-[stt.js](stt.js) hands it to the Whisper sidecar on this machine
+[stt.js](stt.js) hands it to the speech-to-text sidecar on this machine
 ([voicelab/stt_server.py](voicelab/stt_server.py), port 8791, CPU int8).
 [recognition.js](public/js/voice/recognition.js) prefers it whenever
 `/api/stt/health` says ready and uses the browser's engine only while Whisper
-is down or loading. The sidecar holds one model — **small** (the default:
-on kaceybody's CPU the large encoder takes ~27 s a sentence), **large v3** or
-**turbo** (large-v3-turbo) — and frees it, back to the system
-(`malloc_trim`), before loading another. The owner's choice
+is down or loading. The sidecar holds one model — Whisper **small** (the
+default: on kaceybody's CPU the large encoder takes ~27 s a sentence),
+**large v3** or **turbo** (large-v3-turbo) through faster-whisper, or NVIDIA's
+**Parakeet** TDT 0.6B v3 (int8 ONNX through onnx-asr; ~0.2× real time, takes
+no language, so it may answer in Slovak or Polish) — and frees it, back to the
+system (`malloc_trim`), before loading another. In sentences `stt.label()`
+names them "Whisper turbo" but plain "Parakeet". The owner's choice
 is `kacey_kv` `stt.model` (the Controller's Přepis řeči row and Kacey's
 `app_stt` switch through `setModel`); the sidecar's own `stt_state.json`
 only brings it up right without Kacey, and `health()` asks a sidecar that

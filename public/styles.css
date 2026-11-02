@@ -1119,8 +1119,8 @@ button.rblock:hover { filter: brightness(1.3); }
 .srow__last { margin: 10px 0 0; font-size: 13px; color: var(--ink3); }
 .srow__note { margin: 10px 0 0; max-width: 60ch; font-size: 14px; line-height: 1.6; color: var(--ink2); }
 
-/* Přepis řeči: Whisper small / large v3 / turbo (ui/stt-picker.js) — an .srow with a
-   three-option .seg where the switch would be; the state says how it is going. */
+/* Přepis řeči: Whisper small / Parakeet / large v3 / turbo (ui/stt-picker.js) — an .srow
+   with a four-option .seg where the switch would be; the state says how it is going. */
 .sttpick__seg { flex: 0 0 auto; }
 .sttpick__seg .seg__opt { white-space: nowrap; }
 .sttpick__seg .seg__opt:disabled { cursor: wait; opacity: .45; }
@@ -1832,7 +1832,7 @@ html.is-nightwake body > :not(.nightview) { visibility: hidden; }
   .composer .btn { height: 44px; padding: 0 14px; }
   .miczone { display: block; }
   .btn--talk { display: flex; width: 100%; height: auto; min-height: 52px; font-size: 15px; }
-  /* Přepis řeči: the two options drop under the text, full width for the thumb. */
+  /* Přepis řeči: the four options drop under the text, full width for the thumb. */
   .sttpick { flex-wrap: wrap; }
   .sttpick__seg { display: flex; flex: 1 1 100%; }
   .sttpick__seg .seg__opt { flex: 1 1 0; min-height: 44px; }

@@ -19,6 +19,22 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.19 — 2026-11-02
+
+**Přepis řeči — Parakeet**
+- Controller → Hlas → Přepis řeči has a fourth choice, **Parakeet**
+  (NVIDIA Parakeet TDT 0.6B v3, int8 ONNX through onnx-asr, on the CPU like
+  Whisper). Timed on kaceybody on 30 Czech clips: 0.5–1 s for a short
+  command (Whisper small ~5 s), and about half small's word errors on real
+  speech (17 % vs 31 %). It cannot be told the language, so now and then it
+  writes a sentence in Slovak or Polish. Small stays the default.
+- [voicelab/stt_server.py](voicelab/stt_server.py) runs either engine, one
+  model at a time as before; Parakeet decodes with faster-whisper's PyAV
+  and takes long recordings in 30 s pieces. Needs `onnx-asr[hub]` in
+  `~/.venvs/stt`; the first load downloads ~670 MB.
+- Kacey's `app_stt` switches to it (`model: "parakeet"`), and the messages
+  name it "Parakeet", not "Whisper Parakeet" (`stt.label()`).
+
 ## KC 1.0.18 — 2026-10-30
 
 **Světla — tlačítko pro vypnutí všech světel**

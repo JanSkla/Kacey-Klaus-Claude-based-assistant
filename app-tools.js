@@ -712,29 +712,30 @@ const sticky = tool(
   },
 );
 
-/* Přepis řeči: which Whisper writes the owner's dictation down (stt.js). A
+/* Přepis řeči: which model writes the owner's dictation down (stt.js). A
    switch takes about a minute; the pages hear it as an `stt` frame. */
 const speechToText = tool(
   'app_stt',
-  'Přepis pánova diktování — Whisper small (nejrychlejší, asi 5 s na větu, méně přesný; výchozí), large v3 ' +
+  'Přepis pánova diktování — Whisper small (asi 5 s na větu, méně přesný; výchozí), Parakeet (pod sekundu na krátkou ' +
+    'větu a přesnější než small, ale jazyk si určuje sám — občas větu napíše slovensky nebo polsky), Whisper large v3 ' +
     '(nejpřesnější) nebo turbo (skoro stejně přesný) — oba velké tady trvají asi půl minuty na větu. Běží na tomhle počítači. status = co teď běží a jak rychle, switch = přepni model ' +
     '(načtení trvá asi minutu, do té doby přepisuje prohlížeč). Jen když o to pán řekne nebo si stěžuje na mikrofon.',
   {
     action: z.enum(['status', 'switch']),
-    model: z.enum(stt.MODELS).optional().describe('switch: "small", "large-v3" nebo "turbo".'),
+    model: z.enum(stt.MODELS).optional().describe('switch: "small", "parakeet", "large-v3" nebo "turbo".'),
   },
   async ({ action, model }) => {
     try {
       const h = await stt.health();
       if (action === 'status') return ok(stt.describe(h));
-      if (!model) return fail('Na který model? (model: "small", "large-v3" nebo "turbo")');
-      if (h.unreachable) return fail('Whisper na kaceybody neběží, přepnout teď nejde — pán ho spustí: systemctl --user restart stt.');
-      if (h.loading && h.choice === model) return ok(`Whisper si ${stt.NAMES[model]} právě načítá — do minuty bude.`);
+      if (!model) return fail('Na který model? (model: "small", "parakeet", "large-v3" nebo "turbo")');
+      if (h.unreachable) return fail('Přepis řeči na kaceybody neběží, přepnout teď nejde — pán ho spustí: systemctl --user restart stt.');
+      if (h.loading && h.choice === model) return ok(`${stt.label(model)} se právě načítá — do minuty bude.`);
       if (h.ok && h.model === model && h.choice === model && !h.error) {
-        return ok(`Přepis už běží na Whisper ${stt.NAMES[model]} — nic jsem neměnila.`);
+        return ok(`Přepis už běží na ${stt.label(model)} — nic jsem neměnila.`);
       }
       await stt.setModel(model, { by: 'kacey' });
-      return ok(`Přepínám přepis řeči na Whisper ${stt.NAMES[model]} — načtení trvá asi minutu, do té doby přepisuje prohlížeč. ` +
+      return ok(`Přepínám přepis řeči na ${stt.label(model)} — načtení trvá asi minutu, do té doby přepisuje prohlížeč. ` +
         'Pánovi se to ukáže v Controlleru (Hlas → Přepis řeči).');
     } catch (err) { return fail(err.message); }
   },
@@ -1525,7 +1526,7 @@ export function makeAppServer(ctx = {}) {
       '(app_read, kalendář, deník) a rozlož je na whiteboard. ' +
       'Soubory mezi pánovým počítačem a telefonem (Úložiště) spravuje app_storage: co tam je, text nebo fotku ' +
       'z chatu uložit jako soubor, smazat, vrátit, otevřít. ' +
-      'Který Whisper přepisuje pánovo diktování (small, large v3 nebo turbo), ukáže a přepne app_stt. ' +
+      'Který model přepisuje pánovo diktování (Whisper small, large v3, turbo nebo Parakeet), ukáže a přepne app_stt. ' +
       'Jak nahlas mluvíš ty sama („mluv tišeji“, „hlasitost na 40“), ukáže a nastaví app_voice_volume. ' +
       'Co svítí, ukáže app_lights; když pán řekne „zhasni všechno“, zhasne všechna světla (all_off).',
     tools: [...APP_TOOLS, makeUpgradeRequest(ctx), ...makeGalleryTools(ctx), ...makeWhiteboardTools(ctx), ...makeStorageTools(ctx)],

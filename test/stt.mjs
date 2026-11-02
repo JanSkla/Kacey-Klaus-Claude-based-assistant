@@ -1,4 +1,4 @@
-// Přepis řeči — stt.js (the owner's Whisper, large v3 or turbo, kept in the
+// Přepis řeči — stt.js (the owner's model, Whisper or Parakeet, kept in the
 // database; switching, the sidecar brought back to that choice, the last
 // sentence's time, a sidecar that is loading or not there, the preview's
 // pretend switch) and Kacey's app_stt.
@@ -94,7 +94,7 @@ await test('a sidecar reporting the failed load is not asked again', async () =>
   assert.deepEqual(side.calls, ['GET /health']);
   assert.equal(h.ok, true);
   assert.equal(h.model, 'large-v3');
-  assert.match(stt.describe(h), /turbo se nenačetl.*přepisuje dál large v3/);
+  assert.match(stt.describe(h), /turbo se nenačetl.*přepisuje dál Whisper large v3/);
 });
 
 await test('switching asks the sidecar, keeps the choice and says so to every page', async () => {
@@ -107,7 +107,7 @@ await test('switching asks the sidecar, keeps the choice and says so to every pa
   assert.deepEqual(events, [{ event: 'switch', choice: 'turbo', by: 'user', origin: 'p1' }]);
   const h = await stt.health();
   assert.equal(h.loading, true);
-  assert.match(stt.describe(h), /načítá turbo/);
+  assert.match(stt.describe(h), /Načítá se Whisper turbo/);
 });
 
 await test('an unknown model is refused before the sidecar hears of it', async () => {
@@ -207,6 +207,23 @@ await test('small is a choice like the others: back from turbo to small', async 
   assert.ok(side.calls.includes('POST /model?name=small'));
 });
 
+await test('Parakeet is a choice too, and is not called a Whisper', async () => {
+  reset();
+  db.kvSet('stt.model', 'small');
+  const out = await stt.setModel('parakeet', { by: 'user' });
+  assert.deepEqual(out, { choice: 'parakeet', loading: true });
+  assert.equal(stt.choice(), 'parakeet');
+  assert.ok(side.calls.includes('POST /model?name=parakeet'));
+  assert.match(stt.describe(await stt.health()), /^Načítá se Parakeet/);
+  side.model = 'parakeet';
+  side.loading = false;
+  await stt.transcribe(Buffer.alloc(10));
+  assert.equal(stt.last().model, 'parakeet');
+  const said = stt.describe(await stt.health());
+  assert.match(said, /Přepis řeči běží na Parakeet,/);
+  assert.doesNotMatch(said, /Whisper/);
+});
+
 /* ---- Kacey ------------------------------------------------------------------ */
 
 await test('app_stt is on the allow-list', () => {
@@ -237,6 +254,9 @@ await test('app_stt switch switches as Kacey; the model already running is left 
   out = await call('app_stt', { action: 'switch' });
   assert.ok(out.isError);
   assert.match(text(out), /"small"/, 'the question names small too');
+  assert.match(text(out), /"parakeet"/, 'and Parakeet');
+  out = await call('app_stt', { action: 'switch', model: 'parakeet' });
+  assert.match(text(out), /Přepínám přepis řeči na Parakeet —/);
 });
 
 await test('app_stt cannot switch a Whisper that is not running, and says how to start it', async () => {
