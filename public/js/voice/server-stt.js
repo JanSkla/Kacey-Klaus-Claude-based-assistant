@@ -31,6 +31,9 @@ var END_SILENCE_MS = 1200;      // this much quiet after speech -> the utterance
 var MAX_MS = 20000;             // a request, not a dictation session
 var MIN_SPEECH_MS = 250;        // shorter than this is a cough, not a word
 var PARTIAL_MS = 600;           // at least this long between two partials (one in flight at a time)
+/* No partial before this much speech: on a word or two Parakeet guesses the
+   language, and the strip showed "Yeah." or Polish before the Czech came. */
+var PARTIAL_AFTER_MS = 1500;
 
 var NO_FRAMES_MS = 2500;        // the mic opened but no audio arrived -> the context is dead
 
@@ -251,7 +254,8 @@ ServerRecognition.prototype.start = function () {
           else self._fail(s.peak < SILENT_PEAK ? 'no-audio' : 'no-speech');
           return;
         }
-        if (s.speechAt && !s.partialBusy && now - s.partialAt >= PARTIAL_MS && s.chunks.length > s.partialLen) self._partial(s);
+        if (s.speechAt && now - s.speechAt >= PARTIAL_AFTER_MS && !s.partialBusy &&
+            now - s.partialAt >= PARTIAL_MS && s.chunks.length > s.partialLen) self._partial(s);
       }, 250);
       proc.onaudioprocess = function (e) {
         if (!self._s || s.finished) return;

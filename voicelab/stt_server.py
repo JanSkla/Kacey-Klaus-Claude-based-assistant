@@ -109,13 +109,18 @@ def release() -> None:
 def open_model(engine: str, name: str):
     """The model itself, and the device and precision it runs at."""
     if engine == "parakeet":
+        import numpy as np
         import onnx_asr
         import onnxruntime as ort
 
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = THREADS
         # Always the CPU and int8: the GPU is XTTS's, and the float model is 2.5 GB.
-        return onnx_asr.load_model(name, quantization="int8", sess_options=opts), "cpu", "int8"
+        model = onnx_asr.load_model(name, quantization="int8", sess_options=opts)
+        # One silent second through it before it counts as ready: the first real
+        # run after a load took 4.5 s for one second of speech, a warm one 0.6 s.
+        model.recognize(np.zeros(RATE, dtype=np.float32), sample_rate=RATE)
+        return model, "cpu", "int8"
     from faster_whisper import WhisperModel
 
     return WhisperModel(name, device=DEVICE, compute_type=COMPUTE, cpu_threads=THREADS), DEVICE, COMPUTE

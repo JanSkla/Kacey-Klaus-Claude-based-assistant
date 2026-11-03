@@ -19,6 +19,17 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.22 — 2026-11-03
+
+**Hlas — slova naživo: bez nesmyslů na začátku**
+- The live words start after 1.5 s of speech, not at once: on a word or two
+  Parakeet guesses the language, and the strip showed "Yeah." or Polish
+  ("Panie Przewodniczący.") before the Czech came. A short command now shows
+  its words only once it is written down.
+- The sidecar runs one silent second through Parakeet right after loading it,
+  so it is warm before it reports ready: the first pass after a load took
+  4.5 s for one second of speech, a warm one 0.6 s.
+
 ## KC 1.0.21 — 2026-11-03
 
 **Hlas — slova naživo při mluvení**
