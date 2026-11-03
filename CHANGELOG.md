@@ -22,7 +22,7 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 ## KC 1.0.22 — 2026-11-03
 
 **Hlas — slova naživo: bez nesmyslů na začátku**
-- The live words start after 1.5 s of speech, not at once: on a word or two
+- The live words start after 2 s of speech, not at once: on a word or two
   Parakeet guesses the language, and the strip showed "Yeah." or Polish
   ("Panie Przewodniczący.") before the Czech came. A short command now shows
   its words only once it is written down.

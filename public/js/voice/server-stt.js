@@ -32,8 +32,10 @@ var MAX_MS = 20000;             // a request, not a dictation session
 var MIN_SPEECH_MS = 250;        // shorter than this is a cough, not a word
 var PARTIAL_MS = 600;           // at least this long between two partials (one in flight at a time)
 /* No partial before this much speech: on a word or two Parakeet guesses the
-   language, and the strip showed "Yeah." or Polish before the Czech came. */
-var PARTIAL_AFTER_MS = 1500;
+   language, and the strip showed "Yeah." or Polish before the Czech came.
+   Timed on 14 clips: from 1.5 s of speech 3 still came out English or
+   Russian, from 2 s one (a clip that stays Russian at 2.5 s too). */
+var PARTIAL_AFTER_MS = 2000;
 
 var NO_FRAMES_MS = 2500;        // the mic opened but no audio arrived -> the context is dead
 
