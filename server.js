@@ -1793,7 +1793,7 @@ app.put('/api/voice/volume', express.json(), (req, res) => {
  * Whisper sidecar transcribes it on this machine — the audio never leaves it.
  * ------------------------------------------------------------------------- */
 
-/* Whisper small, large v3 or its turbo variant (stt.js): the sidecar holds one, the
+/* Whisper small, large v3, turbo or Parakeet (stt.js): the sidecar holds one, the
  * owner's choice is kept in the database, and a switch from the Controller or
  * from Kacey (app_stt) goes out as an `stt` frame so every page follows. */
 stt.onEvent((ev) => {
@@ -1817,12 +1817,15 @@ app.post('/api/stt/model', express.json(), async (req, res) => {
 
 app.post('/api/stt', express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '12mb' }), async (req, res) => {
   try {
-    const out = await stt.transcribe(req.body, { lang: req.query.lang, type: req.get('content-type') || 'audio/wav' });
-    log(`stt: ${out.model || ''} ${out.audio_seconds}s -> ${JSON.stringify(out.text).slice(0, 80)} in ${out.seconds} s`);
+    const partial = req.query.partial === '1';
+    const out = await stt.transcribe(req.body, { lang: req.query.lang, type: req.get('content-type') || 'audio/wav', partial });
+    // The words so far, every second or so while the owner speaks: not worth a line each.
+    if (!partial) log(`stt: ${out.model || ''} ${out.audio_seconds}s -> ${JSON.stringify(out.text).slice(0, 80)} in ${out.seconds} s`);
     res.json(out);
   } catch (err) {
     // Loading the other model: the page says so and tries the browser's engine.
     if (err.code === 'loading') return res.status(503).json({ error: err.message, loading: true });
+    if (err.code === 'partial') return res.status(409).json({ error: err.message, partial: false });
     log(`stt failed: ${err.message}`);
     res.status(err.status || 502).json({ error: err.message });
   }

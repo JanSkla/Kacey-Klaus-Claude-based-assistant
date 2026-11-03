@@ -12,6 +12,8 @@ Endpoints
     GET  /health                   -> {ok, model, choice, loading, device, compute_type, load_seconds}
     POST /transcribe?lang=cs       <- audio (WAV from the page; anything ffmpeg/PyAV reads)
                                    -> {text, language, seconds, audio_seconds, model}
+                                   &partial=1: the words so far, while the owner speaks
+                                   (Parakeet only, via Kacey) — answered alike, not logged
     POST /model?name=turbo         -> 202 {choice, loading}: load another model
 
 Whisper small by default: on kaceybody's 4-core CPU it writes a sentence down
@@ -247,13 +249,15 @@ class Handler(BaseHTTPRequestHandler):
         if n <= 0 or n > MAX_BYTES:
             return self._json(400, {"error": "audio missing or too long"})
         audio = self.rfile.read(n)
-        lang = (parse_qs(url.query).get("lang") or [""])[0].split("-")[0] or None
+        query = parse_qs(url.query)
+        lang = (query.get("lang") or [""])[0].split("-")[0] or None
         try:
             out = transcribe(audio, lang)
         except Exception as exc:
             print(f"[stt] ERROR: {exc}", flush=True)
             return self._json(500, {"error": str(exc)})
-        print(f"[stt] {out['audio_seconds']}s audio -> {len(out['text'])}ch in {out['seconds']}s", flush=True)
+        if (query.get("partial") or [""])[0] != "1":         # a partial comes every second or so
+            print(f"[stt] {out['audio_seconds']}s audio -> {len(out['text'])}ch in {out['seconds']}s", flush=True)
         return self._json(200, out)
 
 

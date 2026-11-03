@@ -34,6 +34,7 @@ export var state = {
   streaming: false,        // a reply is in flight
   listening: false,        // recognition is actually running
   transcribing: false,     // the utterance is over and Whisper is writing it down
+  heard: '',               // the words so far, while the owner speaks (the listening strip)
   micDesired: false,       // the user wants the mic on
   resumeVoiceLoop: false,  // last turn came from voice -> re-open the mic after TTS
   ttsPending: 0,           // utterances queued/being spoken

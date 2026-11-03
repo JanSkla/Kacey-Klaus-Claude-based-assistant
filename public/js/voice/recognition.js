@@ -92,6 +92,7 @@ function buildRecognition() {
 
   r.onstart = function () {
     state.listening = true;
+    state.heard = '';
     dom.micBtn.setAttribute('aria-pressed', 'true');
     dom.micBtn.setAttribute('aria-label', t().micStop);
     dom.micNote.textContent = t().listenHold;
@@ -131,6 +132,8 @@ function buildRecognition() {
       dom.input.value = (baseText ? baseText + ' ' : '') + interim;
       dom.input.classList.add('is-interim');
       castTranscript(interim);
+      state.heard = interim.trim();
+      syncOrb();
     }
     if (finalText.trim()) {
       dom.input.classList.remove('is-interim');
@@ -251,6 +254,7 @@ export function clearStaleComposer() {
 function resetMicUI() {
   state.listening = false;
   state.transcribing = false;
+  state.heard = '';
   dom.micBtn.setAttribute('aria-pressed', 'false');
   dom.micBtn.setAttribute('aria-label', t().micStart);
   if (!recBlocked && engine()) dom.micNote.textContent = t().micHint;

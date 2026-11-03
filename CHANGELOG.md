@@ -19,6 +19,23 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.21 — 2026-11-03
+
+**Hlas — slova naživo při mluvení**
+- While the owner speaks, the "Poslouchám…" strip above the composer shows
+  the words as they are said (their last ~140 characters), with a pulsing
+  accent square after them; once the sentence is over it reads
+  "… Přepisuji, co jsem slyšela…" after the words until the answer comes.
+  The composer and the bedside widget get the same words, as they already did
+  with the browser's engine.
+- With Parakeet only: the page sends the audio so far as a partial
+  (`POST /api/stt?partial=1`) at most every 0.6 s, one at a time. Kacey
+  refuses a partial (409) unless Parakeet is the choice, does not keep it as
+  `stt.last` and does not log it; the sidecar does not log it either. With
+  Whisper the strip stays as before — it takes ~5 s on any length there.
+- The browser's own engine (where it works) fills the strip from its
+  interim results too.
+
 ## KC 1.0.20 — 2026-11-02
 
 **Světla — „Vypnout vše“ pryč z Kacey**

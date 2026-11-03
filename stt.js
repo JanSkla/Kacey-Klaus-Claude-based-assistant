@@ -17,6 +17,12 @@
  * most once every few minutes and never while the last attempt is the error
  * the sidecar reports.
  *
+ * While the owner speaks, the page may send the audio so far as a partial
+ * (`partial: true`) and show the words as they come. Only with Parakeet: it
+ * writes a few seconds of speech in well under a second, where Whisper small
+ * takes ~5 s whatever the length and would hold the sidecar from the real
+ * sentence. A partial is not kept anywhere.
+ *
  * The last transcription — model, how long it took, how long the audio was —
  * is `stt.last`, so every device shows "věta za 2,4 s", not only the one that
  * spoke. Every switch is reported through onEvent(); server.js broadcasts it
@@ -142,17 +148,20 @@ export async function setModel(name, { by = 'user', origin = '' } = {}) {
 /**
  * One utterance to text. `audio` is the page's WAV, `lang` 'cs' / 'cs-CZ'.
  * Throws with code 'loading' while a model loads (503), 'unreachable' when
- * the sidecar is not there.
+ * the sidecar is not there. `partial`: the words so far, while the owner is
+ * still speaking — refused (409, code 'partial') unless Parakeet is the
+ * choice, and never kept as `stt.last`.
  */
-export async function transcribe(audio, { lang = 'cs', type = 'audio/wav' } = {}) {
+export async function transcribe(audio, { lang = 'cs', type = 'audio/wav', partial = false } = {}) {
   if (!audio || !audio.length) throw problem('žádný zvuk', 400);
+  if (partial && choice() !== 'parakeet') throw problem('Průběžný přepis umí jen Parakeet', 409, 'partial');
   const code = /^[a-z]{2}(-[A-Z]{2})?$/.test(String(lang)) ? String(lang) : 'cs';
   const started = Date.now();
   let r;
   try {
-    r = await sidecar(`/transcribe?lang=${encodeURIComponent(code)}`, {
+    r = await sidecar(`/transcribe?lang=${encodeURIComponent(code)}${partial ? '&partial=1' : ''}`, {
       method: 'POST', headers: { 'Content-Type': type }, body: audio,
-    }, 60000);
+    }, partial ? 15000 : 60000);
   } catch (err) {
     throw problem(`Přepis řeči neodpovídá (${err.message})`, 502, 'unreachable');
   }
@@ -160,6 +169,7 @@ export async function transcribe(audio, { lang = 'cs', type = 'audio/wav' } = {}
   if (!r.ok) throw problem(`Přepis řeči selhal (${r.body.error || r.status})`, 502);
   const out = r.body;
   const seconds = Math.round((Date.now() - started) / 100) / 10;
+  if (partial) return { ...out, seconds, partial: true };
   kvSet('stt.last', {
     model: MODELS.includes(out.model) ? out.model : null, seconds,
     audio_seconds: Number(out.audio_seconds) || 0, at: now(),

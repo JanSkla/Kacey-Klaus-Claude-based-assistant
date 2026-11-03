@@ -681,7 +681,11 @@ is `kacey_kv` `stt.model` (the Controller's Přepis řeči row and Kacey's
 `app_stt` switch through `setModel`); the sidecar's own `stt_state.json`
 only brings it up right without Kacey, and `health()` asks a sidecar that
 holds something else for the owner's model, at most every 5 minutes and never
-over its own load error. The last sentence's time is `stt.last`. A switch goes
+over its own load error. The last sentence's time is `stt.last`. With Parakeet the page also sends the
+audio so far while the owner speaks (`/api/stt?partial=1`, at most every
+0.6 s, one in flight) and shows the answer as an interim result in the
+listening strip (`state.heard`), the composer and the bedside widget; a
+partial is refused unless Parakeet is the choice and is never kept or logged. A switch goes
 out as an `stt` frame (`by`, `origin`): other pages poll again, Kacey's is
 said on every page. In a preview the switch is pretended — the sidecar is the
 live app's.

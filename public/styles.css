@@ -554,6 +554,14 @@ body[data-view="morning"] .sidenav, body[data-view="proposals"] .sidenav { displ
 .listening__busy { display: none; animation: pulseDot 1.4s ease-in-out infinite; }
 .listening[data-busy] .listening__hear { display: none; }
 .listening[data-busy] .listening__busy { display: inline; }
+/* The words so far replace the hint as they are said (Parakeet, or the browser's
+   engine); a pulsing square after them says it is still listening. */
+.listening__words { display: none; color: var(--ink); }
+.listening__words::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 8px; vertical-align: middle; background: var(--acc); animation: pulseDot 1.4s ease-in-out infinite; }
+.listening[data-heard] .listening__hear { display: none; }
+.listening[data-heard] .listening__words { display: inline; }
+.listening[data-heard][data-busy] .listening__words::after { display: none; }
+.listening[data-heard][data-busy] .listening__busy { margin-left: 8px; color: var(--ink3); }
 
 /* attachments ------------------------------------------------------------ */
 .attachstrip {

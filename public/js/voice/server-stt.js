@@ -11,6 +11,13 @@
      ended -> 16 kHz mono WAV -> POST /api/stt -> Whisper on this machine ->
      one final result.
 
+   With Parakeet the words also come while the owner speaks: every
+   PARTIAL_MS the audio so far goes as a partial (/api/stt?partial=1), one at
+   a time, and what it says arrives as an interim result — the same
+   isFinal:false the browser's engine sends, so the composer, the listening
+   strip and the bedside widget show it as they would. Whisper takes ~5 s on
+   any length there: a partial would only hold up the real sentence.
+
    WAV assembled here rather than MediaRecorder: no codec the browser may or
    may not have, and Whisper takes it as it is. The audio goes only to Kacey's
    own server, which hands it to a sidecar on the same machine.
@@ -23,6 +30,7 @@ var NO_SPEECH_MS = 7000;        // nothing said this long after start -> 'no-spe
 var END_SILENCE_MS = 1200;      // this much quiet after speech -> the utterance is over
 var MAX_MS = 20000;             // a request, not a dictation session
 var MIN_SPEECH_MS = 250;        // shorter than this is a cough, not a word
+var PARTIAL_MS = 600;           // at least this long between two partials (one in flight at a time)
 
 var NO_FRAMES_MS = 2500;        // the mic opened but no audio arrived -> the context is dead
 
@@ -227,7 +235,8 @@ ServerRecognition.prototype.start = function () {
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var s = self._s = {
         stream: stream, ctx: ctx, src: src, proc: proc, chunks: [], started: Date.now(),
-        floor: null, level: null, peak: 0, speechAt: 0, lastLoud: 0, timer: 0, watch: 0, frames: 0, finished: false
+        floor: null, level: null, peak: 0, speechAt: 0, lastLoud: 0, timer: 0, watch: 0, frames: 0, finished: false,
+        partialBusy: false, partialAt: 0, partialLen: 0
       };
       /* The clock, not the audio, decides "nothing was said" and "the mic is
          dead": both have to fire precisely when no audio arrives. After the
@@ -240,7 +249,9 @@ ServerRecognition.prototype.start = function () {
         if (!s.speechAt && now - s.started > NO_SPEECH_MS) {
           if (s.peak >= SEND_PEAK) self._finish();
           else self._fail(s.peak < SILENT_PEAK ? 'no-audio' : 'no-speech');
+          return;
         }
+        if (s.speechAt && !s.partialBusy && now - s.partialAt >= PARTIAL_MS && s.chunks.length > s.partialLen) self._partial(s);
       }, 250);
       proc.onaudioprocess = function (e) {
         if (!self._s || s.finished) return;
@@ -296,6 +307,30 @@ ServerRecognition.prototype._fail = function (code) {
   this._busy = false;
   this._emit('error', { error: code });
   this._emit('end');
+};
+
+/** The words so far, as an interim result. Dropped once the utterance is over:
+    the final result says it all. */
+ServerRecognition.prototype._partial = function (s) {
+  if (!this.interimResults || !status.ok || status.model !== 'parakeet') return;
+  var self = this;
+  var gen = this._gen;
+  s.partialBusy = true;
+  s.partialAt = Date.now();
+  s.partialLen = s.chunks.length;
+  var wav = encodeWav(downsample(s.chunks.slice(), s.ctx.sampleRate), TARGET_RATE);
+  fetch('/api/stt?partial=1&lang=' + encodeURIComponent(this.lang || 'cs-CZ'), { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      if (gen !== self._gen || self._s !== s || s.finished) return;
+      var text = String((j && j.text) || '').trim();
+      if (!text) return;
+      var result = [{ transcript: text, confidence: 0 }];
+      result.isFinal = false;
+      self._emit('result', { resultIndex: 0, results: [result] });
+    })
+    .catch(function () { /* the words wait for the final result */ })
+    .then(function () { s.partialBusy = false; s.partialAt = Date.now(); });
 };
 
 /** The utterance is over: send it, and report what Whisper heard as one final result. */

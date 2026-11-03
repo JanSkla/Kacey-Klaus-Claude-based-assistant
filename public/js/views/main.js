@@ -36,6 +36,7 @@ function paintDate() {
    back, and every minute. */
 var owed = false;
 var reloading = false;
+var HEARD_MAX = 140;           // characters of the words so far the listening strip shows
 
 function reloadForDay() {
   if (reloading) return Promise.resolve(null);
@@ -83,6 +84,10 @@ function paintRail() {
 
   $('listeningStrip').hidden = !state.listening;
   $('listeningStrip').toggleAttribute('data-busy', !!state.transcribing);
+  // The words so far, as they are said: their tail, so the strip stays a strip.
+  var heard = state.listening ? state.heard : '';
+  $('listeningStrip').toggleAttribute('data-heard', !!heard);
+  $('listeningWords').textContent = heard.length > HEARD_MAX ? '…' + heard.slice(-HEARD_MAX).replace(/^\S*\s/, '') : heard;
   $('micLabel').textContent = state.listening ? 'Stop' : 'Mluvit';
   $('mic').setAttribute('aria-pressed', String(state.listening));
 

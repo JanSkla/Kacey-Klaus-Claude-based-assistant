@@ -224,6 +224,21 @@ await test('Parakeet is a choice too, and is not called a Whisper', async () => 
   assert.doesNotMatch(said, /Whisper/);
 });
 
+await test('a partial (the words so far) only with Parakeet, and it is never kept as the last sentence', async () => {
+  reset();
+  db.kvSet('stt.model', 'small');
+  await assert.rejects(stt.transcribe(Buffer.alloc(10), { partial: true }), (e) => e.status === 409 && e.code === 'partial');
+  assert.deepEqual(side.calls, [], 'Whisper is not asked');
+  db.kvSet('stt.model', 'parakeet');
+  side.model = 'parakeet';
+  const before = stt.last();
+  const out = await stt.transcribe(Buffer.alloc(10), { lang: 'cs-CZ', partial: true });
+  assert.equal(out.text, 'Zavolej mámě');
+  assert.equal(out.partial, true);
+  assert.deepEqual(side.calls, ['POST /transcribe?lang=cs-CZ&partial=1']);
+  assert.deepEqual(stt.last(), before);
+});
+
 /* ---- Kacey ------------------------------------------------------------------ */
 
 await test('app_stt is on the allow-list', () => {
