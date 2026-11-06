@@ -367,7 +367,7 @@ export const NIGHT_DEFAULTS = {
   fallback_on: true,
   fallback: '04:00',
   morning_end: '09:00',
-  screen_idle_min: 2,
+  screen_idle_min: 3,
   lid_check: true,
 };
 

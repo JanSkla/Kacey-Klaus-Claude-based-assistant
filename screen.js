@@ -18,14 +18,18 @@
  *              X's own input wakes the panel there, so the idle check also
  *              reads X's idle time (xprintidle) to darken it again.
  *
- * With the backlight, going dark is a 20 s fade rather than a cut: the panel
+ * With the backlight, going dark is a 15 s fade rather than a cut: the panel
  * dims down (brightness), then the backlight goes off. Anybody who moves the
  * mouse, taps or talks during the fade gets full brightness back at once, and
- * the fade is the warning that the screen is about to go.
+ * the fade is the warning that the screen is about to go. It runs inside the
+ * idle timeout, not after it: three minutes without a touch means dark at
+ * three minutes, with the last fifteen seconds dimming.
  *
- * "Nechat hrát vinyl" (the music player's button) keeps the panel lit: no idle
- * fade, and the morning's own "back to sleep" is skipped. Only somebody saying
- * so ends it — the button again, "Zpět do klidu", or the night winding down.
+ * The lock ("Obrazovka vždy zapnutá", the square button in Kacey's header)
+ * keeps the panel lit: no idle fade, and the morning's own "back to sleep" is
+ * skipped. Only somebody saying so ends it — the button again, "Zpět do
+ * klidu", or the night winding down. The vinyl visual on the whole screen
+ * holds it lit the same way while it is up (`hold`), without the button.
  *
  * ONE owner decides when the panel sleeps: this module. Every change is
  * logged with its reason, because "why did the screen come on at three in the
@@ -48,7 +52,7 @@ const LID_DIR = '/proc/acpi/button/lid';
 const BACKLIGHT_DIR = '/sys/class/backlight';
 const BL_ON = '0';
 const BL_OFF = '4';
-const FADE_MS = 20000;             // idle → dark takes this long, not an instant
+const FADE_MS = 15000;             // the last stretch of the idle timeout, dimming rather than cutting
 const FADE_STEP_MS = 250;
 const FADE_FLOOR = 0.04;           // the last step before the backlight goes off
 
@@ -59,12 +63,12 @@ let current = { state: 'unknown', since: null, reason: null };
 let lastActivity = Date.now();     // Kacey's own: an interaction, presence, the end of speech, on()
 let speaking = false;
 let idleTimer = null;
-let idleMinutes = () => 2;
+let idleMinutes = () => 3;
 let warned = false;
 let fade = null;                   // { timer } while the panel is dimming towards off
-let keepOn = false;                // "Nechat hrát vinyl": no idle timeout until released
-const holds = new Set();           // other owners keeping it lit (the second monitor), by name
-const keepListeners = new Set();
+let locked = false;                // the header's lock button: no idle timeout until released
+const holds = new Map();           // other owners keeping it lit (the second monitor, the vinyl visual): name -> expiry timer
+const lockListeners = new Set();
 
 function run(cmd, args) {
   return new Promise((resolve) => {
@@ -182,50 +186,74 @@ async function force(state, reason) {
 export function on(reason) { return force('on', reason); }
 
 /**
- * Dark now. While the panel is kept lit this is skipped, unless `release`:
+ * Dark now. While the panel is locked on this is skipped, unless `release`:
  * an off somebody asked for ("Zpět do klidu", the night winding down) ends
- * the keep; an automatic one (the morning is done) does not.
+ * the lock; an automatic one (the morning is done) does not.
  */
 export function off(reason, { release = false } = {}) {
-  if (keepOn) {
-    if (!release) { log(`off (${reason}) skipped — kept lit`); return Promise.resolve(false); }
-    setKeepOn(false, reason);
+  if (locked) {
+    if (!release) { log(`off (${reason}) skipped — locked on`); return Promise.resolve(false); }
+    setLock(false, reason);
   }
   return force('off', reason);
 }
 
-/* ---- kept lit ("Nechat hrát vinyl") -------------------------------------- */
+/* ---- the lock (the square button in Kacey's header) ----------------------- */
 
-export function keptOn() { return keepOn; }
+export function isLocked() { return locked; }
 
-export function onKeepChange(fn) {
-  keepListeners.add(fn);
-  return () => keepListeners.delete(fn);
+export function onLockChange(fn) {
+  lockListeners.add(fn);
+  return () => lockListeners.delete(fn);
 }
 
-/** Keep the panel lit (and light it now), or hand it back to the idle timeout. */
-export function setKeepOn(value, reason = 'button') {
+/** Lock the panel on (and light it now), or hand it back to the idle timeout. */
+export function setLock(value, reason = 'button') {
   const next = !!value;
-  if (next === keepOn) return keepOn;
-  keepOn = next;
+  if (next === locked) return locked;
+  locked = next;
   lastActivity = Date.now();          // released: the full timeout from now
-  log(keepOn ? `kept lit (${reason})` : `keep released (${reason})`);
-  if (keepOn) { cancelFade('kept lit'); if (current.state !== 'on') on('kept lit'); }
-  for (const fn of keepListeners) {
-    try { fn(keepOn); } catch { /* a closed stream must not stop the rest */ }
+  log(locked ? `locked on (${reason})` : `lock released (${reason})`);
+  if (locked) { cancelFade('locked on'); if (current.state !== 'on') on('locked on'); }
+  for (const fn of lockListeners) {
+    try { fn(locked); } catch { /* a closed stream must not stop the rest */ }
   }
-  return keepOn;
+  return locked;
 }
 
-/* ---- held lit (the second monitor) ----------------------------------------
-   Like the keep, but owned by code rather than a button, so it never shows as
-   "Nechat hrát vinyl" pressed. While Moonlight has the screen the page gets no
-   input, so nothing else would tell the idle check somebody is looking. */
+/* ---- held lit (the second monitor, the vinyl on the whole screen) ----------
+   Like the lock, but owned by code rather than a button, so it never shows as
+   the lock pressed. While Moonlight has the screen the page gets no input, and
+   nobody taps a record playing on the whole screen — so nothing else would
+   tell the idle check somebody is looking.
 
-export function hold(name, value) {
-  if (!!value === holds.has(name)) return;
-  if (value) { holds.add(name); cancelFade(`held: ${name}`); if (current.state !== 'on') on(`held: ${name}`); }
-  else { holds.delete(name); lastActivity = Date.now(); }
+   `ttlMs` is for a hold whose owner is a page: the page says so again every
+   little while, and one that goes away (a reload, the kiosk restarting) stops
+   holding by itself rather than keeping the panel lit for good. */
+
+export function hold(name, value, { ttlMs = 0 } = {}) {
+  const had = holds.has(name);
+  const prev = holds.get(name);
+  if (prev) clearTimeout(prev);
+  if (value) {
+    let timer = null;
+    if (ttlMs > 0) {
+      timer = setTimeout(() => {
+        holds.delete(name);
+        lastActivity = Date.now();
+        log(`hold expired (${name})`);
+      }, ttlMs);
+      timer.unref?.();
+    }
+    holds.set(name, timer);
+    if (had) return;                  // only said again, nothing changed
+    cancelFade(`held: ${name}`);
+    if (current.state !== 'on') on(`held: ${name}`);
+  } else {
+    holds.delete(name);
+    if (!had) return;
+    lastActivity = Date.now();
+  }
   log(value ? `held lit (${name})` : `hold released (${name})`);
 }
 
@@ -304,15 +332,22 @@ async function checkIdle() {
   if (panel === null) return;
   if (panel === 'off') { cancelFade('os'); set('off', current.state === 'off' ? current.reason : 'os'); return; }
   if (current.state !== 'on') set('on', 'os');        // woken by something else (X input, a person at the console)
-  if (speaking || keepOn || holds.size) return;
+  if (speaking || locked || holds.size) return;
 
   const kaceyIdle = Date.now() - lastActivity;
   const xIdle = await xIdleMs();
   const idle = xIdle === null ? kaceyIdle : Math.min(kaceyIdle, xIdle);
-  const limit = Math.max(0.25, Number(idleMinutes()) || 2) * 60000;
+  const limit = Math.max(0.25, Number(idleMinutes()) || 3) * 60000;
+  /* The fade is the last stretch of the timeout, not an extra one: three
+     minutes without a touch means dark at three minutes, with the last
+     fifteen seconds dimming as the warning. A timeout shorter than twice the
+     fade keeps half of it lit, so the warning never takes the whole wait. */
+  if (b === 'backlight') {
+    if (idle >= limit - Math.min(FADE_MS, limit / 2)) startFade();
+    return;
+  }
   if (idle < limit) return;
-  if (b === 'backlight') startFade();
-  else await off('idle');
+  await off('idle');
 }
 
 /** Start the idle check. `getIdleMinutes` is read on every check, so the setting applies at once. */
@@ -332,5 +367,5 @@ export function stopScreen() {
 }
 
 export function status() {
-  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, fading: !!fade, keep_on: keepOn, held: [...holds], lid: readLid(), idle_ms: Date.now() - lastActivity };
+  return { ...current, backend: pickBackend(), available: backend !== 'none', speaking, fading: !!fade, locked, held: [...holds.keys()], lid: readLid(), idle_ms: Date.now() - lastActivity };
 }

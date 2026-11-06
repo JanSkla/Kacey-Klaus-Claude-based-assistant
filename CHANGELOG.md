@@ -19,6 +19,27 @@ UI changes are also logged, in more detail, in [DESIGN.md §8](DESIGN.md#8-chang
 
 ---
 
+## KC 1.0.23 — 2026-11-06
+
+**Obrazovka — zámek v hlavičce**
+- A square lock button in Kacey's header (a monitor with a padlock in it):
+  pressed, the bedside screen never goes dark on its own; pressed again, the
+  idle timeout runs from now. The state lives on the server
+  (`GET/POST /api/screen/lock`) and every open page follows it through a new
+  `screen_lock` frame, so two headers never disagree.
+- The idle timeout is 3 minutes by default (was 2), and the 15 s fade is now
+  the **last stretch of it** rather than an extra wait after it: three minutes
+  without a touch means a dark screen at three minutes, with the last fifteen
+  seconds dimming as the warning. Controller → Noc a ráno → Uspání obrazovky
+  still sets the minutes.
+- The vinyl on the whole screen keeps the panel lit by itself while it is up
+  (`POST /api/screen/vinyl`, said again every 30 s; the hold expires 90 s after
+  the last one, so a reloaded or restarted kiosk stops holding). Nobody taps a
+  record playing, and the timeout used to darken it mid-song.
+- "Nechat hrát vinyl" is gone from the mini player's panel — the lock button
+  does the always-on part and the visual does the rest. `/api/screen/keep`
+  stays as the same lock under its old name, for nowplayingd's corner widget.
+
 ## KC 1.0.22 — 2026-11-03
 
 **Hlas — slova naživo: bez nesmyslů na začátku**

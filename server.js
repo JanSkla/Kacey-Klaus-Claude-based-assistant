@@ -1696,17 +1696,42 @@ function nextUp() {
   return nextItem({ events, tasks, now });
 }
 
-const voicePayload = () => ({ ...voice.status(), keep: screen.keptOn(), next: nextUp() });
+const voicePayload = () => ({ ...voice.status(), lock: screen.isLocked(), next: nextUp() });
 
-app.use(['/api/voice', '/api/next', '/api/wake', '/api/presence', '/api/screen/keep'], voiceCors);
+app.use(['/api/voice', '/api/next', '/api/wake', '/api/presence', '/api/screen/lock', '/api/screen/keep', '/api/screen/vinyl'], voiceCors);
 
-/* "Nechat hrát vinyl": the music player (Kacey's header, the visual's corner)
-   keeps the bedside screen lit — no idle timeout until it is pressed again. */
-app.get('/api/screen/keep', (_req, res) => res.json({ keep: screen.keptOn() }));
+/* The lock: the square button in Kacey's header holds the bedside screen on —
+   no idle timeout until it is pressed again (screen.js). Every open page
+   follows through the `screen_lock` frame, so two headers never disagree. */
+app.get('/api/screen/lock', (_req, res) => res.json({ lock: screen.isLocked() }));
+app.post('/api/screen/lock', express.json({ limit: '1kb' }), (req, res) => {
+  const on = req.body && req.body.on;
+  if (typeof on !== 'boolean') return res.status(400).json({ error: 'on musí být true nebo false' });
+  res.json({ lock: screen.setLock(on, 'button') });
+});
+/* Every open page follows the lock, so two headers never disagree (the frame
+   is ignored by an older page). */
+screen.onLockChange((on) => broadcast({ type: 'screen_lock', on }));
+
+/* The old door, for nowplayingd's visual corner widget in the lights repo: the
+   same lock under its old name. Kacey's own pages use /api/screen/lock. */
+app.get('/api/screen/keep', (_req, res) => res.json({ keep: screen.isLocked() }));
 app.post('/api/screen/keep', express.json({ limit: '1kb' }), (req, res) => {
   const on = req.body && req.body.on;
   if (typeof on !== 'boolean') return res.status(400).json({ error: 'on musí být true nebo false' });
-  res.json({ keep: screen.setKeepOn(on, 'button') });
+  res.json({ keep: screen.setLock(on, 'visual') });
+});
+
+/* The vinyl on the whole screen (the kiosk's .visualover): nobody taps a
+   record playing, so the page says it is up — every VINYL_HOLD_MS while it
+   is — and the screen stays lit without the lock. A page that goes away stops
+   holding by itself when the hold expires. */
+const VINYL_HOLD_MS = 90000;
+app.post('/api/screen/vinyl', express.json({ limit: '1kb' }), (req, res) => {
+  const on = req.body && req.body.on;
+  if (typeof on !== 'boolean') return res.status(400).json({ error: 'on musí být true nebo false' });
+  screen.hold('vinyl', on, { ttlMs: VINYL_HOLD_MS });
+  res.status(204).end();
 });
 
 /* The mouse over the music visual: the same as over the kiosk page — wakes a
@@ -1748,12 +1773,12 @@ app.get('/api/voice/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
   let next = nextUp();
-  const push = (s) => res.write(`data: ${JSON.stringify({ ...s, keep: screen.keptOn(), next })}\n\n`);
+  const push = (s) => res.write(`data: ${JSON.stringify({ ...s, lock: screen.isLocked(), next })}\n\n`);
   push(voice.status());
   const unsubscribe = voice.subscribe(push);
-  const unkeep = screen.onKeepChange(() => push(voice.status()));
+  const unlock = screen.onLockChange(() => push(voice.status()));
   const minute = setInterval(() => { next = nextUp(); push(voice.status()); }, 60000);
-  req.on('close', () => { unsubscribe(); unkeep(); clearInterval(minute); });
+  req.on('close', () => { unsubscribe(); unlock(); clearInterval(minute); });
 });
 
 app.post('/api/wake', (_req, res) => {

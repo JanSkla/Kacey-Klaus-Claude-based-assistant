@@ -118,6 +118,7 @@ import { initProposals } from './js/views/proposals.js';
 import { initRules } from './js/views/rules.js';
 import { initSidenav } from './js/ui/sidenav.js';
 import { initStickies } from './js/ui/stickies.js';
+import { initScreenLock } from './js/ui/screenlock.js';
 import { initUpgrade } from './js/views/upgrade.js';
 import { initHistory } from './js/ui/history.js';
 import { initClock } from './js/core/clock.js';
@@ -198,6 +199,7 @@ initProposals();
 initRules();
 initSidenav();
 initStickies();
+initScreenLock();     // the header's screen lock (its state comes from the server)
 if (!EMBED) { initActivity(); initVoicecast(); }
 initMiniPlayer();
 initSheets();

@@ -293,16 +293,19 @@ Three of these rows exist because of how lightsd works:
 > - **The screen** is switched at the **backlight** (`bl_power`, via a udev
 >   rule), not with `xset`. It is dark by default. A tap, a key, the wake word,
 >   or the mouse moving over the page (the `presence` frame, which is not an
->   interaction) lights it, and the idle timeout darkens it. `screen.js` picks
->   the backend at start: backlight, else xset, else a no-op. Darkening is a
->   20 s fade (`brightness` down to 4 %, then `bl_power` off), and any
->   activity during it restores full brightness. The music visual on `:8081`
+>   interaction) lights it, and the idle timeout (3 min by default) darkens
+>   it. `screen.js` picks the backend at start: backlight, else xset, else a
+>   no-op. The last 15 s of the timeout are a fade (`brightness` down to 4 %,
+>   then `bl_power` off), so the panel is dark when the timeout is up and the
+>   dimming is the warning; any activity during it restores full brightness. The music visual on `:8081`
 >   counts as the page: it posts `/api/presence` on mouse moves. On the kiosk
 >   the mini player shows it in a full-screen frame over Kacey's page (cage
 >   0.2 crashes on a second window), and "Otevřít Kacey" closes the frame.
->   "Nechat hrát vinyl" (the mini player and the visual's corner) keeps the
->   screen lit with no idle timeout; the button again, closing the visual,
->   "Zpět do klidu" or the night winding down ends it.
+>   While the visual is on the whole screen the panel stays lit by itself
+>   (`POST /api/screen/vinyl`, said again every 30 s): nobody taps a record
+>   playing. Always on is the lock button in Kacey's header
+>   (`POST /api/screen/lock`, `ui/screenlock.js`): no idle timeout until the
+>   button again, "Zpět do klidu" or the night winding down ends it.
 > - **The kiosk** only needs `KIOSK_URL=http://127.0.0.1:8082/?kiosk=1`.
 > - **The voice** will be XTTS on the laptop's GeForce 940MX (once the 580
 >   legacy driver replaces the 610 one that ignores it).
@@ -1310,7 +1313,7 @@ In the controller, as `srow`s (existing component), stored in `settings.night`:
 | `sleep_delay_min`    | `60`      | Usnutí po (min) bez interakce                  |
 | `fallback`           | `"04:00"` | Záložní spuštění (00:00–06:00)                 |
 | `morning_end`        | `"09:00"` | Ranní režim končí bez interakce v              |
-| `screen_idle_min`    | `2`       | Obrazovka zhasne po (min)                      |
+| `screen_idle_min`    | `3`       | Obrazovka zhasne po (min, posledních 15 s stmívá) |
 | `lid_check`          | `true`    | Nečíst brief při zavřeném víku                 |
 
 `appstate`'s settings merge is **shallow** (`{ ...DEFAULT_SETTINGS, ...stored }`),

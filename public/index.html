@@ -115,10 +115,6 @@
           <button type="button" class="btn btn--step mini__step" id="miniVolUp" aria-label="Hlasitěji">+</button>
           <span class="mini__volnum num" id="miniVolNum">0 %</span>
         </div>
-        <div class="mini__row mini__keep">
-          <span class="mini__label">OBRAZOVKA</span>
-          <button type="button" class="btn btn--sm" id="miniKeep" aria-pressed="false">Nechat hrát vinyl</button>
-        </div>
         <a class="mini__link" id="miniLink" target="_blank" rel="noopener">Otevřít vizuál na celou obrazovku<span class="mini__hint">dvojklepnutí</span></a>
       </div>
     </span>
@@ -146,6 +142,19 @@
     <!-- A new sticky note over every page (ui/stickies.js). Desktop only. -->
     <button type="button" class="iconbtn desk-only" id="stickyBtn" aria-label="Nový lísteček" title="Nový lísteček — zůstane na očích na každé stránce">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 4h16v10l-6 6H4z M14 20v-6h6 M8 9h8 M8 12.5h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+    <!-- The screen lock (ui/screenlock.js): pressed, the bedside panel never
+         goes dark by itself; released, the idle timeout runs again. -->
+    <button type="button" class="iconbtn" id="screenLock" aria-pressed="false"
+            aria-label="Nechat obrazovku vždy zapnutou"
+            title="Obrazovka zhasne po nečinnosti — klepnutím ji nechat vždy zapnutou">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path d="M2.5 4h19v12.5h-19z M8.5 20.5h7 M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <!-- The padlock inside the screen: shut while the screen may not go dark (ui/screenlock.js). -->
+        <rect x="8.5" y="10" width="7" height="5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <g id="screenLockShut" style="display:none"><path d="M10 10V8.4a2 2 0 0 1 4 0V10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+        <g id="screenLockOpen"><path d="M10 10V8.4a2 2 0 0 1 4 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+      </svg>
     </button>
     <button type="button" class="iconbtn" id="controllerBtn" aria-label="Controller — nastavení" title="Controller">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.5 7.5 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>

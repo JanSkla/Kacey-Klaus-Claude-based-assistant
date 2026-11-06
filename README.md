@@ -347,7 +347,8 @@ HTTP:
 - `GET /api/morning` · `POST /api/morning/tick { key, done }` · `POST /api/morning/start` (by hand) · `POST /api/morning/idle`
 - `POST /api/stt?lang=cs` (WAV body) → `{ text }`, via the Whisper sidecar · `GET /api/stt/health`
 - `GET /api/brief/audio/:date/:n` → line `n` of the morning brief, rendered at night
-- `GET /api/screen/keep` → `{ keep }` · `POST /api/screen/keep { on }` → keep the bedside screen lit with no idle timeout ("Nechat hrát vinyl"), or release it
+- `GET /api/screen/lock` → `{ lock }` · `POST /api/screen/lock { on }` → hold the bedside screen on with no idle timeout (the header's lock button), or release it. `/api/screen/keep` is the same lock under its old name, for nowplayingd's corner widget
+- `POST /api/screen/vinyl { on }` → the vinyl visual is on the whole screen: the panel stays lit while it is up. Said again every 30 s; the hold expires 90 s after the last one, so a page that goes away stops holding
 - `GET /api/next` → the next timed event or task (`label` e.g. `zítra 07:30 · Běh`) · `GET /api/voice` → `{ available, listening, transcript, next }` · `GET /api/voice/events` → the same as a server-sent event stream · `POST /api/wake` → asks the kiosk page to listen (409 when none can) · `POST /api/voice/stop`. For nowplayingd's corner widget ([voicebridge.js](voicebridge.js)); these few answer CORS for loopback, `kaceybody` and the tailnet
 - `GET /api/night/cycle` → the night's timeline · `POST /api/night/sunrise { minutes }` → moves lightsd's "morning" routine
 - `POST /api/notify { device?, items: [{ key, package, app, channel, category, posted_at, title, text, sub_text, conversation, sender, group, message, secret }], removed: [{ key, reason, at }] }`

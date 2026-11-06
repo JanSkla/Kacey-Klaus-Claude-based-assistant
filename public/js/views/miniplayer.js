@@ -6,8 +6,10 @@
    sheet it renders per track. Controls go to its /api/player and /api/volume;
    nothing here ever talks to Spotify.
 
-   "Nechat hrát vinyl" keeps the bedside screen lit (Kacey's /api/screen/keep,
-   screen.js) until pressed again; on the kiosk it also puts the visual up.
+   The visual on the whole screen keeps the bedside screen lit for as long as
+   it is up (Kacey's /api/screen/vinyl, screen.js): nobody taps a record
+   playing, so the idle timeout would darken it mid-song. Always on is the
+   header's lock button instead (ui/screenlock.js).
 
    Collapsed it is a 250×34 bar before the Controller button: a window onto
    the live turntable, the title, and Pauza/Hrát. Tapped, it drops a panel
@@ -19,7 +21,6 @@
    ========================================================================= */
 
 import { $ } from '../core/dom.js';
-import { el, fill } from '../core/el.js';
 import { KIOSK } from '../core/state.js';
 import * as store from '../core/store.js';
 
@@ -36,7 +37,6 @@ var progressBase = 0, progressAt = 0, duration = 0;
 var seekingTo = null;       // ms under the pointer while the bar is dragged
 var SEEK_STEP = 5000;       // arrow keys move five seconds, thirty with Shift
 var volumePending = null, volumeTimer = 0;
-var keep = false;          // the screen is kept lit ("Nechat hrát vinyl")
 
 /* ---- the turntable -------------------------------------------------------
    The same player as nowplayingd's own page (its web/index.html advance()):
@@ -306,38 +306,34 @@ function nudgeVolume(delta) {
   }, 300);
 }
 
-/* ---- "Nechat hrát vinyl" --------------------------------------------------- */
+/* ---- the visual on the whole screen ----------------------------------------
+   While it is up the bedside screen stays lit: said again every HOLD_EVERY_MS,
+   so a page that goes away (a reload, the kiosk restarting) stops holding by
+   itself rather than keeping the panel lit for good (screen.js `hold`). */
 
-function renderKeep() {
-  $('miniKeep').setAttribute('aria-pressed', String(keep));
-  // Pressed, it carries the accent dot like the app's other toggles (.btn .dot).
-  fill($('miniKeep'), keep
-    ? [el('span.dot', { 'aria-hidden': 'true' }), 'Vinyl hraje · vypnout']
-    : 'Nechat hrát vinyl');
-}
+var HOLD_EVERY_MS = 30000;
+var holdTimer = 0;
 
-function readKeep() {
-  fetch('/api/screen/keep').then(function (r) { return r.json(); })
-    .then(function (d) { keep = !!d.keep; renderKeep(); })
-    .catch(function () { /* the server's; the button just stays as it is */ });
-}
-
-function setKeep(on) {
-  return fetch('/api/screen/keep', {
+function sendHold(on) {
+  fetch('/api/screen/vinyl', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: on }),
-  }).then(function (r) { return r.json(); })
-    .then(function (d) { keep = !!d.keep; renderKeep(); })
-    .catch(function () { $('miniError').textContent = 'Kacey neodpovídá.'; $('miniError').hidden = false; });
+  }).catch(function () { /* Kacey away: the idle timeout is hers to run anyway */ });
 }
 
 function openVisual() {
   $('visualFrame').src = nowplayingUrl() + '/';
   $('visualOverlay').hidden = false;
+  sendHold(true);
+  clearInterval(holdTimer);
+  holdTimer = setInterval(function () { sendHold(true); }, HOLD_EVERY_MS);
 }
 
 function closeVisual() {
   $('visualOverlay').hidden = true;
   $('visualFrame').removeAttribute('src');     // stop drawing a record nobody sees
+  clearInterval(holdTimer);
+  holdTimer = 0;
+  sendHold(false);
 }
 
 export function initMiniPlayer() {
@@ -363,24 +359,13 @@ export function initMiniPlayer() {
       if (ev.origin !== nowplayingUrl() || !ev.data) return;
       if (ev.data.type === 'kacey-close-visual' || ev.data.type === 'kacey:close-visual' || ev.data === 'kacey:close-visual') {
         closeVisual();
-        // Nobody keeps a screen lit for a record they just closed.
-        if (keep) setKeep(false);
       }
     });
   }
 
-  $('miniKeep').addEventListener('click', function () {
-    var on = !keep;
-    setKeep(on).then(function () {
-      if (on && KIOSK) { setOpen(false); openVisual(); }
-    });
-  });
-
   $('miniOpen').addEventListener('click', function () {
     if (idle()) { openPlayer(); return; }
-    var open = $('miniDrop').hidden;
-    setOpen(open);
-    if (open) readKeep();              // the visual may have changed it
+    setOpen($('miniDrop').hidden);
   });
   /* Double-click goes straight to the vinyl, full screen. The two clicks
      before it have opened and closed the panel, so it ends closed. Idle, the

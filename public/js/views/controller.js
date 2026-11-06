@@ -138,7 +138,7 @@ function renderTools() {
 
 var NIGHT_DEFAULTS = {
   enabled: true, sleep_delay_min: 60, fallback_on: true, fallback: '04:00',
-  morning_end: '09:00', screen_idle_min: 2, lid_check: true
+  morning_end: '09:00', screen_idle_min: 3, lid_check: true
 };
 
 function nightSettings() { return Object.assign({}, NIGHT_DEFAULTS, store.data.settings.night || {}); }
@@ -162,7 +162,7 @@ var NIGHT_ROWS = [
   { key: 'fallback_on', type: 'switch', name: 'Záložní běh', meta: 'když spánek nepřijde nebo běh selže' },
   { key: 'morning_end', type: 'step', name: 'Konec rána bez interakce', meta: 'ranní obrazovka zhasne',
     show: function (v) { return v; }, step: function (v, d) { return hhmmPlus(v, d * 30); } },
-  { key: 'screen_idle_min', type: 'step', name: 'Uspání obrazovky', meta: 'mimo ráno, bez dotyku',
+  { key: 'screen_idle_min', type: 'step', name: 'Uspání obrazovky', meta: 'mimo ráno, bez dotyku · poslední vteřiny stmívá',
     show: function (v) { return v + ' min'; }, step: function (v, d) { return Math.max(1, Math.min(15, v + d)); } },
   { key: 'lid_check', type: 'switch', name: 'Kontrola víka', meta: 'zavřené víko = brief nepřehrát, jen uložit' }
 ];

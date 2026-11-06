@@ -250,6 +250,12 @@ export function onServer(msg) {
       noteVoiceVolume(msg);
       break;
 
+    case 'screen_lock':
+      /* The screen lock was pressed on another page (POST /api/screen/lock):
+         every header shows the same state — ui/screenlock.js. */
+      bus.emit('screen_lock', msg);
+      break;
+
     case 'calendar_sync':
       /* A calendar sync started or ended — the night's, or Synchronizovat on
          any open page (calsync.js on the server, ui/calendar.js here). */
